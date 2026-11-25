@@ -551,14 +551,25 @@ public final class BroadcastHud {
 			text(ctx, tr, ht, w / 2f - tr.getWidth(ht) / 2f, under + 3, 1f, col, a, false);
 		}
 
-		// The breakdown on the left: 3 summary bars on top (Text / Beat / Rebuttals), bonus line, then lines & mob damage.
+		// Precompute Judge's decision panel size so the breakdown never overlaps it.
+		boolean sideBySide = w >= 340;
 		int cw = Math.min(230, w / 2 - 16), cx = 8, cy = under + 28;
+		int jx = sideBySide ? cx + cw + 8 : 0;
+		int lw = sideBySide ? Math.max(150, w - jx - 8) : Math.min(380, w - 12);
+		List<OrderedText> jLines = tr.wrapLines(Text.literal("«" + r.comment + "»"), lw - 18);
+		String jNotes = r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
+		String jMine = "";
+		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) jMine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
+		int qh = 10 + jLines.size() * 10 + (jNotes.isEmpty() ? 0 : 11) + (jMine.isEmpty() ? 0 : 11) + 4;
+		int judgeTop = h - 6 - qh - 16;
+
+		// The breakdown on the left: 3 summary bars on top (Text / Beat / Rebuttals), bonus line, then lines & mob damage.
 		int summaryH = 26 + (r.bonusTotal > 0 ? 11 : 0);
 		boolean hasMobInfo = r.mobLiveDamage + r.mobVerseDamage + r.silenceDamage + r.wardenNoiseDamage > 0;
 		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 12) + (hasMobInfo ? 11 : 0) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
-		// Collapse consecutive 0-damage silent lines only if all rows would not fit on a small screen.
-		int rowH = r.hits.size() > 5 ? 9 : 11;
-		int availH = Math.max(40, h - 58 - cy - summaryH - statsH);
+		int rowH = r.hits.size() > 8 ? 8 : r.hits.size() > 5 ? 9 : 11;
+		int bottomLimit = sideBySide ? h - 8 : Math.min(h - 8, judgeTop - 4);
+		int availH = Math.max(36, bottomLimit - cy - summaryH - statsH);
 		int maxRows = Math.max(4, Math.min(14, availH / rowH));
 		List<BattleView.Hit> displayHits = r.hits;
 		int collapsedSilent = 0;
@@ -682,29 +693,28 @@ public final class BroadcastHud {
 			shine(ctx, cx, cy, cw, ph, (now - verdictAt(v) - 150) / 500f, 0x22FFFFFF);
 		}
 
-		// Judge's decision: the whole comment, wrapped, never cut. Bottom centre, where the hotbar was. Slides up.
-		int lw = Math.min(380, w - 12), lx = 0;
-		beginPanel(ctx, w, h, lw);
+		// Judge's decision: placed on the right half when wide enough so it never overlaps the breakdown.
+		ctx.getMatrices().pushMatrix();
 		float up = easeOutCubic((now - revealAt) / 350f);
-		ctx.getMatrices().translate(0, (1 - up) * 40);
-		List<OrderedText> lines = tr.wrapLines(Text.literal("«" + r.comment + "»"), lw - 18);
-		String notes = r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
-		String mine = "";
-		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) mine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
-		int qh = 10 + lines.size() * 10 + (notes.isEmpty() ? 0 : 11) + (mine.isEmpty() ? 0 : 11) + 4;
+		if (sideBySide) {
+			ctx.getMatrices().translate(jx, h + (1 - up) * 40);
+		} else {
+			ctx.getMatrices().translate((w - lw) / 2f, h + (1 - up) * 40);
+		}
+		int lx = 0;
 		int ly = -6 - qh;
 		tab(ctx, tr, I18n.translate("rapbattle.broadcast.judge_verdict"), lx, ly, GOLD, DARK, up);
 		panel(ctx, lx, ly, lw, qh, GOLD, up);
 		int ty = ly + 7;
-		for (OrderedText line : lines) {
+		for (OrderedText line : jLines) {
 			ctx.drawText(tr, line, lx + 9, ty, alphaOf(TEXT, up), false);
 			ty += 10;
 		}
-		if (!notes.isEmpty()) {
-			ctx.drawText(tr, notes, lx + 9, ty + 1, alphaOf(DIM, up), false);
+		if (!jNotes.isEmpty()) {
+			ctx.drawText(tr, jNotes, lx + 9, ty + 1, alphaOf(DIM, up), false);
 			ty += 11;
 		}
-		if (!mine.isEmpty()) ctx.drawText(tr, BattleHud.fit(tr, mine, lw - 18), lx + 9, ty + 1, alphaOf(0xFF6F7590, up), false);
+		if (!jMine.isEmpty()) ctx.drawText(tr, BattleHud.fit(tr, jMine, lw - 18), lx + 9, ty + 1, alphaOf(0xFF6F7590, up), false);
 		ctx.getMatrices().popMatrix();
 	}
 
