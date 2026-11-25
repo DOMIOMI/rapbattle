@@ -509,6 +509,7 @@ public final class BattleManager {
 			if (server.getTicks() % 10 == 0) offerOnApproach(server);
 			Later.tick();
 			GolemDefender.tick();
+			RaidBattle.tick(server);
 			PvpBattle.tickAll();
 			tickStares(server);
 		});

@@ -476,5 +476,10 @@
   "rapbattle.trophies.perk.homemade": "Перк (в левой руке): вспышка точной доли на таблице рифм",
   "rapbattle.act1.night_hunt": "Ночная охота: лут ×2",
   "rapbattle.act1.style_unlocked": "Открыт новый почерк «%s» (%s Респекта)! %s",
-  "rapbattle.act1.style_btn": "[Выбрать почерк]"
+  "rapbattle.act1.style_btn": "[Выбрать почерк]",
+  "rapbattle.act2.villager_discount": "%s заценил твой флоу: скидки в деревне!",
+  "rapbattle.act2.village_defended": "Жители видели, как ты разнёс врага: репутация в деревне выросла!",
+  "rapbattle.act2.raid_callout": "Это наш район! Выходи на бит, если не струсил!",
+  "rapbattle.act2.raid_broken": "Рейд сломлен на битах! Разбойники бросают оружие и бегут!",
+  "rapbattle.act2.raid_enraged": "Рейд в ярости! Разбойники получили Силу и Скорость!"
 }

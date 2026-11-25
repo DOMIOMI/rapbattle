@@ -476,5 +476,10 @@
   "rapbattle.trophies.perk.homemade": "Perk (off-hand): exact-beat flash on the rhyme board",
   "rapbattle.act1.night_hunt": "Night hunt: loot ×2",
   "rapbattle.act1.style_unlocked": "Unlocked MC Style \"%s\" (%s Respect)! %s",
-  "rapbattle.act1.style_btn": "[Choose style]"
+  "rapbattle.act1.style_btn": "[Choose style]",
+  "rapbattle.act2.villager_discount": "%s respects your flow: village trade discounts unlocked!",
+  "rapbattle.act2.village_defended": "Villagers saw you body the threat: village reputation increased!",
+  "rapbattle.act2.raid_callout": "This is our turf! Step up to the mic if you dare!",
+  "rapbattle.act2.raid_broken": "The raid is broken! Raiders drop their weapons and flee!",
+  "rapbattle.act2.raid_enraged": "The raid is enraged! Raiders gained Strength and Speed!"
 }
