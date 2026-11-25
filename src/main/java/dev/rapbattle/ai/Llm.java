@@ -238,7 +238,7 @@ public final class Llm {
 			List<String> targets = new ArrayList<>();
 			if (o.has("targets")) {
 				for (var tw : o.getAsJsonArray("targets")) {
-					String w = tw.getAsString().trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}-]", "");
+					String w = cleanTarget(tw.getAsString());
 					if (!w.isEmpty() && !targets.contains(w) && targets.size() < targetLimit) targets.add(w);
 				}
 			}
@@ -248,6 +248,20 @@ public final class Llm {
 			RapBattle.LOG.error("Bad verse JSON: {}", o, e);
 			return null;
 		}
+	}
+
+	/** Extracts one clean anchor word from a target string without gluing multi-word phrases together. */
+	public static String cleanTarget(String raw) {
+		if (raw == null) return "";
+		String norm = raw.trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\s-]", " ").trim();
+		if (norm.isEmpty()) return "";
+		String[] parts = norm.split("\\s+");
+		if (parts.length == 1) return parts[0];
+		String best = "";
+		for (String p : parts) {
+			if (p.length() > best.length()) best = p;
+		}
+		return best;
 	}
 
 	@Deprecated
