@@ -62,11 +62,16 @@ public final class PvpBattle {
 	private int respectA = 100, respectB = 100;
 	private final Map<UUID, Integer> combo = new HashMap<>();
 	private final Map<UUID, Integer> dealt = new HashMap<>();
+	private final Map<String, List<Boolean>> barLoud = new ConcurrentHashMap<>();
+	private final Map<String, List<Integer>> barDeltaMs = new ConcurrentHashMap<>();
+	private final Map<String, List<Boolean>> barSilent = new ConcurrentHashMap<>();
+	private final Map<UUID, Integer> hitsCount = new ConcurrentHashMap<>();
+	private final Map<UUID, Integer> missesCount = new ConcurrentHashMap<>();
 	private final Map<UUID, ByteArrayOutputStream> audio = new HashMap<>();
 	private final Map<UUID, CompletableFuture<String>> transcripts = new ConcurrentHashMap<>();
 	private final Map<UUID, Transcriber.Result> timed = new ConcurrentHashMap<>();
 	private final Map<UUID, Integer> recordingStart = new ConcurrentHashMap<>();
-	private final Map<String, CompletableFuture<Llm.Verdict>> verdicts = new LinkedHashMap<>();
+	private CompletableFuture<Llm.PvpVerdict> pvpVerdictFuture;
 	private final Map<String, BattleView.Result> results = new LinkedHashMap<>();
 	private long verdictAsked;
 	private boolean sttMissing;
@@ -228,14 +233,23 @@ public final class PvpBattle {
 	// ------------------------------------------------------------------ during the battle
 
 	public void onBar(ServerPlayerEntity p, boolean loud) {
-		if (phase == Phase.INTRO) return;
-		if (phase != Phase.TIMELINE) return;
+		onBar(p, loud, -1, !loud);
+	}
+
+	public void onBar(ServerPlayerEntity p, boolean loud, int deltaMs, boolean silentBar) {
+		if (phase == Phase.INTRO || phase != Phase.TIMELINE) return;
 		UUID u = p.getUuid();
+		String name = names.getOrDefault(u, p.getName().getString());
+		barLoud.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(loud);
+		barDeltaMs.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(deltaMs);
+		barSilent.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(silentBar);
 		if (loud) {
+			hitsCount.merge(u, 1, Integer::sum);
 			// Volume alone deals nothing: the judge and the beat timing do.
 			int c = combo.merge(u, 1, Integer::sum);
 			if (c >= 3) DamagePop.spawn(world, p, "x" + c, 0xFFD84A);
 		} else {
+			missesCount.merge(u, 1, Integer::sum);
 			combo.put(u, 0);
 			DamagePop.spawn(world, p, Lang.t(langOf(u), "rapbattle.battle.stumbled_pop"), 0xFF6060);
 		}
@@ -333,76 +347,173 @@ public final class PvpBattle {
 
 	// ------------------------------------------------------------------ judging
 
+	private final Map<UUID, List<Scoring.SlicedBar>> slicedBars = new HashMap<>();
+	private List<Llm.PlayerVerse> pendingVerses = List.of();
+
 	private void judging(long now) {
 		long t = now - phaseStart;
 		if (t > AUDIO_WAIT_MS) for (UUID u : List.of(a, b)) transcripts.putIfAbsent(u, CompletableFuture.completedFuture(""));
-		if (verdicts.isEmpty()) {
+		if (pvpVerdictFuture == null) {
 			boolean done = transcripts.size() == 2 && transcripts.values().stream().allMatch(CompletableFuture::isDone);
 			if (!done && t < AUDIO_WAIT_MS + STT_WAIT_MS) return;
+			slicedBars.clear();
 			List<Llm.PlayerVerse> verses = new ArrayList<>();
 			for (UUID u : List.of(a, b)) {
+				String pName = names.get(u);
+				String uLang = langOf(u);
 				CompletableFuture<String> f = transcripts.get(u);
-				String text = f == null ? "" : f.getNow("");
-				verses.add(new Llm.PlayerVerse(names.get(u), rhymes.getOrDefault(u, List.of()), text == null ? "" : text));
+				String raw = f == null ? "" : f.getNow("");
+				String text = raw == null ? "" : raw.trim();
+				List<Scoring.BarSlot> slots = new ArrayList<>();
+				int ln = 1;
+				for (BattleView.Row r : view.rows) {
+					if (pName.equals(r.reader)) slots.add(new Scoring.BarSlot(ln++, r.startBeat, r.word));
+				}
+				List<Scoring.SlicedBar> sliced = Scoring.sliceBars(timed.get(u), recordingStart.get(u), text, slots, beatMs, uLang);
+				slicedBars.put(u, sliced);
+				List<Boolean> louds = barLoud.getOrDefault(pName, List.of());
+				List<Integer> deltas = barDeltaMs.getOrDefault(pName, List.of());
+				List<Llm.BarPrompt> prompts = new ArrayList<>(sliced.size());
+				for (int i = 0; i < sliced.size(); i++) {
+					Scoring.SlicedBar sb = sliced.get(i);
+					boolean sttMiss = sttMissing || timed.get(u) == null;
+					int deltaMs = i < deltas.size() ? deltas.get(i) : -1;
+					int preBeat = Scoring.hybridBeat(sb.whisperDeltaBeats(), 1, sttMiss, deltaMs, beatMs);
+					if (preBeat == 0 && i < louds.size() && Boolean.TRUE.equals(louds.get(i)) && sb.whisperDeltaBeats() == null) {
+						preBeat = 1;
+					}
+					String timingLabel = sb.silent()
+						? Lang.t(uLang, "rapbattle.judge.timing.silent")
+						: preBeat == 2 ? Lang.t(uLang, "rapbattle.judge.timing.on_beat")
+						: preBeat == 1 ? Lang.t(uLang, "rapbattle.judge.timing.near")
+						: Lang.t(uLang, "rapbattle.judge.timing.off");
+					prompts.add(new Llm.BarPrompt(sb.lineIndex(), sb.targetWord(), timingLabel, sb.text(), sb.silent()));
+				}
+				verses.add(new Llm.PlayerVerse(pName, rhymes.getOrDefault(u, List.of()), text, "", prompts));
 			}
+			pendingVerses = List.copyOf(verses);
+			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
+			barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
 			boolean noStt = sttMissing;
 			verdictAsked = now;
-			// One judge per language in the battle: each player reads the breakdown in his own language.
-			for (String l : new LinkedHashSet<>(List.of(langOf(a), langOf(b)))) {
-				verdicts.put(l, CompletableFuture.supplyAsync(() -> {
-					Llm.Verdict v = noStt ? null : Llm.judge("—", Lang.t(l, "rapbattle.pvp.judge_species"), "PvP",
-						Lang.t(l, "rapbattle.pvp.judge_expectation"),
-						0, 0, List.of(), verses, l);
-					if (v == null) v = Fallback.judge(0, 0, verses, rnd, l);
-					return v;
-				}, Battle.POOL));
+			Llm.PlayerVerse vA = verses.get(0), vB = verses.get(1);
+			String lA = langOf(a), lB = langOf(b);
+			pvpVerdictFuture = CompletableFuture.supplyAsync(() -> {
+				Llm.PvpVerdict pv = noStt ? null : Llm.judgePvp(vA, vB, lA, lB);
+				if (pv == null) {
+					Llm.Verdict fRu = Fallback.judge(0, 0, verses, loudSnapshot, noStt, rnd, Lang.RU);
+					Llm.Verdict fEn = Fallback.judge(0, 0, verses, loudSnapshot, noStt, rnd, Lang.EN);
+					return new Llm.PvpVerdict(fRu.playerLines(), fEn.playerLines(), fRu.comment(), fEn.comment());
+				}
+				return pv;
+			}, Battle.POOL);
+			for (String l : new LinkedHashSet<>(List.of(lA, lB))) {
 				BattleView.Result r = new BattleView.Result();
 				for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? Lang.t(l, "rapbattle.battle.silence") : pv.transcript()));
 				results.put(l, r);
 			}
-			view.result = results.get(langOf(a));
+			view.result = results.get(lA);
 			return;
 		}
 		if (t < MIN_JUDGING_MS) return;
-		boolean allDone = verdicts.values().stream().allMatch(CompletableFuture::isDone);
-		if (!allDone && now - verdictAsked < JUDGE_WAIT_MS) return;
-		Map<String, Llm.Verdict> vs = new HashMap<>();
-		for (Map.Entry<String, CompletableFuture<Llm.Verdict>> e : verdicts.entrySet()) {
-			Llm.Verdict v = e.getValue().getNow(null);
-			vs.put(e.getKey(), v != null ? v : Fallback.judge(0, 0, List.of(), rnd, e.getKey()));
+		if (!pvpVerdictFuture.isDone() && now - verdictAsked < JUDGE_WAIT_MS) return;
+		Llm.PvpVerdict pvpVerdict = pvpVerdictFuture.getNow(null);
+		if (pvpVerdict == null) {
+			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
+			barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
+			Llm.Verdict fRu = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.RU);
+			Llm.Verdict fEn = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.EN);
+			pvpVerdict = new Llm.PvpVerdict(fRu.playerLines(), fEn.playerLines(), fRu.comment(), fEn.comment());
 		}
+
 		int before0 = respectA, before1 = respectB;
+		Stats stats = Stats.of(world.getServer());
+		Map<UUID, Scoring.RoundOutcome> outcomes = new HashMap<>();
 		for (UUID u : List.of(a, b)) {
+			String pName = names.get(u);
+			String uLang = langOf(u);
+			Llm.Verdict ownVerdict = pvpVerdict.forLang(uLang);
+			List<Llm.LineScore> ownScores = ownVerdict.playerLines().getOrDefault(pName, List.of());
+			List<Scoring.SlicedBar> sbs = slicedBars.getOrDefault(u, List.of());
+			List<Boolean> louds = barLoud.getOrDefault(pName, List.of());
+			List<Integer> deltas = barDeltaMs.getOrDefault(pName, List.of());
+			List<Boolean> silents = barSilent.getOrDefault(pName, List.of());
 			List<String> words = rhymes.getOrDefault(u, List.of());
-			// Damage comes from the judge in the reader's language; the notes are shown in each viewer's language.
-			List<Llm.LineScore> own = vs.get(langOf(u)).playerLines().getOrDefault(names.get(u), List.of());
-			for (int i = 0; i < own.size(); i++) {
-				Llm.LineScore l = own.get(i);
-				String word = i < words.size() ? words.get(i) : "";
-				int d = l.damage();
-				for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
-					List<Llm.LineScore> theirs = vs.get(e.getKey()).playerLines().getOrDefault(names.get(u), List.of());
-					String note = i < theirs.size() ? theirs.get(i).note() : l.note();
-					e.getValue().hits.add(new BattleView.Hit(names.get(u), (word.isEmpty() ? "" : "«" + word + "» · ") + note, d, u.equals(a), l.punch()));
+
+			McStyle style = stats.player(u).mcStyle();
+			Trophies.TrophyPerk perk = Trophies.equippedPerk(player(u));
+			boolean witherForgiven = false;
+			boolean guardianUsed = false;
+			double wWin = 0.30 + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+			double mWin = 0.35 + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+
+			List<Scoring.LineInput> inputs = new ArrayList<>();
+			for (int i = 0; i < words.size(); i++) {
+				Llm.LineScore l = i < ownScores.size() ? ownScores.get(i) : Llm.LineScore.silent(uLang);
+				Scoring.SlicedBar sb = i < sbs.size() ? sbs.get(i) : null;
+				boolean sttSilent = sb != null && sb.silent();
+				boolean micSilent = i < silents.size() && Boolean.TRUE.equals(silents.get(i));
+				boolean barSilentFlag = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
+				boolean silenceForgiven = false;
+				if (barSilentFlag && perk == Trophies.TrophyPerk.WITHER && !witherForgiven) {
+					silenceForgiven = true;
+					witherForgiven = true;
 				}
-				dealt.merge(u, d, Integer::sum);
+				int deltaMs = i < deltas.size() ? deltas.get(i) : (i < louds.size() && Boolean.TRUE.equals(louds.get(i)) ? 0 : -1);
+				int beatState = barSilentFlag ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
+					l.rhyme(), sttMissing, deltaMs, beatMs, wWin, mWin);
+				if (beatState == 2 && perk == Trophies.TrophyPerk.ELDER_GUARDIAN) guardianUsed = true;
+				inputs.add(style.lineInput(pName, words.get(i), l.score(), l.meaning(), l.punch(), l.rebuttal(),
+					l.note(), beatState, barSilentFlag, false, 1.0, silenceForgiven));
 			}
-			int[] tm = Battle.beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs, langOf(u));
-			if (tm != null) {
-				int on = 0, near = 0;
-				for (int x : tm) if (x == 2) on++; else if (x == 1) near++;
-				int d = Battle.flowDamage(tm);
-				if (d > 0) {
-					for (Map.Entry<String, BattleView.Result> e : results.entrySet())
-						e.getValue().hits.add(new BattleView.Hit(names.get(u), Lang.t(e.getKey(), "rapbattle.battle.hit_rhymes_on_beat", on, tm.length), d, u.equals(a), false));
-					dealt.merge(u, d, Integer::sum);
+			int hypeVal = Math.max(-100, Math.min(100, (hitsCount.getOrDefault(u, 0) - missesCount.getOrDefault(u, 0)) * 18));
+			int extraStyle = perk == Trophies.TrophyPerk.DEFAULT ? 1 : 0;
+			int hb = Scoring.hypeBonus(hypeVal);
+			Scoring.Bonuses bonuses = new Scoring.Bonuses(hb, extraStyle, 0, Math.min(10, hb + extraStyle));
+			Scoring.RoundOutcome o = Scoring.evaluateRound(null, inputs, bonuses, 0, 0);
+			outcomes.put(u, o);
+			dealt.put(u, o.totalToMob());
+
+			for (int i = 0; i < o.lines().size(); i++) {
+				Scoring.EvaluatedLine el = o.lines().get(i);
+				String word = i < words.size() ? words.get(i) : "";
+				for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+					List<Llm.LineScore> theirs = pvpVerdict.forLang(e.getKey()).playerLines().getOrDefault(pName, List.of());
+					String note = i < theirs.size() ? theirs.get(i).note() : el.input().note();
+					e.getValue().hits.add(new BattleView.Hit(pName, (word.isEmpty() ? "" : "«" + word + "» · ") + note, el.damage(), u.equals(a), el.input().punch()));
+				}
+			}
+			if (perk != null) {
+				boolean triggered = switch (perk) {
+					case WITHER -> witherForgiven;
+					case ELDER_GUARDIAN -> guardianUsed;
+					case DEFAULT -> extraStyle > 0;
+					default -> false;
+				};
+				if (triggered) {
+					for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+						e.getValue().hits.add(new BattleView.Hit(pName, perk.triggeredNote(e.getKey()), 0, u.equals(a), false));
+					}
+				}
+			}
+			if (bonuses.hypeBonus() > 0) {
+				for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+					e.getValue().hits.add(new BattleView.Hit(pName, Lang.t(e.getKey(), "rapbattle.battle.hit_crowd"), bonuses.hypeBonus(), u.equals(a), false));
+				}
+			}
+			if (o.silenceDamage() > 0) {
+				for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+					e.getValue().hits.add(new BattleView.Hit(pName, Lang.t(e.getKey(), "rapbattle.battle.hit_silence", o.silentBars()), o.silenceDamage(), !u.equals(a), false));
 				}
 			}
 		}
-		BattleView.Result base = results.get(langOf(a));
-		for (BattleView.Hit h : base.hits) hit(h.toMob ? b : a, h.damage, false);
+
+		Scoring.RoundOutcome oA = outcomes.get(a);
+		Scoring.RoundOutcome oB = outcomes.get(b);
+		respectA = Math.min(100, Math.max(0, 100 - oB.totalToMob() - oA.silenceDamage() + oA.teamHeal()));
+		respectB = Math.min(100, Math.max(0, 100 - oA.totalToMob() - oB.silenceDamage() + oB.teamHeal()));
 		boolean ko = respectA <= 0 || respectB <= 0;
-		UUID winner = respectB <= 0 ? a : respectA <= 0 ? b : respectA >= respectB ? a : b;
+		UUID winner = respectB <= 0 && respectA > 0 ? a : respectA <= 0 && respectB > 0 ? b : respectA >= respectB ? a : b;
 		for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
 			BattleView.Result r = e.getValue();
 			r.teamBefore = before0;
@@ -414,15 +525,21 @@ public final class PvpBattle {
 			r.winner = names.get(winner);
 			r.playersWin = winner.equals(a);
 			r.finalResult = true;
-			r.comment = vs.get(e.getKey()).comment();
+			r.comment = pvpVerdict.forLang(e.getKey()).comment();
 			r.teamLabel = names.get(a);
 			r.mobLabel = names.get(b);
-			r.dealt = dealt.getOrDefault(a, 0);
+			r.dealt = oA.totalToMob();
+			r.barTextTotal = oA.barTextTotal();
+			r.barBeatDelta = oA.barBeatDelta();
+			r.barRebuttalTotal = oA.barRebuttalDamage();
+			r.bonusHype = oA.bonuses().hypeBonus();
+			r.bonusTotal = oA.bonuses().total();
+			r.silenceDamage = oA.silenceDamage();
 			for (BattleView.PlayerScore ps : r.players) {
 				for (UUID u : List.of(a, b)) if (names.get(u).equals(ps.name)) ps.score = dealt.getOrDefault(u, 0);
 			}
 		}
-		view.result = base;
+		view.result = results.get(langOf(a));
 		phase = Phase.RESULT;
 		phaseStart = now;
 		broadcast();
@@ -507,6 +624,7 @@ public final class PvpBattle {
 			mm.mvp = st.mvp;
 			mm.best = st.best;
 			mm.title = st.title(l);
+			mm.style = st.mcStyle().label(l);
 			c.team.add(mm);
 		}
 		if (v.result != null) c.result = results.getOrDefault(l, v.result);

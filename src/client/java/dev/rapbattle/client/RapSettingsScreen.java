@@ -37,10 +37,14 @@ public class RapSettingsScreen extends Screen {
 		addDrawableChild(toggle(x1, y, w, "rapbattle.settings.stage_fx", c.stageFx, v -> c.stageFx = v));
 		addDrawableChild(toggle(x2, y, w, "rapbattle.settings.spectator_hud", c.spectatorHud, v -> c.spectatorHud = v));
 		y += 24;
+		addDrawableChild(toggle(x1, y, w, "rapbattle.settings.camera_motion", c.cameraMotion, v -> c.cameraMotion = v));
 		List<Integer> dances = List.of(0, 1, 2, 3);
 		addDrawableChild(CyclingButtonWidget.<Integer>builder(i -> Text.translatable("rapbattle.settings.dance." + i), c.victoryDance % 4).values(dances)
-			.build(x1, y, w * 2 + gap, 20, Text.translatable("rapbattle.settings.victory_dance"), (b, v) -> c.victoryDance = v));
-		y += 32;
+			.build(x2, y, w, 20, Text.translatable("rapbattle.settings.victory_dance"), (b, v) -> c.victoryDance = v));
+		y += 28;
+		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.settings.style"), b -> client.setScreen(new StyleScreen(this)))
+			.dimensions(x1, y, w * 2 + gap, 20).build());
+		y += 24;
 		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.settings.api_keys"), b -> client.setScreen(new KeysScreen(this)))
 			.dimensions(x1, y, w, 20).build());
 		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.settings.latency", c.latencyMs), b -> client.setScreen(new CalibrationScreen(this)))

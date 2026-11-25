@@ -36,6 +36,7 @@ public final class BattleDance {
 			}
 			case "ROUND_RESULT", "RESULT" -> {
 				if (v.result == null) return Mode.NONE;
+				if (!BroadcastHud.verdictReady(v)) return Mode.LISTEN;
 				if (v.pvp) {
 					// Player battle: the winner dances, the other one hangs his head.
 					for (BattleView.Member m : v.team) if (m.entityId == entityId) return m.name.equals(v.result.winner) ? Mode.WIN : Mode.LOSE;
@@ -73,7 +74,7 @@ public final class BattleDance {
 	}
 
 	/** Is the beat clock running (the battle table), or are we on the free 110 bpm clock (results)? */
-	static boolean onBeat() {
+	public static boolean onBeat() {
 		BattleView v = ClientBattle.view;
 		return v != null && "TIMELINE".equals(v.phase) && ClientBattle.clock() >= 0;
 	}
@@ -104,7 +105,7 @@ public final class BattleDance {
 		Mode m = mode(entityId);
 		return switch (m) {
 			case READ -> 0.09f * MobMoves.pulse(ClientBattle.beatFrac()) * s.height * 0.5f;
-			case LISTEN -> 0.03f * MobMoves.pulse(ClientBattle.beatFrac()) * s.height * 0.5f;
+			case LISTEN -> onBeat() ? 0.03f * MobMoves.pulse(ClientBattle.beatFrac()) * s.height * 0.5f : 0f;
 			case WIN -> 0.15f * freeHit() * s.height * 0.5f;
 			case CROWD -> (crowdStyle(entityId) == 2 ? 0.03f : 0.09f) * crowdHit(entityId) * (0.6f + 0.6f * crowdHype()) * s.height * 0.5f;
 			default -> 0f;
@@ -121,11 +122,25 @@ public final class BattleDance {
 		if (!type.equals("slime") && !type.equals("magma_cube") && !type.equals("creeper")) {
 			float sq = switch (mode) {
 				case READ -> 0.08f * MobMoves.pulse(ClientBattle.beatFrac());
-				case LISTEN -> 0.03f * MobMoves.pulse(ClientBattle.beatFrac());
+				case LISTEN -> onBeat() ? 0.03f * MobMoves.pulse(ClientBattle.beatFrac()) : 0f;
 				case CROWD -> 0.045f * crowdHit(entityId) * (0.6f + 0.6f * crowdHype());
 				default -> 0f;
 			};
 			if (sq > 0) m.scale(1 + sq * 0.55f, 1 - sq, 1 + sq * 0.55f);
+		}
+		if (mode == Mode.LOSE) {
+			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(8)); // slumped
+			return;
+		}
+		boolean player = type.equals("player");
+		boolean mob = ClientBattle.view != null && ClientBattle.view.mobEntityIds.contains(entityId);
+		if (player && onBeat()) {
+			float punch = ClientBattle.mobPunchImpulse();
+			if (punch > 0) m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-12f * punch));
+		}
+		if ((mob || player) && !onBeat() && ClientBattle.view != null && !BroadcastHud.verdictReady(ClientBattle.view)) {
+			float flinch = BroadcastHud.recentHitImpulse(ClientBattle.view, mob);
+			if (flinch > 0) m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-10f * flinch));
 		}
 		if (PlayerMoves.active(entityId)) return;
 		boolean beat = mode == Mode.READ || mode == Mode.LISTEN || (mode == Mode.CROWD && onBeat());
@@ -133,11 +148,8 @@ public final class BattleDance {
 		float wave = beat ? wave() : freeWave();
 		if (mode == Mode.CROWD) wave = (float) Math.sin(Math.asin(Math.max(-1, Math.min(1, wave))) + entityId);
 		float amp = mode == Mode.READ ? 2.2f : mode == Mode.WIN ? 1.8f : mode == Mode.CROWD ? 0.6f + 0.8f * crowdHype() : 1f;
+		if (mode == Mode.READ && player) amp *= (0.6f + 0.8f * ClientBattle.smoothMicLevel());
 		m.translate(0, bounce(entityId, s), 0);
-		if (mode == Mode.LOSE) {
-			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(8)); // slumped
-			return;
-		}
 		switch (type) {
 			case "slime", "magma_cube" -> {
 				// Squash and stretch on every beat.

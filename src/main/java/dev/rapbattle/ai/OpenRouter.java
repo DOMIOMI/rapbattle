@@ -23,15 +23,19 @@ final class OpenRouter {
 	private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
 	static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens) {
-		return ask(system, user, schema, maxTokens, Lang.RU);
+		return ask(system, user, schema, maxTokens, 0.8, Lang.RU);
 	}
 
 	static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens, String lang) {
+		return ask(system, user, schema, maxTokens, 0.8, lang);
+	}
+
+	static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens, double temperature, String lang) {
 		RapConfig cfg = RapConfig.get();
 		JsonObject body = new JsonObject();
 		body.addProperty("model", cfg.openRouterModel);
 		body.addProperty("max_tokens", maxTokens);
-		body.addProperty("temperature", 0.75);
+		body.addProperty("temperature", temperature);
 		// Reasoning models (DeepSeek V4 etc.) otherwise spend the whole budget thinking: slow and no answer.
 		JsonObject reasoning = new JsonObject();
 		reasoning.addProperty("enabled", false);

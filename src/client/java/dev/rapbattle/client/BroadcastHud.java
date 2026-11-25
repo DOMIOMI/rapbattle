@@ -204,6 +204,25 @@ public final class BroadcastHud {
 		return t < 0 ? 0 : (int) Math.min(r.hits.size(), t / HIT_MS + 1);
 	}
 
+	/** True once all breakdown lines have appeared and the verdict banner lands. */
+	public static boolean verdictReady(BattleView v) {
+		return v != null && v.result != null
+			&& ("ROUND_RESULT".equals(v.phase) || "RESULT".equals(v.phase))
+			&& revealed(v) >= v.result.hits.size();
+	}
+
+	/** 0..1 flinch impulse for the side that just took damage on the breakdown reveal. */
+	public static float recentHitImpulse(BattleView v, boolean mobSide) {
+		if (v == null || v.result == null || !("ROUND_RESULT".equals(v.phase) || "RESULT".equals(v.phase))) return 0f;
+		int n = revealed(v);
+		if (n <= 0 || n > v.result.hits.size()) return 0f;
+		BattleView.Hit h = v.result.hits.get(n - 1);
+		if (h.damage <= 0 || h.toMob != mobSide) return 0f;
+		long since = System.currentTimeMillis() - (revealAt + FIRST_HIT_MS + (n - 1) * HIT_MS);
+		if (since < 0 || since > 220) return 0f;
+		return (float) Math.sin((since / 220.0) * Math.PI);
+	}
+
 	/** When the last breakdown line comes in, i.e. when the verdict lands. */
 	private static long verdictAt(BattleView v) {
 		revealed(v);
@@ -234,9 +253,17 @@ public final class BroadcastHud {
 	// ------------------------------------------------------------------ during the verse
 
 	static void timeline(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
-		scoreboard(ctx, tr, v, w, true);
+		int under = scoreboard(ctx, tr, v, w, true);
 		if (v.totalBeats <= 0) return;
 		int beat = Math.max(0, ClientBattle.beat());
+		if (!v.targets.isEmpty() && beat >= v.mobEndBeat && !v.spectator) {
+			String tText = I18n.translate("rapbattle.broadcast.targets", "«" + String.join("» · «", v.targets) + "»");
+			int tw = tr.getWidth(tText) + 16;
+			int ty = under + (v.combo >= 3 ? 19 : 4);
+			ctx.fill(w / 2 - tw / 2, ty, w / 2 + tw / 2, ty + 12, 0xD0151826);
+			ctx.drawStrokedRectangle(w / 2 - tw / 2, ty, tw, 12, alphaOf(GOLD, 0.7f));
+			ctx.drawCenteredTextWithShadow(tr, tText, w / 2, ty + 2, GOLD);
+		}
 		String me = ClientBattle.me();
 		float fr = ClientBattle.beatFrac();
 
@@ -292,6 +319,7 @@ public final class BroadcastHud {
 		}
 
 		String fx = live == null ? null : live.effect;
+		if (ClientBattle.creakingFrozen()) fx = null;
 		int k = live == null ? -1 : beat - live.startBeat;
 		// The table sits at the very bottom, centred, where the hotbar and hearts were (they are hidden during the battle).
 		// Cells grow to fit the mob's words; only on a very narrow screen the whole panel is drawn smaller.
@@ -305,10 +333,18 @@ public final class BroadcastHud {
 		int rowsH = 2 * ROW + GAP + 2 * PAD;
 		int ly = -6 - rowsH;
 
-		// Tag: who is on, a slanted tab; REC on the right end.
+		// Tag: who is on, a slanted tab; REC and optional [R] reroll hint on the right end.
 		boolean rec = ClientBattle.recording();
-		tag = BattleHud.fit(tr, tag, lw - (rec ? 64 : 24));
+		boolean showReroll = rec && v.canReroll && !v.pvp;
+		tag = BattleHud.fit(tr, tag, lw - (rec ? (showReroll ? 124 : 64) : 24));
 		tab(ctx, tr, tag, lx, ly, tagColor, DARK);
+		if (showReroll) {
+			String rr = I18n.translate("rapbattle.broadcast.reroll_hint");
+			int rrw = tr.getWidth(rr) + 10;
+			int rx = lx + lw - rrw - 48;
+			ctx.fill(rx, ly - 11, rx + rrw, ly, 0xD01A2030);
+			ctx.drawText(tr, rr, rx + 5, ly - 9, GOLD, false);
+		}
 		if (rec) {
 			Text r = bold("REC");
 			int rw = tr.getWidth(r) + 18, rx = lx + lw - rw;
@@ -344,6 +380,15 @@ public final class BroadcastHud {
 			}
 		}
 		ctx.getMatrices().popMatrix();
+	}
+
+	private static void summaryBar(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label, String val, int col, float fill) {
+		ctx.fill(x, y, x + w, y + 20, 0xFF151826);
+		ctx.drawStrokedRectangle(x, y, w, 20, alphaOf(col, 0.45f));
+		ctx.drawText(tr, BattleHud.fit(tr, label, w - 6), x + 3, y + 2, DIM, false);
+		ctx.drawText(tr, BattleHud.fit(tr, val, w - 6), x + 3, y + 11, col, false);
+		int fw = Math.max(0, Math.min(w - 2, Math.round((w - 2) * fill)));
+		ctx.fill(x + 1, y + 18, x + 1 + fw, y + 19, col);
 	}
 
 	/** A big number popping on every beat with an expanding frame, and a slanted caption above it. */
@@ -421,7 +466,8 @@ public final class BroadcastHud {
 		String shown = shownWord(r, activeK);
 		boolean stolen = !r.mob && "stolen".equals(r.effect);
 		boolean burned = !r.mob && "burn".equals(r.effect) && activeK >= 2;
-		int cell = stolen ? 0xFF3A1A1A : burned ? 0xFFE86A17 : BattleHud.opaque(r.color);
+		boolean free = !r.mob && r.freestyle && !"???".equals(shown);
+		int cell = stolen ? 0xFF3A1A1A : burned ? 0xFFE86A17 : free ? GOLD : BattleHud.opaque(r.color);
 		if (live && k == 3) {
 			// The rhyme's beat: a glow around the cell.
 			int g = Math.round(2 + 2 * (1 - fr));
@@ -442,9 +488,12 @@ public final class BroadcastHud {
 
 	/** The rhyme as the mob's tricks let you see it. */
 	private static String shownWord(BattleView.Row r, int k) {
+		BattleView v = ClientBattle.view;
+		if (!r.mob && v != null && v.revealBeats > 0 && r.startBeat - ClientBattle.beat() > v.revealBeats) return "???";
+		if (!r.mob && r.freestyle) return I18n.translate("rapbattle.hud.word_freestyle");
 		if (r.effect == null || r.mob) return r.word;
 		return switch (r.effect) {
-			case "hidden" -> "???";
+			case "hidden", "web_pair" -> "???";
 			case "stolen" -> I18n.translate("rapbattle.hud.word_stolen");
 			case "burn" -> k >= 2 ? I18n.translate("rapbattle.hud.word_burned") : r.word;
 			case "illusion" -> k >= 0 && k < 3 ? fake(r) : r.word;
@@ -491,6 +540,7 @@ public final class BroadcastHud {
 		// How it was won, a slanted strip under the scoreboard, once the breakdown has run.
 		if (allIn && !roundOnly) {
 			String how = r.knockout ? I18n.translate("rapbattle.broadcast.knockout")
+				: v.rounds > 1 ? I18n.translate("rapbattle.hud.sub_rounds", v.roundWinsPlayers, v.roundWinsMob).toUpperCase(Locale.ROOT)
 				: I18n.translate("rapbattle.broadcast.by_points", r.respectTeam, r.respectMob);
 			Text ht = bold(how);
 			int col = r.knockout ? ORANGE : (won ? YELLOW : LOSS);
@@ -501,23 +551,91 @@ public final class BroadcastHud {
 			text(ctx, tr, ht, w / 2f - tr.getWidth(ht) / 2f, under + 3, 1f, col, a, false);
 		}
 
-		// The breakdown on the left: line by line, each sliding in, newest at the bottom.
-		int cw = Math.min(214, w / 2 - 20), cx = 8, cy = under + 30;
-		int maxRows = Math.max(4, Math.min(10, (h - 120 - cy) / 11));
-		int from = Math.max(0, n - maxRows);
-		int rows = n - from;
-		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 11) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
-		int ph = 6 + rows * 11 + statsH + 2;
+		// Precompute Judge's decision panel size so the breakdown never overlaps it.
+		boolean sideBySide = w >= 340;
+		int cw = Math.min(230, w / 2 - 16), cx = 8, cy = under + 28;
+		int jx = sideBySide ? cx + cw + 8 : 0;
+		int lw = sideBySide ? Math.max(150, w - jx - 8) : Math.min(380, w - 12);
+		List<OrderedText> jLines = tr.wrapLines(Text.literal("«" + r.comment + "»"), lw - 18);
+		String jNotes = r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
+		String jMine = "";
+		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) jMine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
+		int qh = 10 + jLines.size() * 10 + (jNotes.isEmpty() ? 0 : 11) + (jMine.isEmpty() ? 0 : 11) + 4;
+		int judgeTop = h - 6 - qh - 16;
+
+		// The breakdown on the left: 3 summary bars on top (Text / Beat / Rebuttals), bonus line, then lines & mob damage.
+		int summaryH = 26 + (r.bonusTotal > 0 ? 11 : 0);
+		boolean hasMobInfo = r.mobLiveDamage + r.mobVerseDamage + r.silenceDamage + r.wardenNoiseDamage > 0;
+		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 12) + (hasMobInfo ? 11 : 0) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
+		int rowH = r.hits.size() > 8 ? 9 : 11;
+		int bottomLimit = sideBySide ? h - 8 : Math.min(h - 8, judgeTop - 4);
+		int availH = Math.max(36, bottomLimit - cy - summaryH - statsH);
+		int maxRows = Math.max(4, Math.min(14, availH / rowH));
+		List<BattleView.Hit> displayHits = r.hits;
+		int collapsedSilent = 0;
+		if (n > maxRows) {
+			List<BattleView.Hit> compacted = new java.util.ArrayList<>();
+			for (int i = 0; i < n; i++) {
+				BattleView.Hit hit = r.hits.get(i);
+				if (hit.toMob && hit.damage == 0 && collapsedSilent < n - maxRows + 1) {
+					collapsedSilent++;
+				} else {
+					compacted.add(hit);
+				}
+			}
+			if (collapsedSilent > 1) {
+				compacted.add(0, new BattleView.Hit("", I18n.translate("rapbattle.broadcast.more_silence", collapsedSilent), 0, true, false));
+			} else if (collapsedSilent == 1) {
+				compacted = r.hits;
+				collapsedSilent = 0;
+			}
+			displayHits = compacted;
+		}
+		int dn = displayHits.size();
+		int from = Math.max(0, dn - maxRows);
+		int rows = dn - from;
+		int ph = 6 + summaryH + rows * rowH + statsH + 2;
 		tab(ctx, tr, I18n.translate("rapbattle.broadcast.breakdown"), cx, cy, GOLD, DARK);
 		panel(ctx, cx, cy, cw, ph, GOLD);
 		ctx.fill(cx, cy, cx + 3, cy + ph, GOLD);
 		int ry = cy + 5;
-		for (int i = from; i < n; i++) {
-			BattleView.Hit hit = r.hits.get(i);
-			long since = now - (revealAt + FIRST_HIT_MS + i * HIT_MS);
+
+		// Top 3 summary pills: TEXT, BEAT, REBUTTALS
+		int gap = 3, innerW = cw - 12, pw3 = (innerW - gap * 2) / 3;
+		summaryBar(ctx, tr, cx + 7, ry, pw3, I18n.translate("rapbattle.broadcast.summary.text"),
+			String.valueOf(r.barTextTotal), CYAN, Math.min(1f, r.barTextTotal / 70f));
+		String beatVal = (r.barBeatDelta >= 0 ? "+" : "") + r.barBeatDelta;
+		int beatCol = r.barBeatDelta >= 0 ? GREEN : LOSS;
+		summaryBar(ctx, tr, cx + 7 + pw3 + gap, ry, pw3, I18n.translate("rapbattle.broadcast.summary.beat"),
+			beatVal, beatCol, Math.min(1f, Math.abs(r.barBeatDelta) / 25f));
+		String rebVal = r.mobParried > 0 ? (r.barRebuttalTotal + " (-" + r.mobParried + ")") : String.valueOf(r.barRebuttalTotal);
+		summaryBar(ctx, tr, cx + 7 + (pw3 + gap) * 2, ry, pw3, I18n.translate("rapbattle.broadcast.summary.rebuttal"),
+			rebVal, ORANGE, Math.min(1f, (r.barRebuttalTotal + r.mobParried) / 24f));
+		ry += 24;
+		if (r.bonusTotal > 0) {
+			StringBuilder bParts = new StringBuilder();
+			if (r.bonusHype > 0) bParts.append(I18n.translate("rapbattle.battle.hit_crowd")).append(" +").append(r.bonusHype);
+			if (r.bonusStyle > 0) {
+				if (bParts.length() > 0) bParts.append(" · ");
+				bParts.append(I18n.translate("rapbattle.battle.hit_outfit")).append(" +").append(r.bonusStyle);
+			}
+			if (r.bonusAlly > 0) {
+				if (bParts.length() > 0) bParts.append(" · ");
+				bParts.append(I18n.translate("rapbattle.battle.hit_backup")).append(" +").append(r.bonusAlly);
+			}
+			ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.summary.bonuses", r.bonusTotal, bParts.toString()), cw - 14),
+				cx + 8, ry, GREEN, false);
+			ry += 11;
+		}
+		ctx.fill(cx + 8, ry - 1, cx + cw - 6, ry, alphaOf(GOLD, 0.35f));
+		ry += 2;
+
+		for (int i = from; i < dn; i++) {
+			BattleView.Hit hit = displayHits.get(i);
+			long since = now - (revealAt + FIRST_HIT_MS + Math.min(i, n - 1) * HIT_MS);
 			float a = easeOutCubic(since / 220f);
 			int off = Math.round((1 - a) * -16);
-			if ((i & 1) == 0) ctx.fill(cx + 4, ry - 2, cx + cw - 2, ry + 9, 0x0CFFFFFF);
+			if ((i & 1) == 0) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, 0x0CFFFFFF);
 			String target = !v.pvp ? I18n.translate(hit.toMob ? "rapbattle.broadcast.target_mob" : "rapbattle.broadcast.target_team")
 				: hit.toMob ? v.mobName : (v.team.isEmpty() ? "" : v.team.get(0).name);
 			String dmg = hit.damage == 0 ? "0" : target + " -" + hit.damage;
@@ -526,14 +644,14 @@ public final class BroadcastHud {
 			String text = BattleHud.fit(tr, who + hit.note, cw - 26 - dw);
 			int col = !hit.toMob ? 0xFFFF8A8A : hit.damage == 0 ? DIM : hit.punch ? ORANGE : TEXT;
 			int dcol = hit.toMob ? (hit.damage == 0 ? DIM : YELLOW) : RED;
-			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry - 2, cx + 6, ry + 9, alphaOf(ORANGE, a));
+			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry, cx + 6, ry + 8, alphaOf(ORANGE, a));
 			text(ctx, tr, text, cx + 9 + off, ry, 1f, col, a, false);
 			int px = cx + cw - 8 - dw;
-			ctx.fill(px - 3, ry - 2, cx + cw - 4, ry + 9, alphaOf(mix(dcol, BG, 0.8f), a));
+			ctx.fill(px - 3, ry, cx + cw - 4, ry + 8, alphaOf(mix(dcol, BG, 0.8f), a));
 			text(ctx, tr, dmg, px, ry, 1f, dcol, a, false);
 			// A fresh line flashes once.
-			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry - 2, cx + cw - 2, ry + 9, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
-			ry += 11;
+			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
+			ry += rowH;
 		}
 		if (allIn) {
 			ry += 3;
@@ -541,7 +659,27 @@ public final class BroadcastHud {
 			ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.stats_summary", r.dealt, r.accuracy, r.bestCombo), cw - 14), cx + 9, ry + 1, CYAN, false);
 			ry += 11;
 			if (!r.bestLine.isEmpty()) {
-				ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.best_line", r.bestLine), cw - 14), cx + 9, ry + 1, DIM, false);
+				ctx.fill(cx + 7, ry, cx + cw - 6, ry + 10, 0x40E8C14A);
+				ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.best_punch", r.bestLine), cw - 16), cx + 9, ry + 1, GOLD, false);
+				ry += 12;
+			}
+			if (hasMobInfo) {
+				StringBuilder ms = new StringBuilder();
+				if (r.mobLiveDamage > 0) ms.append(I18n.translate("rapbattle.broadcast.summary.mob_live", r.mobLiveDamage));
+				if (r.mobVerseDamage > 0 || r.mobParried > 0) {
+					if (ms.length() > 0) ms.append(" · ");
+					ms.append(I18n.translate("rapbattle.broadcast.summary.mob_verse", r.mobVerseDamage));
+					if (r.mobParried > 0) ms.append(" (").append(I18n.translate("rapbattle.broadcast.summary.parried", r.mobParried)).append(")");
+				}
+				if (r.silenceDamage > 0) {
+					if (ms.length() > 0) ms.append(" · ");
+					ms.append(I18n.translate("rapbattle.broadcast.summary.mob_silence", r.silenceDamage));
+				}
+				if (r.wardenNoiseDamage > 0) {
+					if (ms.length() > 0) ms.append(" · ");
+					ms.append(I18n.translate("rapbattle.broadcast.summary.mob_warden", r.wardenNoiseDamage));
+				}
+				ctx.drawText(tr, BattleHud.fit(tr, ms.toString(), cw - 14), cx + 9, ry + 1, LOSS, false);
 				ry += 11;
 			}
 			if (r.players.size() > 1) {
@@ -555,30 +693,36 @@ public final class BroadcastHud {
 			shine(ctx, cx, cy, cw, ph, (now - verdictAt(v) - 150) / 500f, 0x22FFFFFF);
 		}
 
-		// Judge's decision: the whole comment, wrapped, never cut. Bottom centre, where the hotbar was. Slides up.
-		int lw = Math.min(380, w - 12), lx = 0;
-		beginPanel(ctx, w, h, lw);
+		// Judge's decision: placed on the right half when wide enough so it never overlaps the breakdown.
+		ctx.getMatrices().pushMatrix();
 		float up = easeOutCubic((now - revealAt) / 350f);
-		ctx.getMatrices().translate(0, (1 - up) * 40);
-		List<OrderedText> lines = tr.wrapLines(Text.literal("«" + r.comment + "»"), lw - 18);
-		String notes = r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
-		String mine = "";
-		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) mine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
-		int qh = 10 + lines.size() * 10 + (notes.isEmpty() ? 0 : 11) + (mine.isEmpty() ? 0 : 11) + 4;
+		if (sideBySide) {
+			ctx.getMatrices().translate(jx, h + (1 - up) * 40);
+		} else {
+			ctx.getMatrices().translate((w - lw) / 2f, h + (1 - up) * 40);
+		}
+		int lx = 0;
 		int ly = -6 - qh;
 		tab(ctx, tr, I18n.translate("rapbattle.broadcast.judge_verdict"), lx, ly, GOLD, DARK, up);
 		panel(ctx, lx, ly, lw, qh, GOLD, up);
 		int ty = ly + 7;
-		for (OrderedText line : lines) {
+		for (OrderedText line : jLines) {
 			ctx.drawText(tr, line, lx + 9, ty, alphaOf(TEXT, up), false);
 			ty += 10;
 		}
-		if (!notes.isEmpty()) {
-			ctx.drawText(tr, notes, lx + 9, ty + 1, alphaOf(DIM, up), false);
+		if (!jNotes.isEmpty()) {
+			ctx.drawText(tr, jNotes, lx + 9, ty + 1, alphaOf(DIM, up), false);
 			ty += 11;
 		}
-		if (!mine.isEmpty()) ctx.drawText(tr, BattleHud.fit(tr, mine, lw - 18), lx + 9, ty + 1, alphaOf(0xFF6F7590, up), false);
+		if (!jMine.isEmpty()) ctx.drawText(tr, BattleHud.fit(tr, jMine, lw - 18), lx + 9, ty + 1, alphaOf(0xFF6F7590, up), false);
 		ctx.getMatrices().popMatrix();
+	}
+
+	private static void drawSummaryPill(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label, String value, int accent) {
+		ctx.fill(x, y, x + w, y + 21, 0xE0141722);
+		ctx.fill(x, y, x + w, y + 1, alphaOf(accent, 0.85f));
+		ctx.drawText(tr, BattleHud.fit(tr, label, w - 6), x + 3, y + 3, DIM, false);
+		ctx.drawText(tr, BattleHud.fit(tr, value, w - 6), x + 3, y + 12, accent, false);
 	}
 
 	// ------------------------------------------------------------------ bystanders

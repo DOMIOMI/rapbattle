@@ -32,7 +32,16 @@ public final class MobTricks {
 		Map.entry("guardian", "Держи одну тему во всех строках."),
 		Map.entry("elder_guardian", "Держи одну тему во всех строках."),
 		Map.entry("shulker", "Прячется в панцирь и не слушает тебя."),
-		Map.entry("skeleton", "Строг к ритму: не сбивайся."),
+		Map.entry("skeleton", "Узкое окно бита (0.22 доли), но попадания бьют больнее."),
+		Map.entry("stray", "Узкое окно бита (0.22 доли), но попадания бьют больнее."),
+		Map.entry("bogged", "Узкое окно бита (0.22 доли), но попадания бьют больнее."),
+		Map.entry("parched", "Узкое окно бита (0.22 доли), но попадания бьют больнее."),
+		Map.entry("spider", "Паутина рифм: 2-я строка пары скрыта до громкой 1-й."),
+		Map.entry("cave_spider", "Паутина рифм: 2-я строка пары скрыта до громкой 1-й."),
+		Map.entry("villager", "Изумруд в левой руке на старте снизит его ранг."),
+		Map.entry("pillager", "Изумруд в левой руке на старте снизит его ранг."),
+		Map.entry("vindicator", "Изумруд в левой руке на старте снизит его ранг."),
+		Map.entry("creaking", "Держи его в прицеле, чтобы заморозить помехи."),
 		Map.entry("pig", "С морковкой в руке у тебя он отвлекается."),
 		Map.entry("piglin", "Уважает золото на тебе."),
 		Map.entry("cat", "С рыбой в руке у тебя она добрее."),
@@ -58,7 +67,16 @@ public final class MobTricks {
 		Map.entry("guardian", "Stick to one topic across all your lines."),
 		Map.entry("elder_guardian", "Stick to one topic across all your lines."),
 		Map.entry("shulker", "Hides in its shell and doesn't listen to you."),
-		Map.entry("skeleton", "Strict on rhythm: don't fall off beat."),
+		Map.entry("skeleton", "Tighter beat window (0.22 beat), but on-beat bars hit harder."),
+		Map.entry("stray", "Tighter beat window (0.22 beat), but on-beat bars hit harder."),
+		Map.entry("bogged", "Tighter beat window (0.22 beat), but on-beat bars hit harder."),
+		Map.entry("parched", "Tighter beat window (0.22 beat), but on-beat bars hit harder."),
+		Map.entry("spider", "Webbed rhymes: the 2nd bar stays hidden until you hit the 1st."),
+		Map.entry("cave_spider", "Webbed rhymes: the 2nd bar stays hidden until you hit the 1st."),
+		Map.entry("villager", "An emerald in your off-hand at start lowers its rank."),
+		Map.entry("pillager", "An emerald in your off-hand at start lowers its rank."),
+		Map.entry("vindicator", "An emerald in your off-hand at start lowers its rank."),
+		Map.entry("creaking", "Keep it in your sights to freeze its interference."),
 		Map.entry("pig", "Hold a carrot in your hand and he gets distracted."),
 		Map.entry("piglin", "Respects gold armor on you."),
 		Map.entry("cat", "Hold fish in your hand and she goes easier on you."),
@@ -102,6 +120,7 @@ public final class MobTricks {
 		v.gaze = id.equals("enderman");
 		v.fuse = id.equals("creeper");
 		v.silence = id.equals("warden");
+		v.creakingGaze = id.equals("creaking");
 		v.trick = hint(id, lang);
 	}
 
@@ -127,6 +146,10 @@ public final class MobTricks {
 					for (int i = 0; i < rows.size(); i += 4) rows.get(i).effect = "ram";
 				}
 				case "illusioner" -> rows.forEach(r -> r.effect = "illusion");
+				case "spider", "cave_spider" -> {
+					for (int i = 1; i < rows.size(); i += 2) rows.get(i).effect = "web_pair";
+				}
+				case "creaking" -> rows.forEach(r -> r.effect = "shake");
 				default -> {}
 			}
 		}

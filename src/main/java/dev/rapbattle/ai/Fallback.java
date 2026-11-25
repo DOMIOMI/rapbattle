@@ -188,31 +188,109 @@ public final class Fallback {
 		"The mob out-rapped you, outplayed you, and respawned you.",
 		"Next time practice on pigs. They are not as harsh when they judge.");
 
+	/** Extracts anchor words from a mob verse for the rebuttal target bar. */
+	public static List<String> extractTargets(List<Llm.MobLine> lines, String lang) {
+		return extractTargets(lines, lang, 2);
+	}
+
+	public static List<String> extractTargets(List<Llm.MobLine> lines, String lang, int maxTargets) {
+		boolean ru = Lang.isRu(lang);
+		int limit = Math.max(1, maxTargets);
+		List<String> out = new ArrayList<>();
+		java.util.Set<String> stop = ru
+			? Set.of("это", "как", "что", "для", "про", "тебя", "меня", "тебе", "мне", "тут", "здесь", "даже", "просто", "если", "только")
+			: Set.of("this", "that", "with", "your", "from", "just", "even", "here", "there", "into", "about", "like", "you", "the");
+		for (Llm.MobLine ml : lines) {
+			for (String raw : ml.text().split("\\s+")) {
+				String w = raw.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}]", "");
+				if (w.length() >= (ru ? 4 : 4) && !stop.contains(w) && !out.contains(w)) {
+					out.add(w);
+					if (out.size() >= limit) return out;
+				}
+			}
+		}
+		return out;
+	}
+
 	/** Scores every line by whether its rhyme word was actually said; the mob's verse lands inside its rank range. */
 	public static Llm.Verdict judge(int lo, int hi, List<Llm.PlayerVerse> players, Random rnd, String lang) {
+		return judge(lo, hi, players, Map.of(), false, List.of(), rnd, lang);
+	}
+
+	public static Llm.Verdict judge(int lo, int hi, List<Llm.PlayerVerse> players, Map<String, List<Boolean>> loudBars,
+									boolean sttMissing, Random rnd, String lang) {
+		return judge(lo, hi, players, loudBars, sttMissing, List.of(), rnd, lang);
+	}
+
+	/** Offline judge; when {@code sttMissing} is true, grades each bar from client mic loudness (5..7 loud, 0 silent). */
+	public static Llm.Verdict judge(int lo, int hi, List<Llm.PlayerVerse> players, Map<String, List<Boolean>> loudBars,
+									boolean sttMissing, List<String> targetWords, Random rnd, String lang) {
 		boolean ru = Lang.isRu(lang);
 		Map<String, List<Llm.LineScore>> lines = new LinkedHashMap<>();
 		int hits = 0, targets = 0, sum = 0;
 		for (Llm.PlayerVerse p : players) {
-			String t = ru ? p.transcript().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(p.transcript());
-			Set<String> enWords = ru ? Set.of() : wordsEn(t);
+			List<Boolean> loud = loudBars == null ? List.of() : loudBars.getOrDefault(p.name(), List.of());
+			List<Llm.BarPrompt> bars = p.bars() != null && !p.bars().isEmpty() ? p.bars() : null;
+			String fullT = ru ? p.transcript().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(p.transcript());
+			Set<String> fullEnWords = ru ? Set.of() : wordsEn(fullT);
 			List<Llm.LineScore> ls = new java.util.ArrayList<>();
-			for (String w : p.rhymeWords()) {
-				boolean matched;
-				if (ru) {
-					String stem = w.toLowerCase(Locale.ROOT).replace('ё', 'е');
-					stem = stem.length() > 4 ? stem.substring(0, stem.length() - 2) : stem;
-					matched = !t.isBlank() && t.contains(stem);
-				} else {
-					matched = !t.isBlank() && matchesEn(t, enWords, w);
-				}
+			for (int i = 0; i < p.rhymeWords().size(); i++) {
+				String w = p.rhymeWords().get(i);
 				Llm.LineScore s;
-				if (t.isBlank()) s = new Llm.LineScore(0, false, ru ? "тишина" : "silence");
-				else if (matched) {
-					int sc = 5 + rnd.nextInt(4);
-					s = new Llm.LineScore(sc, sc >= 8 && rnd.nextBoolean(), ru ? "рифма в точку" : "on the rhyme");
-					hits++;
-				} else s = new Llm.LineScore(1 + rnd.nextInt(2), false, ru ? "мимо рифмы" : "missed the rhyme");
+				if (sttMissing) {
+					boolean heard = i < loud.size() && Boolean.TRUE.equals(loud.get(i));
+					if (heard) {
+						int sc = 5 + rnd.nextInt(3);
+						s = new Llm.LineScore(sc, 2, 1, false, false, ru ? "рифма в точку" : "on the rhyme");
+						hits++;
+					} else {
+						s = Llm.LineScore.silent(lang);
+					}
+				} else if (bars != null && i < bars.size() && bars.get(i).silent()) {
+					s = Llm.LineScore.silent(lang);
+				} else {
+					String barText = bars != null && i < bars.size()
+						? (ru ? bars.get(i).text().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(bars.get(i).text()))
+						: fullT;
+					boolean isReb = false;
+					if (targetWords != null && !barText.isBlank()) {
+						for (String tw : targetWords) {
+							String normTw = ru ? tw.toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "") : normalizeEn(tw);
+							String stemTw = normTw.length() > 4 ? normTw.substring(0, normTw.length() - 2) : normTw;
+							if (!stemTw.isEmpty() && barText.contains(stemTw)) {
+								isReb = true;
+								break;
+							}
+						}
+					}
+					boolean freestyle = w == null || w.isBlank();
+					if (freestyle) {
+						if (barText.isBlank()) s = Llm.LineScore.silent(lang);
+						else {
+							int meaning = 2 + (rnd.nextInt(3) == 0 ? 1 : 0);
+							s = Llm.LineScore.fromRubric(2, meaning, isReb, ru ? "своя рифма" : "own rhyme");
+							hits++;
+						}
+					} else {
+						Set<String> enWords = bars != null && i < bars.size() ? (ru ? Set.of() : wordsEn(barText)) : fullEnWords;
+						boolean matched;
+						if (ru) {
+							String last = lastWord(w).toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "");
+							String stem = last.length() > 4 ? last.substring(0, last.length() - 2) : last;
+							matched = !barText.isBlank() && !stem.isEmpty() && barText.contains(stem);
+						} else {
+							matched = !barText.isBlank() && matchesEn(barText, enWords, w);
+						}
+						if (barText.isBlank()) s = Llm.LineScore.silent(lang);
+						else if (matched) {
+							int meaning = 1 + rnd.nextInt(2) + (rnd.nextInt(5) == 0 ? 1 : 0);
+							s = Llm.LineScore.fromRubric(2, Math.min(3, meaning), isReb, ru ? "рифма в точку" : "on the rhyme");
+							hits++;
+						} else {
+							s = Llm.LineScore.fromRubric(0, 1, isReb, ru ? "мимо рифмы" : "missed the rhyme");
+						}
+					}
+				}
 				ls.add(s);
 				sum += s.score();
 			}
@@ -244,16 +322,58 @@ public final class Fallback {
 		return out;
 	}
 
-	private static boolean matchesEn(String normalizedTranscript, Set<String> words, String rawTarget) {
-		String target = normalizeEn(rawTarget);
-		if (target.isEmpty()) return false;
-		if (target.contains(" ")) {
-			return (" " + normalizedTranscript + " ").contains(" " + target + " ");
+	private static final Map<String, Set<String>> HOMOPHONES_EN = buildHomophones(
+		List.of("knight", "night"),
+		List.of("board", "bored"),
+		List.of("throne", "thrown"),
+		List.of("groan", "grown"),
+		List.of("pain", "pane"),
+		List.of("rain", "reign", "rein"),
+		List.of("plain", "plane"),
+		List.of("red", "read"),
+		List.of("bread", "bred"),
+		List.of("beat", "beet"),
+		List.of("meat", "meet"),
+		List.of("feet", "feat"),
+		List.of("break", "brake"),
+		List.of("stake", "steak"),
+		List.of("weak", "week"),
+		List.of("soul", "sole"),
+		List.of("whole", "hole"),
+		List.of("miner", "minor")
+	);
+
+	@SafeVarargs
+	private static Map<String, Set<String>> buildHomophones(List<String>... groups) {
+		Map<String, Set<String>> m = new LinkedHashMap<>();
+		for (List<String> g : groups) {
+			Set<String> set = Set.copyOf(g);
+			for (String w : g) m.put(w, set);
 		}
-		if (words.contains(target)) return true;
-		if (words.contains(target + "s") || words.contains(target + "es")
-			|| words.contains(target + "ed") || words.contains(target + "d")) return true;
-		if (target.endsWith("s") && target.length() > 3 && words.contains(target.substring(0, target.length() - 1))) return true;
+		return m;
+	}
+
+	/** English homophone equivalents for words in the rhyme bank (e.g. knight/night). */
+	public static Set<String> homophonesEn(String word) {
+		return HOMOPHONES_EN.getOrDefault(word, Set.of(word));
+	}
+
+	/** Last whitespace-separated token of a rhyme phrase (e.g. "в пещере" -> "пещере"). */
+	public static String lastWord(String phrase) {
+		if (phrase == null) return "";
+		String[] parts = phrase.trim().split("\\s+");
+		return parts.length == 0 ? "" : parts[parts.length - 1];
+	}
+
+	private static boolean matchesEn(String normalizedTranscript, Set<String> words, String rawTarget) {
+		String target = normalizeEn(lastWord(rawTarget));
+		if (target.isEmpty()) return false;
+		for (String cand : homophonesEn(target)) {
+			if (words.contains(cand)) return true;
+			if (words.contains(cand + "s") || words.contains(cand + "es")
+				|| words.contains(cand + "ed") || words.contains(cand + "d")) return true;
+			if (cand.endsWith("s") && cand.length() > 3 && words.contains(cand.substring(0, cand.length() - 1))) return true;
+		}
 		return false;
 	}
 }

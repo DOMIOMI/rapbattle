@@ -18,7 +18,11 @@ public final class Outfit {
 
 	private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
-	public record Score(double value, String note) {
+	public record Score(double value, String note, boolean stylish) {
+		public Score(double value, String note) {
+			this(value, note, false);
+		}
+
 		/** Rank-style level 0..6 (0 = naked). */
 		public int level() { return (int) Math.floor(value + 1e-6); }
 
@@ -42,6 +46,7 @@ public final class Outfit {
 		Integer dye = null;
 		boolean sameDye = true;
 		int leather = 0;
+		int trims = 0;
 		StringBuilder note = new StringBuilder();
 		for (EquipmentSlot slot : SLOTS) {
 			ItemStack s = e.getEquippedStack(slot);
@@ -57,7 +62,10 @@ public final class Outfit {
 			sum += Math.max(0, m);
 			if (material == -1) material = m;
 			else if (material != m) sameMaterial = false;
-			if (s.get(DataComponentTypes.TRIM) != null) style += 0.25;
+			if (s.get(DataComponentTypes.TRIM) != null) {
+				style += 0.25;
+				trims++;
+			}
 			if (s.hasGlint()) style += 0.1;
 			if (m == 1) {
 				leather++;
@@ -82,13 +90,15 @@ public final class Outfit {
 			style += 0.25;
 			note.append(ru ? "полный комплект; " : "full matching set; ");
 		}
-		if (leather == 4 && sameDye && dye != null) {
+		boolean matchingDyed = leather == 4 && sameDye && dye != null;
+		if (matchingDyed) {
 			style += 0.5;
 			note.append(ru ? "кожанка в цвет; " : "matching dyed leather; ");
 		}
+		boolean stylish = fullGang || matchingDyed || trims >= 1;
 		style = Math.max(-1, Math.min(1, style));
 		double value = Math.max(0, sum / 4.0 + style);
-		return new Score(value, note.toString().trim());
+		return new Score(value, note.toString().trim(), stylish);
 	}
 
 	/** 0 empty / not armour, 1 leather, 2 chain, 3 iron (and turtle), 4 gold (and elytra), 5 diamond, 6 netherite. */

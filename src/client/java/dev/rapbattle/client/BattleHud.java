@@ -210,6 +210,12 @@ public final class BattleHud {
 		}
 
 		long secs = (v.lobbyMsLeft + 999) / 1000;
+		if (ClientBattle.isChallenger()) {
+			String t1 = (v.topic == 1 ? "§e" : "§7") + I18n.translate("rapbattle.hud.topic_1");
+			String t2 = (v.topic == 2 ? "§e" : "§7") + I18n.translate("rapbattle.hud.topic_2");
+			String t3 = (v.topic == 3 ? "§e" : "§7") + I18n.translate("rapbattle.hud.topic_3");
+			ctx.drawCenteredTextWithShadow(tr, I18n.translate("rapbattle.hud.topic_pick", t1 + "  ·  " + t2 + "  ·  " + t3), mid, h - 42, TEXT);
+		}
 		String bottom = ClientBattle.isChallenger()
 			? I18n.translate("rapbattle.hud.lobby_challenger", secs)
 			: I18n.translate("rapbattle.hud.lobby_wait", secs);
@@ -277,7 +283,10 @@ public final class BattleHud {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		int tier = Math.max(0, Math.min(6, m.outfitLevel));
 		int tierColor = tier <= 0 ? 0xFF9A9A9A : opaque(Rank.ofLevel(tier).color);
-		String sub = m.title.isEmpty() ? I18n.translate("rapbattle.hud.card.player") : I18n.translate("rapbattle.hud.card.title_quoted", m.title);
+		String sub = m.title.isEmpty()
+			? (m.style.isEmpty() ? I18n.translate("rapbattle.hud.card.player") : I18n.translate("rapbattle.hud.card.player_style", m.style))
+			: (m.style.isEmpty() ? I18n.translate("rapbattle.hud.card.title_quoted", m.title)
+				: I18n.translate("rapbattle.hud.card.title_quoted", m.title) + " · " + m.style);
 		String extraLabel, extra;
 		int extraColor;
 		if (m.streak > 1) {

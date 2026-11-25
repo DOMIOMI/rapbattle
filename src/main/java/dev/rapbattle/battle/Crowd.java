@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AllayEntity;
@@ -28,6 +29,14 @@ public final class Crowd {
 	private static final int RADIUS = 16, MAX = 20;
 	/** After the battle the truce holds a little longer, then everyone is free to fight. */
 	private static final List<Map.Entry<MobEntity, Long>> TRUCE = new ArrayList<>();
+	private record Retreat(MobEntity mob, Vec3d awayFrom, long until) {}
+	private static final List<Retreat> RETREATING = new ArrayList<>();
+
+	static boolean isAquaticOnly(MobEntity m) {
+		return m instanceof net.minecraft.entity.mob.WaterCreatureEntity
+			|| m instanceof net.minecraft.entity.mob.GuardianEntity
+			|| (m instanceof net.minecraft.entity.passive.AxolotlEntity && m.isTouchingWater());
+	}
 
 	final Map<MobEntity, Side> members = new LinkedHashMap<>();
 	private final Map<MobEntity, Boolean> wasSilent = new HashMap<>();
@@ -52,8 +61,10 @@ public final class Crowd {
 		center = challenger == null ? new Vec3d(star.getX(), star.getY(), star.getZ())
 			: new Vec3d((star.getX() + challenger.getX()) / 2, star.getY(), (star.getZ() + challenger.getZ()) / 2);
 		String kin = battle.opp.profile().kin();
+		boolean stageInWater = w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(center)).isIn(net.minecraft.registry.tag.FluidTags.WATER);
 		List<MobEntity> near = w.getEntitiesByClass(MobEntity.class, star.getBoundingBox().expand(RADIUS),
-			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null && !Opponent.isBoss(m));
+			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null && !Opponent.isBoss(m)
+				&& (!isAquaticOnly(m) || stageInWater));
 		near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(star)));
 		for (MobEntity m : near) {
 			if (members.size() >= MAX) break;
@@ -83,6 +94,7 @@ public final class Crowd {
 		for (MobEntity m : members.keySet()) {
 			int slot = i++;
 			if (!m.isAlive()) continue;
+			if (m.isOnFire()) m.extinguish();
 			if (m instanceof HostileEntity || m.getTarget() != null) m.setTarget(null);
 			if (fear) {
 				// Peaceful mobs keep their distance from a boss.
@@ -124,8 +136,10 @@ public final class Crowd {
 
 	/** Standing spot on the ground near (x, z): free space, solid below. */
 	private Vec3d ground(ServerWorld w, MobEntity m, double x, double z) {
+		boolean needWater = isAquaticOnly(m);
 		for (int dy : new int[]{0, 1, -1, 2, -2, 3}) {
 			Vec3d at = new Vec3d(x, Math.floor(center.y) + dy, z);
+			if (needWater && !w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(at)).isIn(net.minecraft.registry.tag.FluidTags.WATER)) continue;
 			var box = m.getBoundingBox().offset(at.subtract(m.getX(), m.getY(), m.getZ()));
 			if (w.isSpaceEmpty(m, box) && !w.isSpaceEmpty(m, box.offset(0, -0.2, 0))) return at;
 		}
@@ -241,6 +255,7 @@ public final class Crowd {
 		if (!fear) {
 			shout(moment);
 			soloReactions(moment);
+			swaySides(moment);
 		}
 		ServerWorld w = battle.world;
 		for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
@@ -304,16 +319,67 @@ public final class Crowd {
 		}
 	}
 
-	private static void particles(ServerWorld w, ParticleEffect type, double x, double y, double z, int count) {
-		w.spawnParticles(type, x, y, z, count, 0.3, 0.2, 0.3, 0.02);
+	private void swaySides(Moment moment) {
+		if (members.isEmpty()) return;
+		ServerWorld w = battle.world;
+		if (moment == Moment.PLAYER_HIT && battle.combo >= 3) {
+			Side targetSide = battle.combo >= 6 ? Side.MOB : Side.NEUTRAL;
+			MobEntity candidate = null;
+			for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+				if (e.getKey().isAlive() && e.getValue() == targetSide) {
+					candidate = e.getKey();
+					break;
+				}
+			}
+			if (candidate == null && battle.combo >= 6) {
+				for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+					if (e.getKey().isAlive() && e.getValue() == Side.NEUTRAL) {
+						candidate = e.getKey();
+						break;
+					}
+				}
+			}
+			if (candidate != null) {
+				members.put(candidate, Side.PLAYERS);
+				Speech.bubble(candidate, Lang.t(battle.lang, "rapbattle.crowd.defected_players"), 0x7CF0A0, 2200);
+				particles(w, ParticleTypes.HAPPY_VILLAGER, candidate.getX(), candidate.getY() + candidate.getHeight() + 0.3, candidate.getZ(), 8);
+			}
+		} else if (moment == Moment.PLAYER_MISS) {
+			for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+				if (e.getKey().isAlive() && e.getValue() == Side.NEUTRAL) {
+					members.put(e.getKey(), Side.MOB);
+					Speech.bubble(e.getKey(), Lang.t(battle.lang, "rapbattle.crowd.defected_mob"), 0xFF8080, 2000);
+					particles(w, ParticleTypes.ANGRY_VILLAGER, e.getKey().getX(), e.getKey().getY() + e.getKey().getHeight() + 0.3, e.getKey().getZ(), 4);
+					break;
+				}
+			}
+		}
 	}
 
-	/** Fans on the players' side cheering more than the rest: the crowd prize, 0..2 degrees. */
-	int prize() {
-		if (members.isEmpty()) return 0;
-		int hit = battle.barsHit, miss = battle.barsMissed;
-		if (hit == 0) return 0;
-		return hit >= 2 * miss + 2 ? 2 : hit > miss ? 1 : 0;
+	/** After a player victory, a friendly fan may toss a small gift (emerald, apple, or glowstone dust). */
+	void dropGift(net.minecraft.server.network.ServerPlayerEntity winner) {
+		if (winner == null || members.isEmpty() || rnd.nextInt(100) >= 45) return;
+		MobEntity fan = null;
+		for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+			if (e.getKey().isAlive() && e.getValue() == Side.PLAYERS) {
+				fan = e.getKey();
+				break;
+			}
+		}
+		if (fan == null) return;
+		net.minecraft.item.Item[] pool = {net.minecraft.item.Items.EMERALD, net.minecraft.item.Items.APPLE, net.minecraft.item.Items.GLOWSTONE_DUST};
+		net.minecraft.item.ItemStack gift = new net.minecraft.item.ItemStack(pool[rnd.nextInt(pool.length)], 1);
+		net.minecraft.entity.ItemEntity drop = new net.minecraft.entity.ItemEntity(
+			battle.world, winner.getX(), winner.getY() + 0.5, winner.getZ(), gift);
+		drop.setToDefaultPickupDelay();
+		battle.world.spawnEntity(drop);
+		Speech.bubble(fan, Lang.t(battle.lang, "rapbattle.crowd.gift_bubble"), 0xFFE84A, 2200);
+		winner.sendMessage(net.minecraft.text.Text.translatable("rapbattle.crowd.gift_chat", gift.getName())
+			.formatted(net.minecraft.util.Formatting.GREEN), false);
+	}
+
+	private static void particles(ServerWorld w, ParticleEffect type, double x, double y, double z, int count) {
+		w.spawnParticles(type, x, y, z, count, 0.3, 0.2, 0.3, 0.02);
 	}
 
 	/** Battle over: keep the truce 5 more seconds, then let everyone go. */
@@ -326,11 +392,60 @@ public final class Crowd {
 		}
 	}
 
-	/** Server tick: hostile crowd keeps its hands off until the truce ends. */
+	/** Escaped mob team: 15 s truce and actively walking away from {@code awayFrom}. */
+	public static void retreat(Collection<MobEntity> mobs, Vec3d awayFrom, long durationMs) {
+		long until = System.currentTimeMillis() + durationMs;
+		for (MobEntity m : mobs) {
+			if (m == null || !m.isAlive()) continue;
+			m.setTarget(null);
+			m.setAttacker(null);
+			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
+			TRUCE.add(Map.entry(m, until));
+			RETREATING.add(new Retreat(m, awayFrom, until));
+			steerAway(m, awayFrom);
+		}
+	}
+
+	private static void steerAway(MobEntity m, Vec3d from) {
+		if (from == null) return;
+		double dx = m.getX() - from.x, dz = m.getZ() - from.z;
+		double len = Math.hypot(dx, dz);
+		if (len < 1e-3) {
+			dx = 1;
+			dz = 0;
+		} else {
+			dx /= len;
+			dz /= len;
+		}
+		m.getNavigation().startMovingTo(m.getX() + dx * 12, m.getY(), m.getZ() + dz * 12, 1.2);
+	}
+
+	public static boolean inTruce(MobEntity m) {
+		long now = System.currentTimeMillis();
+		for (Map.Entry<MobEntity, Long> e : TRUCE) if (e.getKey() == m && now <= e.getValue()) return true;
+		return false;
+	}
+
+	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
 		long now = System.currentTimeMillis();
 		TRUCE.removeIf(e -> now > e.getValue() || !e.getKey().isAlive());
-		for (Map.Entry<MobEntity, Long> e : TRUCE) e.getKey().setTarget(null);
+		for (Map.Entry<MobEntity, Long> e : TRUCE) {
+			MobEntity m = e.getKey();
+			m.setTarget(null);
+			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
+			if (m.isOnFire()) m.extinguish();
+		}
+		RETREATING.removeIf(r -> now > r.until() || !r.mob().isAlive());
+		for (Retreat r : RETREATING) {
+			MobEntity m = r.mob();
+			if (m.getNavigation().isIdle()) steerAway(m, r.awayFrom());
+		}
+	}
+
+	static void clear() {
+		TRUCE.clear();
+		RETREATING.clear();
 	}
 
 	Side sideOf(MobEntity m) { return members.getOrDefault(m, null); }

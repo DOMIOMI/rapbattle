@@ -81,13 +81,40 @@ public class BlingFeature extends FeatureRenderer<LivingEntityRenderState, Entit
 			draw(m, head, q, light, kit.cap(), cx, top - 1.0f, cz, w + 2 * fur, 2.0f, d + 2 * fur);
 			draw(m, head, q, light, kit.cap(), cx, top + 0.3f, c.maxZ + fur + 1.6f, w * 0.85f, 0.5f, 3.2f);
 		}
-		if (found[3] != null && type.equals("player") && BattleDance.mode(((RapRenderState) s).rapbattle$entityId()) == BattleDance.Mode.READ) {
-			// The mic in the fist while he reads: black grip, grey mesh head towards the mouth.
-			Part arm = found[3];
-			ModelPart.Cuboid a = arm.c();
-			float ax = (a.minX + a.maxX) / 2, ay = a.maxY - 1.2f, az = (a.minZ + a.maxZ) / 2;
-			draw(m, arm, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), ax, ay, az - 2.6f, 1.3f, 1.3f, 4.2f);
-			draw(m, arm, q, light, Blocks.GRAY_CONCRETE.getDefaultState(), ax, ay, az - 5.4f, 2.1f, 2.1f, 2.1f);
+		int entityId = ((RapRenderState) s).rapbattle$entityId();
+		boolean reading = BattleDance.mode(entityId) == BattleDance.Mode.READ;
+		if (reading) {
+			if (found[3] != null && Bling.isBiped(type)) {
+				// Detailed mic in the fist while reading: beside the chin (and to the side of the nose for nosed mobs).
+				Part arm = found[3];
+				ModelPart.Cuboid a = arm.c();
+				boolean nosed = Bling.nosed(entityId);
+				float ax = (a.minX + a.maxX) / 2 + (nosed ? -0.85f : -0.35f);
+				float ay = a.maxY - 1.2f + (nosed ? 0.5f : 0f);
+				float az = (a.minZ + a.maxZ) / 2;
+				m.push();
+				m.peek().getPositionMatrix().set(arm.pos());
+				m.peek().getNormalMatrix().set(arm.normal());
+				m.translate(ax / 16f, ay / 16f, az / 16f);
+				// Tilt slightly upward so the ring and mesh head stick out above the fist toward the chin.
+				m.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotationDegrees(-20f));
+				MicModel.render(m, q, light, 1 / 16f, null);
+				m.pop();
+			} else if (!Bling.isBiped(type)) {
+				// Small & quadruped mobs: microphone stand in front of the muzzle, scaled to their height.
+				float mouthY = c.minY + h * 0.72f;
+				float mz = c.minZ - fur - 2.5f;
+				float standH = Math.max(5.5f, Math.min(18f, s.height * 10f));
+				m.push();
+				m.peek().getPositionMatrix().set(head.pos());
+				m.peek().getNormalMatrix().set(head.normal());
+				m.translate(cx / 16f, mouthY / 16f, (mz + 3.75f) / 16f);
+				MicModel.render(m, q, light, 1 / 16f, null);
+				m.pop();
+				draw(m, head, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), cx, mouthY + 1.0f, mz - 0.6f, 1.0f, 2.0f, 1.0f);
+				draw(m, head, q, light, Blocks.IRON_BLOCK.getDefaultState(), cx, mouthY + 1.5f + standH * 0.5f, mz - 0.6f, 0.7f, standH, 0.7f);
+				draw(m, head, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), cx, mouthY + 1.5f + standH, mz - 0.6f, 3.2f, 0.7f, 3.2f);
+			}
 		}
 		if (kit.chain() != null) {
 			if (biped) {

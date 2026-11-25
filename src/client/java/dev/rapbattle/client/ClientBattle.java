@@ -147,6 +147,7 @@ public final class ClientBattle {
 				ui(SoundEvents.BLOCK_NOTE_BLOCK_PLING, 1.2f, 0.8f);
 			}
 			case "keys" -> KeysScreen.serverStatus(v.keysLlm, v.keysStt);
+			case "style_status" -> StyleScreen.serverStatus(v.playerRespect, v.playerStyle);
 			case "invite_close" -> {
 				if (invite != null && invite.id == v.id) invite = null;
 			}
@@ -217,6 +218,19 @@ public final class ClientBattle {
 	}
 
 	public static boolean isChallenger() { return view != null && me().equals(view.challenger); }
+
+	public static boolean inLobbyChallenger() { return view != null && "LOBBY".equals(view.phase) && isChallenger(); }
+
+	public static boolean creakingFrozen() {
+		if (view == null || !view.creakingGaze) return false;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null || mc.world == null) return false;
+		Entity e = mc.world.getEntityById(view.mobEntityId);
+		if (e == null) return false;
+		var eye = mc.player.getEyePos();
+		var to = e.getEyePos().subtract(eye).normalize();
+		return mc.player.getRotationVec(1f).dotProduct(to) >= Math.cos(Math.toRadians(15));
+	}
 
 	public static float micLevel() { return MIC.level; }
 
@@ -381,18 +395,12 @@ public final class ClientBattle {
 		var look = mc.player.getRotationVec(1f);
 		if (look.dotProduct(to) < Math.cos(Math.toRadians(8))) return;
 		gazedKey = key;
-		String me = me();
-		java.util.List<BattleView.Row> own = new java.util.ArrayList<>();
-		for (BattleView.Row r : view.rows) if (!r.mob && me.equals(r.reader)) own.add(r);
-		java.util.List<String> words = new java.util.ArrayList<>();
-		for (BattleView.Row r : own) words.add(r.word);
-		java.util.Collections.shuffle(words);
-		for (int i = 0; i < own.size(); i++) own.get(i).word = words.get(i);
+		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"gaze\"}"));
 		say(Text.translatable("rapbattle.client.enderman_gaze"), Formatting.DARK_PURPLE);
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.ENTITY_ENDERMAN_STARE, 1f, 0.8f));
 	}
 
-	/** At the end of each of my rows: was the rhyme slot loud (crowd cheers) or silent (creeper fuse)? */
+	/** At the end of each of my rows: send whether the rhyme slot was loud, the voice peak offset from beat 4 (ms), and silence. */
 	private static void trackRows() {
 		BattleView.Row live = liveRow();
 		int idx = live == null ? -1 : view.rows.indexOf(live);
@@ -401,27 +409,83 @@ public final class ClientBattle {
 			if (trackedRow >= 0 && trackedRow < view.rows.size()) {
 				BattleView.Row done = view.rows.get(trackedRow);
 				if (!done.mob && me().equals(done.reader) && MIC.isRunning() && !monitoring) {
-					// Loud right on the rhyme beat (shifted by the player's latency), not just anywhere in the line.
-					boolean loud = rhymePeak > 0.08f;
-					ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"bar\",\"loud\":" + loud + "}"));
-					if (view.fuse && rowPeak < 0.02f) ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"silent\"}"));
+					boolean onBeatLoud = rhymePeak > 0.08f;
+					boolean anyNearLoud = onBeatLoud || nearRhymePeak > 0.08f;
+					int deltaMs = onBeatLoud ? rhymePeakDeltaMs : anyNearLoud ? nearPeakDeltaMs : -1;
+					boolean silentBar = rowPeak < 0.02f;
+					ClientPlayNetworking.send(new Payloads.ActionC2S(
+						"{\"type\":\"bar\",\"loud\":" + onBeatLoud + ",\"deltaMs\":" + deltaMs + ",\"silent\":" + silentBar + "}"));
+					if (view.fuse && silentBar) ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"silent\"}"));
 				}
 			}
 			trackedRow = idx;
 			rowPeak = 0;
 			rhymePeak = 0;
+			nearRhymePeak = 0;
+			rhymePeakDeltaMs = -1;
+			nearPeakDeltaMs = -1;
 		}
 		if (mine) {
 			rowPeak = Math.max(rowPeak, MIC.level);
-			long heard = clock() - ClientConfig.get().latencyMs;
-			long bm = view.beatMs;
-			if (heard >= (live.startBeat + 3) * bm - bm * 35 / 100 && heard < (live.startBeat + 4) * bm + bm / 4) {
-				rhymePeak = Math.max(rhymePeak, MIC.level);
+			smoothMic += (MIC.level - smoothMic) * 0.25f;
+			if (MIC.level < 0.02f) {
+				if (silentSinceMs == 0) silentSinceMs = System.currentTimeMillis();
+			} else {
+				silentSinceMs = 0;
 			}
+			long heard = clock() - ClientConfig.get().latencyMs;
+			long bm = Math.max(1, view.beatMs);
+			long expected = (live.startBeat + 3) * bm;
+			long absDelta = Math.abs(heard - expected);
+			if (absDelta <= bm * 35 / 100 && MIC.level > rhymePeak) {
+				rhymePeak = MIC.level;
+				rhymePeakDeltaMs = (int) absDelta;
+			}
+			if (absDelta <= bm * 70 / 100 && MIC.level > nearRhymePeak) {
+				nearRhymePeak = MIC.level;
+				nearPeakDeltaMs = (int) absDelta;
+			}
+			if (beat() - live.startBeat == 3 && MIC.level > 0.08f && absDelta <= bm * 35 / 100) {
+				long now = System.currentTimeMillis();
+				if (now - playerJabAt > bm * 2) {
+					playerJabAt = now;
+					if (view.combo >= 2) mobFlinchAt = now;
+				}
+			}
+		} else {
+			smoothMic *= 0.85f;
+			silentSinceMs = 0;
+		}
+		if (live != null && live.mob && live.punch && beat() - live.startBeat == 3 && beatFrac() < 0.25f) {
+			long now = System.currentTimeMillis();
+			if (now - mobPunchAt > Math.max(400, view.beatMs)) mobPunchAt = now;
 		}
 	}
 
-	private static float rhymePeak;
+	private static float rhymePeak, nearRhymePeak, smoothMic;
+	private static int rhymePeakDeltaMs = -1, nearPeakDeltaMs = -1;
+	private static long silentSinceMs, mobPunchAt, mobFlinchAt, playerJabAt, scratchAt;
+
+	public static float smoothMicLevel() { return smoothMic; }
+
+	public static float silentBeats() {
+		if (silentSinceMs == 0 || view == null || view.beatMs <= 0) return 0f;
+		return (System.currentTimeMillis() - silentSinceMs) / (float) view.beatMs;
+	}
+
+	public static float mobPunchImpulse() { return impulse(mobPunchAt, 220); }
+	public static float fovImpulse() { return impulse(mobPunchAt, 120); }
+	public static float mobFlinchImpulse() { return impulse(mobFlinchAt, 260); }
+	public static float playerJabImpulse() { return impulse(playerJabAt, 220); }
+	public static float scratchImpulse() { return impulse(scratchAt, 300); }
+
+	private static float impulse(long at, long durMs) {
+		if (at <= 0) return 0f;
+		long dt = System.currentTimeMillis() - at;
+		if (dt < 0 || dt > durMs) return 0f;
+		float t = dt / (float) durMs;
+		return (float) Math.sin(t * Math.PI);
+	}
 
 	private static void say(Text text, Formatting color) {
 		MinecraftClient mc = MinecraftClient.getInstance();
@@ -502,15 +566,32 @@ public final class ClientBattle {
 	}
 
 	public static void pressDecline() {
-		if (invite == null) return;
-		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"invite\",\"id\":" + invite.id + ",\"accept\":false}"));
-		invite = null;
+		if (invite != null) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"invite\",\"id\":" + invite.id + ",\"accept\":false}"));
+			invite = null;
+			return;
+		}
+		if (choice != null) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"cancel\"}"));
+			choice = null;
+		}
 	}
 
-	/** R: rap battle, when the choice prompt is open and the mob accepts. */
+	/** R: rap battle when choice is open, or once-per-round rhyme reroll during your verse. */
 	public static void pressRap() {
-		if (choice == null || !choice.allowed) return;
-		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"rap\"}"));
-		choice = null;
+		if (choice != null && choice.allowed) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"rap\"}"));
+			choice = null;
+			return;
+		}
+		if (view != null && !view.spectator && "TIMELINE".equals(view.phase) && view.canReroll && !view.pvp) {
+			scratchAt = System.currentTimeMillis();
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"reroll\"}"));
+		}
+	}
+
+	public static void chooseTopic(int topic) {
+		if (!inLobbyChallenger() || topic < 1 || topic > 3) return;
+		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"topic\",\"topic\":" + topic + "}"));
 	}
 }

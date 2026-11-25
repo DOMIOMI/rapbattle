@@ -1,11 +1,13 @@
 package dev.rapbattle.ai;
 
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
+import dev.rapbattle.battle.Scoring;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,14 +20,17 @@ import java.util.Map;
 public final class Llm {
 	private Llm() {}
 
+	public static final double VERSE_TEMPERATURE = 0.8;
+	public static final double JUDGE_TEMPERATURE = 0.15;
+
 	public static boolean available() {
 		return !RapConfig.get().openRouterKey().isEmpty();
 	}
 
 	/** Sends one request and returns the parsed JSON object, or null on any failure. */
-	private static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens, String lang) {
+	private static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens, double temperature, String lang) {
 		if (!available()) return null;
-		return OpenRouter.ask(system, user, schema, maxTokens, lang);
+		return OpenRouter.ask(system, user, schema, maxTokens, temperature, lang);
 	}
 
 	private static String tone(String lang) {
@@ -44,8 +49,12 @@ public final class Llm {
 	/** One mob line: who of the mob team reads it, the text, and whether it is a punchline. */
 	public record MobLine(String speaker, String text, boolean punch) {}
 
-	/** The mob team's verse plus rhyme groups (4 words each) for the players. */
-	public record Content(List<MobLine> lines, List<List<String>> rhymes) {}
+	/** The mob team's verse, rhyme groups (4 words each) for players, and 2 target words for rebuttals. */
+	public record Content(List<MobLine> lines, List<List<String>> rhymes, List<String> targets) {
+		public Content(List<MobLine> lines, List<List<String>> rhymes) {
+			this(lines, rhymes, List.of());
+		}
+	}
 
 	public record Rapper(String name, String species, String adlib, String style) {}
 
@@ -75,6 +84,19 @@ public final class Llm {
 	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
 									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
 									   String lang) {
+		return roundContent(mobs, rankLabel, mood, language, lineCount, opponents, rhymeGroups, difficulty, round, previous, rivalry, "", lang);
+	}
+
+	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
+									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
+									   String chosenTopic, String lang) {
+		return roundContent(mobs, rankLabel, mood, language, lineCount, opponents, rhymeGroups, difficulty, round, previous, rivalry, chosenTopic, 2, lang);
+	}
+
+	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
+									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
+									   String chosenTopic, int maxTargets, String lang) {
+		int targetLimit = Math.max(2, maxTargets);
 		boolean ru = Lang.isRu(lang);
 		String system;
 		String diff;
@@ -106,6 +128,8 @@ public final class Llm {
 				Слова в группе бери в разных формах, не только начальной: падежи, множественное число, глаголы
 				(например: «кирками, руками, врагами, веками» или «сгорел, умел, задел, пропел»).
 				Каждый раз новый куплет: не повторяй типовые фразы, придумывай свежие образы.
+				Также укажи targets: ровно """ + targetLimit + """
+				 коротких опорных слова (существительных или ярких образа) прямо из твоего куплета мобов, которые игрок может обыграть в ответ.
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "простые, короткие, бытовые (кот/рот/живот/компот)";
@@ -120,7 +144,9 @@ public final class Llm {
 					.append(". Характер: ").append(r.style()).append('\n');
 			}
 			u.append("Соперники (игроки): ").append(String.join(", ", opponents)).append(".\n");
-			u.append("Угол атаки в этот раз: ").append(ANGLES.get(new java.util.Random().nextInt(ANGLES.size()))).append(".\n");
+			String angle = (chosenTopic != null && !chosenTopic.isBlank()) ? chosenTopic
+				: ANGLES.get(new java.util.Random().nextInt(ANGLES.size()));
+			u.append("Угол атаки в этот раз: ").append(angle).append(".\n");
 			if (rivalry != null && !rivalry.isBlank()) u.append(rivalry).append(' ');
 			if (round > 1) u.append("Это раунд ").append(round).append(". В прошлом раунде было:\n").append(previous).append("\nОтветь на это и не повторяйся.\n");
 			u.append("Напиши ровно ").append(lineCount).append(" строк для мобов и ").append(rhymeGroups)
@@ -151,6 +177,8 @@ public final class Llm {
 				Use varied word forms in each group, not just base nouns: plurals, past tense, -ing verbs
 				(for example: "mining, shining, whining, dining" or "burned, turned, learned, earned").
 				Fresh verse every time: do not recycle generic lines, invent new imagery.
+				Also return targets: exactly """ + targetLimit + """
+				 short anchor words (nouns/images) from the mob's verse that the player can flip in a rebuttal.
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "simple, short, everyday words (cat/hat/bat/flat)";
@@ -165,7 +193,9 @@ public final class Llm {
 					.append(". Style: ").append(r.style()).append('\n');
 			}
 			u.append("Opponents (players): ").append(String.join(", ", opponents)).append(".\n");
-			u.append("Angle of attack this time: ").append(ANGLES_EN.get(new java.util.Random().nextInt(ANGLES_EN.size()))).append(".\n");
+			String angle = (chosenTopic != null && !chosenTopic.isBlank()) ? chosenTopic
+				: ANGLES_EN.get(new java.util.Random().nextInt(ANGLES_EN.size()));
+			u.append("Angle of attack this time: ").append(angle).append(".\n");
 			if (rivalry != null && !rivalry.isBlank()) u.append(rivalry).append(' ');
 			if (round > 1) u.append("This is round ").append(round).append(". In the previous round:\n").append(previous).append("\nRespond to it and do not repeat yourself.\n");
 			u.append("Write exactly ").append(lineCount).append(" lines for the mobs and ").append(rhymeGroups)
@@ -174,30 +204,30 @@ public final class Llm {
 		Map<String, Object> line = Map.of("type", "object",
 			"properties", Map.of("speaker", Map.of("type", "string"), "text", Map.of("type", "string"), "punch", Map.of("type", "boolean")),
 			"required", List.of("speaker", "text", "punch"), "additionalProperties", false);
-		// Property order matters: the model writes the theme first and then sticks to it.
-		Map<String, Object> props = new java.util.LinkedHashMap<>();
+		Map<String, Object> props = new LinkedHashMap<>();
 		props.put("theme", Map.of("type", "string"));
 		props.put("lines", Map.of("type", "array", "items", line));
 		props.put("rhymes", Map.of("type", "array", "items", Map.of("type", "array", "items", Map.of("type", "string"))));
+		props.put("targets", Map.of("type", "array", "items", Map.of("type", "string")));
 		Map<String, Object> schema = Map.of(
 			"type", "object",
 			"properties", props,
-			"required", List.of("theme", "lines", "rhymes"),
+			"required", List.of("theme", "lines", "rhymes", "targets"),
 			"additionalProperties", false);
-		JsonObject o = ask(system, u.toString(), schema, 3000, lang);
+		JsonObject o = ask(system, u.toString(), schema, 3000, VERSE_TEMPERATURE, lang);
 		if (o == null || !o.has("lines")) return null;
 		try {
-			List<MobLine> lines = new java.util.ArrayList<>();
+			List<MobLine> lines = new ArrayList<>();
 			for (var e : o.getAsJsonArray("lines")) {
 				JsonObject l = e.getAsJsonObject();
 				String text = l.get("text").getAsString().trim();
 				if (text.isEmpty()) continue;
 				lines.add(new MobLine(l.get("speaker").getAsString().trim(), text, l.has("punch") && l.get("punch").getAsBoolean()));
 			}
-			List<List<String>> rhymes = new java.util.ArrayList<>();
+			List<List<String>> rhymes = new ArrayList<>();
 			if (o.has("rhymes")) {
 				for (var g : o.getAsJsonArray("rhymes")) {
-					List<String> words = new java.util.ArrayList<>();
+					List<String> words = new ArrayList<>();
 					for (var w : g.getAsJsonArray()) {
 						String word = w.getAsString().trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}-]", "");
 						if (!word.isEmpty() && !words.contains(word)) words.add(word);
@@ -205,8 +235,15 @@ public final class Llm {
 					if (words.size() >= 4) rhymes.add(words.subList(0, 4));
 				}
 			}
+			List<String> targets = new ArrayList<>();
+			if (o.has("targets")) {
+				for (var tw : o.getAsJsonArray("targets")) {
+					String w = tw.getAsString().trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}-]", "");
+					if (!w.isEmpty() && !targets.contains(w) && targets.size() < targetLimit) targets.add(w);
+				}
+			}
 			if (lines.size() < lineCount) return null;
-			return new Content(lines.subList(0, lineCount), rhymes);
+			return new Content(lines.subList(0, lineCount), rhymes, targets);
 		} catch (RuntimeException e) {
 			RapBattle.LOG.error("Bad verse JSON: {}", o, e);
 			return null;
@@ -245,9 +282,9 @@ public final class Llm {
 		Map<String, Object> schema = Map.of("type", "object",
 			"properties", Map.of("lines", Map.of("type", "array", "items", Map.of("type", "string"))),
 			"required", List.of("lines"), "additionalProperties", false);
-		JsonObject o = ask(system, user, schema, 1500, lang);
+		JsonObject o = ask(system, user, schema, 1500, VERSE_TEMPERATURE, lang);
 		if (o == null || !o.has("lines")) return null;
-		List<String> out = new java.util.ArrayList<>();
+		List<String> out = new ArrayList<>();
 		o.getAsJsonArray("lines").forEach(e -> {
 			String s = e.getAsString().trim();
 			if (!s.isEmpty() && s.length() < 90) out.add(s);
@@ -260,81 +297,157 @@ public final class Llm {
 		return aggroLines(species, style, adlib, examples, count, Lang.RU);
 	}
 
-	// ---------------------------------------------------------------- judge
+	// ---------------------------------------------------------------- judge 2.0
 
-	public record PlayerVerse(String name, List<String> rhymeWords, String transcript) {}
+	/** One bar prepared for the judge: 1-based line number, target rhyme, timing label, spoken text, and whether the bar was silent. */
+	public record BarPrompt(int line, String targetWord, String timing, String text, boolean silent) {}
 
-	/** One line of a player as the judge saw it: 0..10, a punchline or not, a short note for the screen. */
-	public record LineScore(int score, boolean punch, String note) {
-		/** Respect this line takes from the mob: the mark, plus half of it on top for a punchline. */
-		public int damage() { return score + (punch ? (score + 1) / 2 : 0); }
+	public record PlayerVerse(String name, List<String> rhymeWords, String transcript, String timingNote, List<BarPrompt> bars) {
+		public PlayerVerse(String name, List<String> rhymeWords, String transcript) {
+			this(name, rhymeWords, transcript, "", List.of());
+		}
+
+		public PlayerVerse(String name, List<String> rhymeWords, String transcript, String timingNote) {
+			this(name, rhymeWords, transcript, timingNote, List.of());
+		}
+	}
+
+	/**
+	 * Judge 2.0 line evaluation:
+	 * rhyme (0..2), meaning (0..3), rebuttal (true/false), note (<= 30 chars).
+	 * Code computes {@code score = meaning == 0 ? 0 : rhyme * 2 + meaning * 2} and {@code punch = meaning == 3}.
+	 */
+	public record LineScore(int score, int rhyme, int meaning, boolean punch, boolean rebuttal, String note) {
+		public LineScore(int score, boolean punch, String note) {
+			this(score, score >= 6 ? 2 : score >= 3 ? 1 : 0, punch ? 3 : score >= 6 ? 2 : score > 0 ? 1 : 0, punch, false, note);
+		}
+
+		public static LineScore fromRubric(int rhyme, int meaning, boolean rebuttal, String note) {
+			int r = Math.max(0, Math.min(2, rhyme));
+			int m = Math.max(0, Math.min(3, meaning));
+			int sc = Scoring.scoreFromRubric(r, m);
+			boolean p = sc > 0 && Scoring.punchFromRubric(m);
+			return new LineScore(sc, r, m, p, sc > 0 && rebuttal, trimNote(note));
+		}
+
+		public static LineScore silent(String lang) {
+			return new LineScore(0, 0, 0, false, false, Lang.isRu(lang) ? "тишина" : "silence");
+		}
 	}
 
 	/** The judge's verdict for one round: the mob's verse 0..10, every player's lines, and the host's comment. */
-	public record Verdict(int mobVerse, Map<String, List<LineScore>> playerLines, String comment) {
-		public int damageBy(String name) {
-			return playerLines.getOrDefault(name, List.of()).stream().mapToInt(LineScore::damage).sum();
+	public record Verdict(int mobVerse, Map<String, List<LineScore>> playerLines, String comment) {}
+
+	/** Single-call PvP verdict supporting both same-language and bilingual (RU vs EN) player battles. */
+	public record PvpVerdict(Map<String, List<LineScore>> linesRu, Map<String, List<LineScore>> linesEn,
+							 String commentRu, String commentEn) {
+		public Verdict forLang(String lang) {
+			boolean ru = Lang.isRu(lang);
+			return new Verdict(0, ru ? linesRu : linesEn, ru ? commentRu : commentEn);
 		}
+	}
+
+	private static String trimNote(String raw) {
+		if (raw == null) return "";
+		String n = raw.trim();
+		return n.length() > 30 ? n.substring(0, 29) + "…" : n;
+	}
+
+	private static List<BarPrompt> ensureBars(PlayerVerse p, String lang) {
+		if (p.bars() != null && !p.bars().isEmpty()) return p.bars();
+		List<Scoring.BarSlot> slots = new ArrayList<>();
+		for (int i = 0; i < p.rhymeWords().size(); i++) slots.add(new Scoring.BarSlot(i + 1, i * 4, p.rhymeWords().get(i)));
+		List<Scoring.SlicedBar> sliced = Scoring.sliceBars(null, null, p.transcript(), slots, 600, lang);
+		List<BarPrompt> out = new ArrayList<>(sliced.size());
+		for (Scoring.SlicedBar b : sliced) out.add(new BarPrompt(b.lineIndex(), b.targetWord(), "—", b.text(), b.silent()));
+		return out;
 	}
 
 	public static Verdict judge(String mobName, String species, String rankLabel, String expectation, int lo, int hi,
 								List<String> mobLines, List<PlayerVerse> players, String lang) {
+		boolean ru = Lang.isRu(lang);
+		Map<String, List<BarPrompt>> barsByPlayer = new LinkedHashMap<>();
+		boolean anySpoken = false;
+		for (PlayerVerse p : players) {
+			List<BarPrompt> bp = ensureBars(p, lang);
+			barsByPlayer.put(p.name(), bp);
+			for (BarPrompt b : bp) if (!b.silent()) anySpoken = true;
+		}
+		// Silent bars are immediately 0 — if nobody said anything at all, skip asking the model about player lines.
+		if (!anySpoken) {
+			RapBattle.LOG.warn("Judge skipped: all player bars marked silent (players={})", players.size());
+			return null;
+		}
+
 		String system;
 		StringBuilder u = new StringBuilder();
-		if (Lang.isRu(lang)) {
+		if (ru) {
 			system = """
-				Ты судья рэп-баттла в Minecraft. Против моба (или команды мобов) читают один или несколько игроков (одна команда).
-				Игроки читали голосом под бит, их речь распознана автоматически одним текстом, поэтому возможны ошибки
-				распознавания: не придирайся к ним. Каждой строке игрока была назначена рифма (слово, которым строка должна кончаться).
-				Оцени КАЖДУЮ строку игрока по порядку заданных рифм: найди в тексте, где он читал строку на эту рифму.
-				score от 0 до 10: 0 строки нет или мимо рифмы и смысла, 3 рифма есть, но смысла нет, 6 рифма в точку и связно,
-				8 сильная строка, 10 разнос. punch: true, если строка — настоящий панч или ответ на дисс моба.
-				note: пометка до 30 символов для экрана, по-русски, дерзко: «рифма в точку», «мимо рифмы», «панч про шерсть», «тишина».
-				mobVerse от 0 до 10: насколько силён куплет мобов.
-				comment: одна-две фразы на русском (до 200 символов) в стиле дерзкого ведущего баттла: процитируй или упомяни
-				конкретную строчку игрока и вынеси вердикт. Не упоминай баллы и цифры. Каждый раз по-новому:
-				не начинай с одних и тех же слов, меняй образы, сравнения и подачу.
+				Ты объективный судья рэп-баттла в Minecraft. Против моба (или команды мобов) читает команда игроков.
+				Речь игроков распознана автоматически и разбита по тактам (строкам), возможны мелкие ошибки распознавания:
+				не штрафуй за опечатки STT, если слышно созвучие и понятен смысл.
+				ВАЖНО: строки с пометкой «(промолчал такт)» уже получили 0 автоматически — НЕ оценивай их и НЕ включай в массив lines!
+				Оценивай ТОЛЬКО непустые строки, указывая точный номер строки `line` из списка.
+				Рубрика для каждой непустой строки:
+				- rhyme (0..2): 0 — мимо заданной рифмы, 1 — неточная рифма / созвучие / искажение STT, 2 — точная рифма в конце строки. Если у строки указано «СВОЯ РИФМА к предыдущей», оценивай, зарифмовал ли игрок свою строку с концом предыдущей строки!
+				- meaning (0..3): 0 — бессмысленный набор слов ради рифмы, 1 — простая связная фраза, 2 — адресный наезд по теме или сопернику, 3 — яркий образ, игра слов или мощный панч.
+				- rebuttal (boolean): true, только если строка прямо отбивает или переворачивает конкретный тезис из куплета моба.
+				- note: дерзкая подпись до 30 символов по-русски («рифма в точку», «панч про шерсть», «ответ про лаву», «вода»).
+				mobVerse (0..10): насколько силён куплет мобов.
+				comment: 1–2 живые фразы ведущего по-русски (до 200 символов), упомяни конкретную строчку игрока и вынеси вердикт без цифр и баллов.
 				""" + tone(lang);
 			u.append("Соперник: ").append(mobName).append(" (").append(species).append("), ранг ").append(rankLabel).append(".\n");
-			u.append("Ожидания: ").append(expectation).append(" Обычно куплет мобов этого ранга стоит от ").append(lo).append(" до ").append(hi).append(" баллов.\n");
+			u.append(expectation).append(" Обычно куплет моба этого ранга оценивается от ").append(lo).append(" до ").append(hi).append(".\n");
 			u.append("Куплет мобов:\n");
 			mobLines.forEach(l -> u.append("  ").append(l).append('\n'));
 			for (PlayerVerse p : players) {
-				u.append("\nИгрок ").append(p.name()).append(". Заданные рифмы по порядку строк: ").append(String.join(", ", p.rhymeWords()))
-					.append(" (строк: ").append(p.rhymeWords().size()).append(")\n");
-				u.append("Что он прочитал: ").append(p.transcript().isBlank() ? "(молчал)" : p.transcript()).append('\n');
+				u.append("\nИгрок ").append(p.name()).append(" (по тактам):\n");
+				for (BarPrompt b : barsByPlayer.get(p.name())) {
+					String targetInfo = b.targetWord().isEmpty() ? "СВОЯ РИФМА к предыдущей строке" : "цель-рифма: «" + b.targetWord() + "»";
+					u.append("  ").append(b.line()).append(". [").append(targetInfo)
+						.append(" | тайминг: ").append(b.timing()).append("] → ")
+						.append(b.silent() ? "(промолчал такт)" : "«" + b.text() + "»").append('\n');
+				}
 			}
 		} else {
 			system = """
-				You are the judge of a Minecraft rap battle. One or more players (one team) rap against a mob (or mob team).
-				The players rapped by voice over a beat and their speech was auto-transcribed as a single block of text, so
-				transcription errors happen: do not nitpick them. Each player line was assigned a target rhyme word (the word the line should end with).
-				Score EVERY player line in the order of the assigned rhymes: find where in the transcript they rapped that rhyme.
-				score 0 to 10: 0 missing line or off-rhyme and no sense, 3 rhyme is there but no sense, 6 on the rhyme and coherent,
-				8 strong bar, 10 total destruction. punch: true if the line is a real punchline or a direct clapback to the mob.
-				note: short label up to 30 characters for the screen, in English, punchy: "on the rhyme", "missed the rhyme", "wool punchline", "silence".
-				mobVerse 0 to 10: how strong the mob team's verse was.
-				comment: one or two sentences in English (up to 200 characters) in the voice of a cocky battle host: quote or reference
-				a specific line from the player and deliver the verdict. Do not mention scores or numbers. Keep it fresh every time:
-				do not start with the same phrasing, vary your imagery, comparisons, and delivery.
+				You are the objective judge of a Minecraft rap battle. One or more players battle a mob (or mob crew).
+				Player speech was auto-transcribed and sliced into bars; minor STT errors happen, so forgive near-homophones when sense and sound match.
+				IMPORTANT: bars marked "(silent bar)" are already scored 0 automatically — DO NOT evaluate them and DO NOT include them in `lines`!
+				Evaluate ONLY non-silent bars, returning their exact 1-based `line` number from the list.
+				Rubric for each non-silent bar:
+				- rhyme (0..2): 0 — missed target rhyme, 1 — slant rhyme / near-homophone / STT typo, 2 — exact rhyme landed at bar end. If a bar says "OWN RHYME to previous bar", judge whether it rhymes with the end of the previous bar!
+				- meaning (0..3): 0 — incoherent word salad, 1 — simple coherent line, 2 — aimed diss at opponent/topic, 3 — vivid image, wordplay, or hard punchline.
+				- rebuttal (boolean): true only if the bar directly counters or flips a specific claim from the mob's verse.
+				- note: punchy screen label up to 30 chars in English ("dead-on rhyme", "wool punchline", "flipped lava diss", "filler").
+				mobVerse (0..10): how strong the mob team's verse was.
+				comment: 1–2 sentences in English (up to 200 chars) in a cocky battle-host voice, referencing a concrete player bar with no numbers.
 				""" + tone(lang);
 			u.append("Opponent: ").append(mobName).append(" (").append(species).append("), rank ").append(rankLabel).append(".\n");
-			u.append("Expectations: ").append(expectation).append(" Usually a mob verse of this rank scores between ").append(lo).append(" and ").append(hi).append(".\n");
+			u.append(expectation).append(" Usually a mob verse of this rank scores between ").append(lo).append(" and ").append(hi).append(".\n");
 			u.append("Mob verse:\n");
 			mobLines.forEach(l -> u.append("  ").append(l).append('\n'));
 			for (PlayerVerse p : players) {
-				u.append("\nPlayer ").append(p.name()).append(". Assigned rhymes in line order: ").append(String.join(", ", p.rhymeWords()))
-					.append(" (lines: ").append(p.rhymeWords().size()).append(")\n");
-				u.append("What they rapped: ").append(p.transcript().isBlank() ? "(silent)" : p.transcript()).append('\n');
+				u.append("\nPlayer ").append(p.name()).append(" (bar by bar):\n");
+				for (BarPrompt b : barsByPlayer.get(p.name())) {
+					String targetInfo = b.targetWord().isEmpty() ? "OWN RHYME to previous bar" : "target rhyme: \"" + b.targetWord() + "\"";
+					u.append("  ").append(b.line()).append(". [").append(targetInfo)
+						.append(" | timing: ").append(b.timing()).append("] → ")
+						.append(b.silent() ? "(silent bar)" : "\"" + b.text() + "\"").append('\n');
+				}
 			}
 		}
-		Map<String, Object> line = new java.util.LinkedHashMap<>();
-		line.put("type", "object");
-		line.put("properties", Map.of("score", Map.of("type", "integer"), "punch", Map.of("type", "boolean"), "note", Map.of("type", "string")));
-		line.put("required", List.of("score", "punch", "note"));
-		line.put("additionalProperties", false);
+
+		Map<String, Object> lineProps = new LinkedHashMap<>();
+		lineProps.put("line", Map.of("type", "integer"));
+		lineProps.put("rhyme", Map.of("type", "integer"));
+		lineProps.put("meaning", Map.of("type", "integer"));
+		lineProps.put("rebuttal", Map.of("type", "boolean"));
+		lineProps.put("note", Map.of("type", "string"));
+		Map<String, Object> lineSchema = Map.of("type", "object", "properties", lineProps,
+			"required", List.of("line", "rhyme", "meaning", "rebuttal", "note"), "additionalProperties", false);
 		Map<String, Object> ps = Map.of("type", "object",
-			"properties", Map.of("name", Map.of("type", "string"), "lines", Map.of("type", "array", "items", line)),
+			"properties", Map.of("name", Map.of("type", "string"), "lines", Map.of("type", "array", "items", lineSchema)),
 			"required", List.of("name", "lines"), "additionalProperties", false);
 		Map<String, Object> schema = Map.of(
 			"type", "object",
@@ -344,29 +457,26 @@ public final class Llm {
 				"comment", Map.of("type", "string")),
 			"required", List.of("mobVerse", "players", "comment"),
 			"additionalProperties", false);
-		JsonObject o = ask(system, u.toString(), schema, 4000, lang);
-		if (o == null) return null;
+
+		JsonObject o = ask(system, u.toString(), schema, 4000, JUDGE_TEMPERATURE, lang);
+		if (o == null) {
+			RapBattle.LOG.warn("Judge LLM returned null (OpenRouter/model error or empty response)");
+			return null;
+		}
 		try {
-			Map<String, List<LineScore>> byName = new java.util.LinkedHashMap<>();
-			List<List<LineScore>> ordered = new java.util.ArrayList<>();
+			Map<String, JsonObject> playerJsonByName = new LinkedHashMap<>();
+			List<JsonObject> playerJsonOrdered = new ArrayList<>();
 			for (var e : o.getAsJsonArray("players")) {
-				JsonObject p = e.getAsJsonObject();
-				List<LineScore> ls = new java.util.ArrayList<>();
-				for (var le : p.getAsJsonArray("lines")) {
-					JsonObject l = le.getAsJsonObject();
-					String note = l.get("note").getAsString().trim();
-					if (note.length() > 34) note = note.substring(0, 33) + "…";
-					ls.add(new LineScore(Math.max(0, Math.min(10, l.get("score").getAsInt())), l.get("punch").getAsBoolean(), note));
-				}
-				byName.put(p.get("name").getAsString().trim(), ls);
-				ordered.add(ls);
+				JsonObject pj = e.getAsJsonObject();
+				playerJsonByName.put(pj.get("name").getAsString().trim(), pj);
+				playerJsonOrdered.add(pj);
 			}
-			// The model may mangle a nickname or miscount lines; fall back to order and pad / cut to the real line count.
-			Map<String, List<LineScore>> fixed = new java.util.LinkedHashMap<>();
+			Map<String, List<LineScore>> fixed = new LinkedHashMap<>();
 			for (int i = 0; i < players.size(); i++) {
 				PlayerVerse pv = players.get(i);
-				List<LineScore> ls = byName.containsKey(pv.name()) ? byName.get(pv.name()) : i < ordered.size() ? ordered.get(i) : List.of();
-				fixed.put(pv.name(), fit(ls, pv, lang));
+				JsonObject pj = playerJsonByName.containsKey(pv.name()) ? playerJsonByName.get(pv.name())
+					: i < playerJsonOrdered.size() ? playerJsonOrdered.get(i) : null;
+				fixed.put(pv.name(), mergeBarScores(barsByPlayer.get(pv.name()), pj, "note", lang));
 			}
 			int mob = Math.max(0, Math.min(10, o.get("mobVerse").getAsInt()));
 			return new Verdict(mob, fixed, o.get("comment").getAsString().trim());
@@ -376,23 +486,192 @@ public final class Llm {
 		}
 	}
 
+	/**
+	 * Single-call PvP judge for two players: tells the model who went first and that the second reader could rebut.
+	 * When the two players use different languages, asks for notes and comments in both RU and EN in one response.
+	 */
+	public static PvpVerdict judgePvp(PlayerVerse first, PlayerVerse second, String langFirst, String langSecond) {
+		List<BarPrompt> bars1 = ensureBars(first, langFirst);
+		List<BarPrompt> bars2 = ensureBars(second, langSecond);
+		boolean anySpoken = bars1.stream().anyMatch(b -> !b.silent()) || bars2.stream().anyMatch(b -> !b.silent());
+		if (!anySpoken) return null;
+
+		boolean bilingual = !Lang.isRu(langFirst) == Lang.isRu(langSecond);
+		String primaryLang = bilingual ? Lang.EN : langFirst;
+		boolean ru = Lang.isRu(primaryLang);
+
+		String system;
+		StringBuilder u = new StringBuilder();
+		if (!bilingual && ru) {
+			system = """
+				Ты объективный судья PvP рэп-баттла 1-на-1 между двумя игроками в Minecraft.
+				Игрок 1 читал ПЕРВЫМ и задавал тон (у него rebuttal = false). Игрок 2 читал ВТОРЫМ после куплета Игрока 1 и мог прямо отвечать на его строки (rebuttal = true за точный ответ на наезд Игрока 1).
+				Строки «(промолчал такт)» НЕ оценивай и НЕ включай в массив lines (за них уже стоит 0).
+				Рубрика для непустых строк: rhyme (0..2), meaning (0..3), rebuttal (boolean), note (до 30 символов по-русски).
+				comment: 1–2 дерзкие фразы ведущего по-русски (до 200 символов) без цифр — сравни обоих и скажи, кто кого перечитал.
+				""" + tone(Lang.RU);
+			appendPvpBarsRu(u, first, bars1, true);
+			appendPvpBarsRu(u, second, bars2, false);
+		} else if (!bilingual) {
+			system = """
+				You are the objective judge of a 1v1 PvP Minecraft rap battle between two players.
+				Player 1 rapped FIRST to open the battle (rebuttal = false for Player 1). Player 2 rapped SECOND after hearing Player 1 and could directly answer/flip Player 1's bars (rebuttal = true when countering Player 1's lines).
+				DO NOT evaluate or include "(silent bar)" entries in `lines` (they automatically score 0).
+				Rubric for non-silent bars: rhyme (0..2), meaning (0..3), rebuttal (boolean), note (up to 30 chars in English).
+				comment: 1–2 cocky host sentences in English (up to 200 chars) with no numbers, comparing both rappers.
+				""" + tone(Lang.EN);
+			appendPvpBarsEn(u, first, bars1, true);
+			appendPvpBarsEn(u, second, bars2, false);
+		} else {
+			system = """
+				You are the bilingual (Russian + English) judge of a 1v1 PvP Minecraft rap battle. Each player rapped in their own language.
+				Player 1 rapped FIRST to open the battle (rebuttal = false for Player 1). Player 2 rapped SECOND after hearing Player 1 and could directly answer/flip Player 1's disses even across languages (rebuttal = true when countering Player 1's points).
+				DO NOT evaluate or include "(silent bar)" entries in `lines` (they automatically score 0).
+				Use ONE fair scale for both languages:
+				- rhyme (0..2): 0 missed target rhyme, 1 slant rhyme / STT near-match, 2 exact target rhyme in that player's language.
+				- meaning (0..3): 0 word salad, 1 simple coherent bar, 2 aimed diss, 3 vivid punchline/wordplay.
+				- rebuttal (boolean): true only when Player 2 directly counters a point from Player 1's verse.
+				- noteRu (Russian, <=30 chars) and noteEn (English, <=30 chars) for every evaluated bar.
+				- commentRu (Russian) and commentEn (English): 1–2 cocky host sentences (<=200 chars) with no numbers.
+				""" + tone(Lang.EN);
+			u.append("Player 1 (rapped FIRST, language ").append(Lang.isRu(langFirst) ? "Russian" : "English").append(") — ").append(first.name()).append(":\n");
+			for (BarPrompt b : bars1) {
+				u.append("  ").append(b.line()).append(". [target rhyme: \"").append(b.targetWord()).append("\" | timing: ").append(b.timing()).append("] → ")
+					.append(b.silent() ? "(silent bar)" : "\"" + b.text() + "\"").append('\n');
+			}
+			u.append("\nPlayer 2 (rapped SECOND — could answer Player 1, language ").append(Lang.isRu(langSecond) ? "Russian" : "English").append(") — ").append(second.name()).append(":\n");
+			for (BarPrompt b : bars2) {
+				u.append("  ").append(b.line()).append(". [target rhyme: \"").append(b.targetWord()).append("\" | timing: ").append(b.timing()).append("] → ")
+					.append(b.silent() ? "(silent bar)" : "\"" + b.text() + "\"").append('\n');
+			}
+		}
+
+		Map<String, Object> lineProps = new LinkedHashMap<>();
+		lineProps.put("line", Map.of("type", "integer"));
+		lineProps.put("rhyme", Map.of("type", "integer"));
+		lineProps.put("meaning", Map.of("type", "integer"));
+		lineProps.put("rebuttal", Map.of("type", "boolean"));
+		List<String> lineReq;
+		if (bilingual) {
+			lineProps.put("noteRu", Map.of("type", "string"));
+			lineProps.put("noteEn", Map.of("type", "string"));
+			lineReq = List.of("line", "rhyme", "meaning", "rebuttal", "noteRu", "noteEn");
+		} else {
+			lineProps.put("note", Map.of("type", "string"));
+			lineReq = List.of("line", "rhyme", "meaning", "rebuttal", "note");
+		}
+		Map<String, Object> lineSchema = Map.of("type", "object", "properties", lineProps, "required", lineReq, "additionalProperties", false);
+		Map<String, Object> ps = Map.of("type", "object",
+			"properties", Map.of("name", Map.of("type", "string"), "lines", Map.of("type", "array", "items", lineSchema)),
+			"required", List.of("name", "lines"), "additionalProperties", false);
+		Map<String, Object> rootProps = new LinkedHashMap<>();
+		rootProps.put("players", Map.of("type", "array", "items", ps));
+		List<String> rootReq;
+		if (bilingual) {
+			rootProps.put("commentRu", Map.of("type", "string"));
+			rootProps.put("commentEn", Map.of("type", "string"));
+			rootReq = List.of("players", "commentRu", "commentEn");
+		} else {
+			rootProps.put("comment", Map.of("type", "string"));
+			rootReq = List.of("players", "comment");
+		}
+		Map<String, Object> schema = Map.of("type", "object", "properties", rootProps, "required", rootReq, "additionalProperties", false);
+
+		JsonObject o = ask(system, u.toString(), schema, 4000, JUDGE_TEMPERATURE, primaryLang);
+		if (o == null) return null;
+		try {
+			Map<String, JsonObject> byName = new LinkedHashMap<>();
+			List<JsonObject> ordered = new ArrayList<>();
+			for (var e : o.getAsJsonArray("players")) {
+				JsonObject pj = e.getAsJsonObject();
+				byName.put(pj.get("name").getAsString().trim(), pj);
+				ordered.add(pj);
+			}
+			List<PlayerVerse> pair = List.of(first, second);
+			List<List<BarPrompt>> pairBars = List.of(bars1, bars2);
+			Map<String, List<LineScore>> mapRu = new LinkedHashMap<>();
+			Map<String, List<LineScore>> mapEn = new LinkedHashMap<>();
+			for (int i = 0; i < 2; i++) {
+				PlayerVerse pv = pair.get(i);
+				JsonObject pj = byName.containsKey(pv.name()) ? byName.get(pv.name()) : i < ordered.size() ? ordered.get(i) : null;
+				if (bilingual) {
+					mapRu.put(pv.name(), mergeBarScores(pairBars.get(i), pj, "noteRu", Lang.RU));
+					mapEn.put(pv.name(), mergeBarScores(pairBars.get(i), pj, "noteEn", Lang.EN));
+				} else {
+					List<LineScore> ls = mergeBarScores(pairBars.get(i), pj, "note", primaryLang);
+					mapRu.put(pv.name(), ls);
+					mapEn.put(pv.name(), ls);
+				}
+			}
+			String cRu = bilingual ? o.get("commentRu").getAsString().trim() : o.get("comment").getAsString().trim();
+			String cEn = bilingual ? o.get("commentEn").getAsString().trim() : cRu;
+			return new PvpVerdict(mapRu, mapEn, cRu, cEn);
+		} catch (RuntimeException e) {
+			RapBattle.LOG.error("Bad PvP judge JSON: {}", o, e);
+			return null;
+		}
+	}
+
+	private static void appendPvpBarsRu(StringBuilder u, PlayerVerse p, List<BarPrompt> bars, boolean first) {
+		u.append(first ? "\nИгрок 1 (читал ПЕРВЫМ, задавал тему) — " : "\nИгрок 2 (читал ВТОРЫМ, мог отвечать Игроку 1) — ")
+			.append(p.name()).append(":\n");
+		for (BarPrompt b : bars) {
+			u.append("  ").append(b.line()).append(". [цель-рифма: «").append(b.targetWord())
+				.append("» | тайминг: ").append(b.timing()).append("] → ")
+				.append(b.silent() ? "(промолчал такт)" : "«" + b.text() + "»").append('\n');
+		}
+	}
+
+	private static void appendPvpBarsEn(StringBuilder u, PlayerVerse p, List<BarPrompt> bars, boolean first) {
+		u.append(first ? "\nPlayer 1 (rapped FIRST, opened the battle) — " : "\nPlayer 2 (rapped SECOND, could rebut Player 1) — ")
+			.append(p.name()).append(":\n");
+		for (BarPrompt b : bars) {
+			u.append("  ").append(b.line()).append(". [target rhyme: \"").append(b.targetWord())
+				.append("\" | timing: ").append(b.timing()).append("] → ")
+				.append(b.silent() ? "(silent bar)" : "\"" + b.text() + "\"").append('\n');
+		}
+	}
+
+	/** Maps non-silent bar scores back onto the full bar list while locking silent bars at 0. */
+	static List<LineScore> mergeBarScores(List<BarPrompt> bars, JsonObject playerJson, String noteField, String lang) {
+		int total = bars.size();
+		LineScore[] out = new LineScore[total];
+		List<Integer> nonSilent = new ArrayList<>();
+		for (int i = 0; i < total; i++) {
+			if (bars.get(i).silent()) out[i] = LineScore.silent(lang);
+			else nonSilent.add(i);
+		}
+		List<LineScore> extras = new ArrayList<>();
+		if (playerJson != null && playerJson.has("lines")) {
+			for (var le : playerJson.getAsJsonArray("lines")) {
+				JsonObject l = le.getAsJsonObject();
+				int lineNum = l.has("line") ? l.get("line").getAsInt() : -1;
+				int rhyme = l.get("rhyme").getAsInt();
+				int meaning = l.get("meaning").getAsInt();
+				boolean reb = l.has("rebuttal") && l.get("rebuttal").getAsBoolean();
+				String note = l.has(noteField) ? l.get(noteField).getAsString() : "";
+				LineScore score = LineScore.fromRubric(rhyme, meaning, reb, note);
+				int idx = lineNum - 1;
+				if (idx >= 0 && idx < total && !bars.get(idx).silent() && out[idx] == null) {
+					out[idx] = score;
+				} else {
+					extras.add(score);
+				}
+			}
+		}
+		int ex = 0;
+		String missNote = Lang.isRu(lang) ? "мимо рифмы" : "missed the rhyme";
+		for (int idx : nonSilent) {
+			if (out[idx] == null) {
+				out[idx] = ex < extras.size() ? extras.get(ex++) : new LineScore(0, 0, 0, false, false, missNote);
+			}
+		}
+		return List.of(out);
+	}
+
 	@Deprecated
 	public static Verdict judge(String mobName, String species, String rankLabel, String expectation, int lo, int hi,
 								List<String> mobLines, List<PlayerVerse> players) {
 		return judge(mobName, species, rankLabel, expectation, lo, hi, mobLines, players, Lang.RU);
 	}
-
-	/** Exactly one score per assigned rhyme. */
-	static List<LineScore> fit(List<LineScore> ls, PlayerVerse pv, String lang) {
-		List<LineScore> out = new java.util.ArrayList<>(ls.subList(0, Math.min(ls.size(), pv.rhymeWords().size())));
-		boolean silent = pv.transcript().isBlank();
-		String note = Lang.isRu(lang) ? (silent ? "тишина" : "мимо рифмы") : (silent ? "silence" : "missed the rhyme");
-		while (out.size() < pv.rhymeWords().size()) out.add(new LineScore(0, false, note));
-		return out;
-	}
-
-	static List<LineScore> fit(List<LineScore> ls, PlayerVerse pv) {
-		return fit(ls, pv, Lang.RU);
-	}
-
 }

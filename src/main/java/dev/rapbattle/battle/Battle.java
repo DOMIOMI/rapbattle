@@ -115,10 +115,21 @@ public class Battle {
 	private int noise;
 	/** Crowd: rhyme slots players hit loudly / missed in silence this round. */
 	int barsHit, barsMissed;
+	private final Map<String, List<Boolean>> playerBarLoud = new HashMap<>();
+	private final Map<String, List<Integer>> playerBarDeltaMs = new HashMap<>();
+	private final Map<String, List<Boolean>> playerBarSilent = new HashMap<>();
+	private final Set<UUID> gazedPlayers = new HashSet<>();
+	private final Set<UUID> rerolledPlayers = new HashSet<>();
+	private final Set<UUID> wardenTriggered = new HashSet<>();
+	private List<String> targets = List.of();
+	private int chosenTopic;
+	private boolean hasStyleBonus;
+	private int[] mobLiveDamages = new int[0];
+	private List<Llm.PlayerVerse> pendingVerses = List.of();
 	/** Respect: the battle's health bars. Not reset between rounds. */
 	int respectTeam, respectMob, respectMax;
 	/** The team's run of lines on the beat (x1.5 from the 3rd, x2 from the 6th). */
-	private int combo, bestCombo;
+	int combo, bestCombo;
 	private int dealtTotal, linesOnBeat, linesTotal, roundToMob, roundToTeam, bestLineDamage;
 	private String bestLine = "";
 	private final Map<String, Integer> roundDealt = new HashMap<>();
@@ -134,11 +145,21 @@ public class Battle {
 		this.world = (ServerWorld) mob.getEntityWorld();
 		this.mob = mob;
 		this.opp = Opponent.of(mob, rnd, challenger, lang);
-		this.rank = opp.rank();
+		Rank r = opp.rank();
+		String mobId = opp.profile().id();
+		if (challenger != null && (mobId.equals("villager") || mobId.equals("wandering_trader")
+			|| mobId.equals("pillager") || mobId.equals("vindicator"))
+			&& challenger.getOffHandStack().isOf(net.minecraft.item.Items.EMERALD) && r.level() > 1) {
+			challenger.getOffHandStack().decrement(1);
+			r = Rank.ofLevel(r.level() - 1);
+			Speech.bubble(mob, Lang.t(lang, "rapbattle.trick.bribe_bubble"), 0x7CF0A0, 3000);
+			challenger.sendMessage(Text.translatable("rapbattle.trick.bribe_chat", opp.name()).formatted(net.minecraft.util.Formatting.GREEN), false);
+		}
+		this.rank = r;
 		this.boss = rank.isBoss();
 		this.rounds = boss ? 3 : 1;
 		this.winsNeeded = boss ? 2 : 1;
-		this.respectMax = boss ? 200 : 100;
+		this.respectMax = Scoring.RESPECT_MAX;
 		this.respectTeam = respectMax;
 		this.respectMob = respectMax;
 		long wantMs = Math.round(60000.0 / Math.max(40, Math.min(220, rank.bpm * cfg.tempoScale * tempoOf(opp.profile().id()))));
@@ -241,6 +262,23 @@ public class Battle {
 		if (phase == Phase.LOBBY && p.getUuid().equals(players.get(0))) lobbyEnd = System.currentTimeMillis();
 	}
 
+	/** Challenger picks a battle topic in the lobby (1..3). */
+	public void setTopic(ServerPlayerEntity p, int topic) {
+		if (phase == Phase.LOBBY && p.getUuid().equals(players.get(0)) && topic >= 1 && topic <= 3) {
+			this.chosenTopic = topic;
+			broadcastState();
+		}
+	}
+
+	private String topicPromptText() {
+		return switch (chosenTopic) {
+			case 1 -> Lang.isRu(lang) ? "высмеять шмот, броню и понты соперника" : "roast the opponent's outfit, armor, and flex";
+			case 2 -> Lang.isRu(lang) ? "чей это район и биом, кто здесь хозяин" : "whose turf and biome this is, who runs the block";
+			case 3 -> Lang.isRu(lang) ? "жёсткий личный разбор без тормозов и пощады" : "brutal personal roast with no brakes and no mercy";
+			default -> "";
+		};
+	}
+
 	public void onPlayerLeft(UUID uuid) {
 		if (!hasPlayer(uuid)) {
 			invited.remove(uuid);
@@ -267,8 +305,10 @@ public class Battle {
 		double mark = 3.0 + mob.getWidth() / 2;
 		if (Math.abs(dist - mark) < 0.4) return;
 		Vec3d target = p.add(dir.normalize().multiply(mark));
+		boolean needWater = Crowd.isAquaticOnly(mob);
 		for (double y : new double[]{0, 1, -1}) {
 			Vec3d at = new Vec3d(target.x, Math.floor(m.y) + y, target.z);
+			if (needWater && !world.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(at)).isIn(net.minecraft.registry.tag.FluidTags.WATER)) continue;
 			var box = mob.getBoundingBox().offset(at.subtract(m));
 			if (world.isSpaceEmpty(mob, box) && !world.isSpaceEmpty(mob, box.offset(0, -0.2, 0))) {
 				mob.refreshPositionAndAngles(at.x, at.y, at.z, mob.getYaw(), mob.getPitch());
@@ -303,8 +343,10 @@ public class Battle {
 			Vec3d look = p.subtract(target);
 			float yaw = (float) (Math.toDegrees(Math.atan2(look.z, look.x)) - 90);
 			Vec3d cur = new Vec3d(e.getX(), e.getY(), e.getZ());
+			boolean needWater = Crowd.isAquaticOnly(e);
 			for (double y : new double[]{0, 1, -1}) {
 				Vec3d at = new Vec3d(target.x, Math.floor(m.y) + y, target.z);
+				if (needWater && !world.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(at)).isIn(net.minecraft.registry.tag.FluidTags.WATER)) continue;
 				var box = e.getBoundingBox().offset(at.subtract(cur));
 				if (world.isSpaceEmpty(e, box) && !world.isSpaceEmpty(e, box.offset(0, -0.2, 0))) {
 					e.refreshPositionAndAngles(at.x, at.y, at.z, yaw, 0);
@@ -359,25 +401,20 @@ public class Battle {
 				}
 			}
 		}
-		// Dress code bonus / overdressed check, from the team's average outfit.
+		// Style bonus (+2 for full gang gear, matching dyed leather, or trim; not raw armor material) & overdressed check.
 		double sum = 0;
+		boolean anyStylish = false;
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
-			if (p != null) sum += Outfit.of(p, lang).value();
-		}
-		double avg = sum / Math.max(1, players.size());
-		int above = (int) Math.floor(avg) - Outfit.required(rank);
-		outfitBonus = Math.max(0, Math.min(3, above));
-		// Someone on the team wears the mob's crew colours: "свой на районе".
-		for (UUID u : players) {
-			ServerPlayerEntity p = player(u);
-			if (p != null && Gangs.isOwn(p, opp.profile())) {
-				outfitBonus = Math.min(4, outfitBonus + 1);
-				broadcastChat(Text.translatable("rapbattle.battle.gang_colors", p.getName().getString(), Gangs.of(opp.profile()).name(lang))
-					.formatted(Formatting.GOLD));
-				break;
+			if (p != null) {
+				Outfit.Score os = Outfit.of(p, lang);
+				sum += os.value();
+				if (os.stylish() || Gangs.isOwn(p, opp.profile())) anyStylish = true;
 			}
 		}
+		hasStyleBonus = anyStylish;
+		outfitBonus = hasStyleBonus ? 2 : 0;
+		double avg = sum / Math.max(1, players.size());
 		overdressed = !boss && Math.floor(avg) >= rank.level() + 2;
 	}
 
@@ -428,34 +465,99 @@ public class Battle {
 		if (hasPlayer(p.getUuid()) && opp.profile().id().equals("warden")) noise += Math.max(0, Math.min(10, count));
 	}
 
-	/** Rhymes on the beat: 2 each (1 for "almost"), and a run of them multiplies: x1.5 from 3 in a row, x2 from 6. */
-	static int flowDamage(int[] tm) {
-		double sum = 0;
-		int streak = 0;
-		for (int x : tm) {
-			if (x == 2) {
-				streak++;
-				sum += 2 * (streak >= 6 ? 2.0 : streak >= 3 ? 1.5 : 1.0);
-			} else {
-				streak = 0;
-				if (x == 1) sum += 1;
-			}
+	/** Enderman: looking him in the eyes during his verse shuffles this player's upcoming rhymes on the server. */
+	public void onGaze(ServerPlayerEntity p) {
+		UUID u = p.getUuid();
+		if (phase != Phase.TIMELINE || view == null || !hasPlayer(u) || !opp.profile().id().equals("enderman")) return;
+		if (Trophies.equippedPerk(p) == Trophies.TrophyPerk.WARDEN && wardenTriggered.add(u)) return;
+		if (!gazedPlayers.add(u)) return;
+		String name = names.get(u);
+		int curBeat = (int) Math.floorDiv(System.currentTimeMillis() - beatZero, Math.max(1, beatMs));
+		List<BattleView.Row> upcoming = new ArrayList<>();
+		for (BattleView.Row r : view.rows) {
+			if (!r.mob && name.equals(r.reader) && r.startBeat > curBeat) upcoming.add(r);
 		}
-		return (int) Math.round(sum);
+		if (upcoming.size() < 2) return;
+		List<String> pool = new ArrayList<>();
+		for (BattleView.Row r : upcoming) pool.add(r.word);
+		Collections.shuffle(pool, rnd);
+		boolean changed = false;
+		for (int i = 0; i < upcoming.size(); i++) if (!pool.get(i).equals(upcoming.get(i).word)) changed = true;
+		if (!changed) Collections.rotate(pool, 1);
+		for (int i = 0; i < upcoming.size(); i++) upcoming.get(i).word = pool.get(i);
+		List<String> updatedAll = new ArrayList<>();
+		for (BattleView.Row r : view.rows) {
+			if (!r.mob && name.equals(r.reader)) updatedAll.add(r.word);
+		}
+		rhymeWords.put(u, updatedAll);
+		broadcastState();
 	}
 
-	/** One rhyme slot of a player: said loud on the beat, or silence. Feeds the crowd. */
+	/** Rerolls the current or next upcoming non-freestyle rhyme word for {@code p} once per round (R key). */
+	public void onReroll(ServerPlayerEntity p) {
+		UUID u = p.getUuid();
+		if (phase != Phase.TIMELINE || view == null || !hasPlayer(u) || rerolledPlayers.contains(u)) return;
+		String name = names.get(u);
+		int curBeat = (int) Math.floorDiv(System.currentTimeMillis() - beatZero, Math.max(1, beatMs));
+		BattleView.Row targetRow = null;
+		for (BattleView.Row r : view.rows) {
+			if (!r.mob && name.equals(r.reader) && !r.freestyle && r.startBeat + 2 >= curBeat) {
+				targetRow = r;
+				break;
+			}
+		}
+		if (targetRow == null) return;
+		List<String> used = new ArrayList<>();
+		for (BattleView.Row r : view.rows) if (!r.mob && name.equals(r.reader) && !r.word.isEmpty()) used.add(r.word.toLowerCase(Locale.ROOT));
+		String replacement = RhymeBank.spareWord(targetRow.word, used, rnd, lang);
+		if (replacement == null || replacement.isEmpty()) return;
+		targetRow.word = replacement;
+		List<String> updatedAll = new ArrayList<>();
+		for (BattleView.Row r : view.rows) if (!r.mob && name.equals(r.reader)) updatedAll.add(r.word);
+		rhymeWords.put(u, updatedAll);
+		rerolledPlayers.add(u);
+		world.playSound(null, p.getBlockPos(), net.minecraft.sound.SoundEvents.BLOCK_GRINDSTONE_USE,
+			net.minecraft.sound.SoundCategory.PLAYERS, 0.9f, 1.85f);
+		broadcastState();
+	}
+
+	/** One rhyme slot of a player: said loud on the beat, peak offset from beat 4 (ms), or silence. */
 	public void onBar(ServerPlayerEntity p, boolean loud) {
+		onBar(p, loud, -1, !loud);
+	}
+
+	public void onBar(ServerPlayerEntity p, boolean loud, int deltaMs, boolean silentBar) {
 		if (!hasPlayer(p.getUuid()) || phase != Phase.TIMELINE) return;
+		String who = names.getOrDefault(p.getUuid(), p.getName().getString());
+		int barIdx = playerBarLoud.computeIfAbsent(who, k -> new ArrayList<>()).size();
+		playerBarLoud.get(who).add(loud);
+		playerBarDeltaMs.computeIfAbsent(who, k -> new ArrayList<>()).add(deltaMs);
+		playerBarSilent.computeIfAbsent(who, k -> new ArrayList<>()).add(silentBar);
+		// Spider web_pair: hitting bar 0/2/4 loudly unlocks the webbed 2nd bar of the pair.
+		if (loud && view != null && (opp.profile().id().equals("spider") || opp.profile().id().equals("cave_spider"))) {
+			int curIdx = 0;
+			BattleView.Row nextToUnlock = null;
+			for (BattleView.Row r : view.rows) {
+				if (!r.mob && who.equals(r.reader)) {
+					if (curIdx == barIdx + 1 && "web_pair".equals(r.effect)) {
+						nextToUnlock = r;
+						break;
+					}
+					curIdx++;
+				}
+			}
+			if (nextToUnlock != null) {
+				nextToUnlock.effect = null;
+				broadcastState();
+			}
+		}
 		if (loud) barsHit++;
 		else barsMissed++;
 		linesTotal++;
-		String who = p.getName().getString();
 		if (loud) {
 			combo++;
 			bestCombo = Math.max(bestCombo, combo);
 			linesOnBeat++;
-			// Volume alone deals nothing now: the judge and the beat timing do. It only hypes the crowd and the combo.
 			if (combo >= 3) DamagePop.spawn(world, p, "x" + combo, 0xFFD84A);
 		} else {
 			combo = 0;
@@ -545,7 +647,7 @@ public class Battle {
 		int[] out = new int[mine.size()];
 		for (int i = 0; i < mine.size(); i++) {
 			BattleView.Row row = mine.get(i);
-			String target = ru ? stemRu(row.word) : lastWordEn(row.word);
+			String target = ru ? stemRu(Fallback.lastWord(row.word)) : lastWordEn(row.word);
 			double expected = (row.startBeat + 3) * (double) beatMs;
 			double best = Double.MAX_VALUE;
 			for (dev.rapbattle.ai.Transcriber.Word w : r.words()) {
@@ -579,9 +681,11 @@ public class Battle {
 		if (target.isEmpty()) return false;
 		String w = spoken.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}]", "");
 		if (w.length() < 2) return false;
-		if (w.equals(target)) return true;
-		if (w.equals(target + "s") || w.equals(target + "es") || w.equals(target + "ed") || w.equals(target + "d")) return true;
-		if (target.equals(w + "s") || target.equals(w + "es") || target.equals(w + "ed") || target.equals(w + "d")) return true;
+		for (String cand : Fallback.homophonesEn(target)) {
+			if (w.equals(cand)) return true;
+			if (w.equals(cand + "s") || w.equals(cand + "es") || w.equals(cand + "ed") || w.equals(cand + "d")) return true;
+			if (cand.equals(w + "s") || cand.equals(w + "es") || cand.equals(w + "ed") || cand.equals(w + "d")) return true;
+		}
 		return false;
 	}
 
@@ -683,6 +787,7 @@ public class Battle {
 			return;
 		}
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
+		for (MobEntity m : mobTeam) if (m.isOnFire()) m.extinguish();
 		keepThePeace();
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
@@ -725,8 +830,9 @@ public class Battle {
 				long readMs = ROUND_RESULT_MS + (result == null ? 0 : Math.min(6000, result.comment.length() * 40L) + result.hits.size() * 400L);
 				if (now - phaseStart >= readMs) {
 					round++;
-					// The boss catches his breath between rounds.
-					if (boss) respectMob = Math.min(respectMax, respectMob + 20);
+					// Each round of a boss fight starts fresh at 100 Respect on both sides.
+					respectTeam = respectMax;
+					respectMob = respectMax;
 					beginRoundContent(now);
 				}
 			}
@@ -773,14 +879,27 @@ public class Battle {
 		}
 	}
 
-	/** The crowd goes "ооо" right on the rhyme of a mob punchline. */
+	private static final List<String> CREW_ADLIBS_RU = List.of("Факты!", "Туда его!", "Жёстко!", "Слышал?!", "Ооо!", "По делу!");
+	private static final List<String> CREW_ADLIBS_EN = List.of("Facts!", "Cook him!", "Cold!", "You hear that?!", "Ooh!", "Bars!");
+
+	/** The crowd goes "ооо" right on the rhyme of a mob punchline; crewmates throw backup ad-libs. */
 	private void firePunches(long now) {
 		int beat = (int) Math.floorDiv(now - beatZero, beatMs);
 		for (int i = 0; i < view.rows.size(); i++) {
 			BattleView.Row r = view.rows.get(i);
-			if (r.punch && beat == r.startBeat + 3 && punchesFired.add(i)) Crowd.react(this, Crowd.Moment.MOB_PUNCH);
+			if (r.punch && beat == r.startBeat + 3 && punchesFired.add(i)) {
+				Crowd.react(this, Crowd.Moment.MOB_PUNCH);
+				if (mobTeam.size() > 1) {
+					List<String> pool = Lang.isRu(lang) ? CREW_ADLIBS_RU : CREW_ADLIBS_EN;
+					for (MobEntity m : mobTeam) {
+						if (m.isAlive() && m.getId() != r.readerEntityId) {
+							Speech.bubble(m, pool.get(rnd.nextInt(pool.size())), 0xFFD27F, 1800);
+						}
+					}
+				}
+			}
 			if (r.mob && beat == r.startBeat + 3 && mobLinesFired.add(i)) {
-				int d = rank.lineDamage * (r.punch ? 2 : 1);
+				int d = i < mobLiveDamages.length ? mobLiveDamages[i] : 0;
 				liveHit(false, d, null);
 				for (UUID u : players) DamagePop.spawn(world, player(u), "-" + d + (r.punch ? " " + Lang.t(lang, "rapbattle.battle.punch_pop") : ""), 0xFF6060);
 				broadcastState();
@@ -815,6 +934,14 @@ public class Battle {
 		roundDealt.clear();
 		barsHit = 0;
 		barsMissed = 0;
+		playerBarLoud.clear();
+		playerBarDeltaMs.clear();
+		playerBarSilent.clear();
+		gazedPlayers.clear();
+		rerolledPlayers.clear();
+		wardenTriggered.clear();
+		targets = List.of();
+		pendingVerses = List.of();
 		transcripts.clear();
 		audio.clear();
 		verdictFuture = null;
@@ -833,13 +960,19 @@ public class Battle {
 		String prev = history.toString();
 		String rivalry = rivalryText();
 		int r = round;
+		String topicText = topicPromptText();
+		Stats stats = Stats.of(world.getServer());
+		int maxTargets = 2;
+		for (UUID u : players) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		int targetLimit = maxTargets;
 		contentFuture = CompletableFuture.supplyAsync(() -> {
 			Llm.Content c = Llm.roundContent(rappers, rank.label(lang), opp.mood(), opp.profile().language(lang), lineCount,
-				opponents, groupsNeeded, rank.rhymeDifficulty, r, prev, rivalry, lang);
+				opponents, groupsNeeded, rank.rhymeDifficulty, r, prev, rivalry, topicText, targetLimit, lang);
 			if (c == null) {
 				List<String> speakers = new ArrayList<>();
 				for (Llm.Rapper rp : rappers) speakers.add(rp.name());
-				c = new Llm.Content(Fallback.mobVerse(speakers, opponents, lineCount, rnd, lang), List.of());
+				List<Llm.MobLine> fbLines = Fallback.mobVerse(speakers, opponents, lineCount, rnd, lang);
+				c = new Llm.Content(fbLines, List.of(), Fallback.extractTargets(fbLines, lang, targetLimit));
 			}
 			return c;
 		}, POOL);
@@ -856,7 +989,7 @@ public class Battle {
 	}
 
 	private int playerLines() {
-		return Math.max(1, players.size() > 1 ? rank.playerLinesCoop : rank.playerLinesSolo);
+		return Math.max(1, rank.linesPerPlayer(players.size()));
 	}
 
 	private void buildTimeline(Llm.Content content, long zero) {
@@ -865,7 +998,12 @@ public class Battle {
 		List<Llm.MobLine> lines = content != null ? content.lines()
 			: Fallback.mobVerse(speakers, namesList(), rank.mobLines, rnd, lang);
 		mobLines = lines;
+		Stats stats = Stats.of(world.getServer());
+		int maxTargets = 2;
+		for (UUID u : players) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		targets = (content != null && !content.targets().isEmpty()) ? content.targets() : Fallback.extractTargets(lines, lang, maxTargets);
 		BattleView v = baseView();
+		v.targets = new ArrayList<>(targets);
 		int beat = 4; // 4-3-2-1 countdown
 		v.mobStartBeat = beat;
 		for (int i = 0; i < lines.size(); i++) {
@@ -887,6 +1025,9 @@ public class Battle {
 			history.append(r.reader).append(": ").append(ml.text()).append('\n');
 		}
 		v.mobEndBeat = beat;
+		List<Boolean> mobPunches = new ArrayList<>(lines.size());
+		for (Llm.MobLine ml : lines) mobPunches.add(ml.punch());
+		mobLiveDamages = Scoring.mobLiveDamages(rank.liveBudget(), mobPunches);
 
 		// Rhymes: generated ones for harder ranks, the curated bank for easy ones and as a top-up.
 		int perPlayer = playerLines();
@@ -900,7 +1041,11 @@ public class Battle {
 		for (UUID u : players) {
 			List<String> w = new ArrayList<>();
 			for (int b = 0; b < blocks; b++) w.addAll(groups.get(g++));
-			words.put(u, w.subList(0, perPlayer));
+			List<String> sliced = new ArrayList<>(w.subList(0, perPlayer));
+			if (rank.level() >= 4) {
+				for (int i = 3; i < sliced.size(); i += 4) sliced.set(i, "");
+			}
+			words.put(u, sliced);
 		}
 		rhymeWords.clear();
 		rhymeWords.putAll(words);
@@ -968,12 +1113,26 @@ public class Battle {
 			byPlayer.add(own);
 		}
 		MobTricks.apply(opp.profile().id(), byPlayer, rnd);
+		for (int i = 0; i < players.size(); i++) {
+			UUID u = players.get(i);
+			if (Trophies.equippedPerk(player(u)) == Trophies.TrophyPerk.WARDEN) {
+				boolean blocked = false;
+				for (BattleView.Row r : byPlayer.get(i)) {
+					if (r.effect != null) {
+						r.effect = null;
+						blocked = true;
+					}
+				}
+				if (blocked) wardenTriggered.add(u);
+			}
+		}
 		view = v;
 	}
 
 	private BattleView.Row playerRow(UUID u, int i, int total, String word, int color, int beat) {
 		BattleView.Row r = new BattleView.Row();
-		r.word = word;
+		r.freestyle = rank.level() >= 4 && (i + 1) % 4 == 0;
+		r.word = r.freestyle ? "" : word;
 		r.color = color;
 		r.reader = names.get(u);
 		ServerPlayerEntity p = player(u);
@@ -1003,6 +1162,8 @@ public class Battle {
 
 	// ------------------------------------------------------------------ judging
 
+	private final Map<UUID, List<Scoring.SlicedBar>> slicedBarsByPlayer = new HashMap<>();
+
 	private void tickJudging(long now) {
 		long t = now - judgingStart;
 		if (t > AUDIO_WAIT_MS) {
@@ -1012,27 +1173,61 @@ public class Battle {
 			boolean allIn = players.stream().allMatch(transcripts::containsKey);
 			boolean allDone = allIn && players.stream().allMatch(u -> transcripts.get(u).isDone());
 			if (!allDone && t < AUDIO_WAIT_MS + STT_WAIT_MS) return;
+			slicedBarsByPlayer.clear();
 			List<Llm.PlayerVerse> verses = new ArrayList<>();
 			for (UUID u : players) {
+				String pName = names.get(u);
 				CompletableFuture<String> f = transcripts.get(u);
-				String text = f != null ? f.getNow("") : "";
-				int[] tm = beatTiming(u);
-				String note = tm == null || text == null || text.isBlank() ? ""
-					: Lang.isRu(lang)
-						? " [по таймингу: в бит " + count(tm, 2) + " из " + tm.length + " рифм, рядом с долей " + count(tm, 1) + "]"
-						: " [timing: on beat " + count(tm, 2) + " of " + tm.length + " rhymes, near beat " + count(tm, 1) + "]";
-				verses.add(new Llm.PlayerVerse(names.get(u), rhymeWords.getOrDefault(u, List.of()), text == null ? "" : text + note));
+				String raw = f != null ? f.getNow("") : "";
+				String text = raw == null ? "" : raw.trim();
+				List<Scoring.BarSlot> slots = new ArrayList<>();
+				int lineNum = 1;
+				if (view != null) {
+					for (BattleView.Row r : view.rows) {
+						if (!r.mob && pName.equals(r.reader)) slots.add(new Scoring.BarSlot(lineNum++, r.startBeat, r.word));
+					}
+				}
+				List<Scoring.SlicedBar> sliced = Scoring.sliceBars(timed.get(u), recordingStart.get(u), text, slots, beatMs, lang);
+				slicedBarsByPlayer.put(u, sliced);
+				List<Boolean> louds = playerBarLoud.getOrDefault(pName, List.of());
+				List<Integer> deltas = playerBarDeltaMs.getOrDefault(pName, List.of());
+				List<Llm.BarPrompt> prompts = new ArrayList<>(sliced.size());
+				for (int i = 0; i < sliced.size(); i++) {
+					Scoring.SlicedBar sb = sliced.get(i);
+					boolean sttMiss = sttMissing || timed.get(u) == null;
+					int deltaMs = i < deltas.size() ? deltas.get(i) : -1;
+					int preBeat = Scoring.hybridBeat(sb.whisperDeltaBeats(), 1, sttMiss, deltaMs, beatMs);
+					if (preBeat == 0 && i < louds.size() && Boolean.TRUE.equals(louds.get(i)) && sb.whisperDeltaBeats() == null) {
+						preBeat = 1;
+					}
+					String timingLabel = sb.silent()
+						? Lang.t(lang, "rapbattle.judge.timing.silent")
+						: preBeat == 2 ? Lang.t(lang, "rapbattle.judge.timing.on_beat")
+						: preBeat == 1 ? Lang.t(lang, "rapbattle.judge.timing.near")
+						: Lang.t(lang, "rapbattle.judge.timing.off");
+					prompts.add(new Llm.BarPrompt(sb.lineIndex(), sb.targetWord(), timingLabel, sb.text(), sb.silent()));
+				}
+				verses.add(new Llm.PlayerVerse(pName, rhymeWords.getOrDefault(u, List.of()), text, "", prompts));
 			}
+			pendingVerses = List.copyOf(verses);
+			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
+			playerBarLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
 			List<String> mobCopy = new ArrayList<>();
 			for (Llm.MobLine l : mobLines) mobCopy.add(l.speaker() + ": " + l.text());
 			boolean noStt = sttMissing;
+			String topicInfo = topicPromptText();
+			List<String> roundTargets = List.copyOf(targets);
 			verdictStart = now;
 			verdictFuture = CompletableFuture.supplyAsync(() -> {
-				String expectation = rank.judgeExpectation(lang) + " " + MobTricks.judgeHint(opp.profile().id(), lang);
+				String expectation = rank.judgeExpectation(lang)
+					+ (topicInfo.isBlank() ? "" : (Lang.isRu(lang) ? " Тема баттла: " : " Battle topic: ") + topicInfo + ".")
+					+ (roundTargets.isEmpty() ? "" : (Lang.isRu(lang) ? " Слова-мишени моба: " : " Mob anchor targets: ") + String.join(", ", roundTargets) + ".")
+					+ " " + MobTricks.judgeHint(opp.profile().id(), lang);
 				Llm.Verdict v = noStt ? null : Llm.judge(opp.name(), opp.profile().species(lang), rank.label(lang), expectation,
 					rank.verseLo, rank.verseHi, mobCopy, verses, lang);
 				if (v == null) {
-					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, rnd, lang);
+					if (!noStt) RapBattle.LOG.warn("LLM judge returned null in battle {}, falling back to offline judge", id);
+					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, loudSnapshot, noStt, roundTargets, rnd, lang);
 					if (noStt) v = new Llm.Verdict(v.mobVerse(), v.playerLines(),
 						Lang.t(lang, "rapbattle.battle.no_stt_prefix") + v.comment());
 				}
@@ -1048,88 +1243,161 @@ public class Battle {
 		if (t < MIN_JUDGING_MS) return;
 		if (!verdictFuture.isDone() && now - verdictStart < JUDGE_WAIT_MS) return;
 		Llm.Verdict v = verdictFuture.getNow(null);
-		if (v == null) v = Fallback.judge(rank.verseLo, rank.verseHi, List.of(), rnd, lang);
+		if (v == null) v = Fallback.judge(rank.verseLo, rank.verseHi, pendingVerses, playerBarLoud, sttMissing, targets, rnd, lang);
 
-		// The breakdown: every player line hits the mob, the bonuses too; the mob's verse hits the team.
-		int mobVerse = Math.max(rank.verseLo, Math.min(rank.verseHi, v.mobVerse()));
+		// Build timeline-ordered LineInputs for the whole team so combo & K = 8/N work seamlessly in solo and co-op.
 		result.teamBefore = respectTeam;
 		result.mobBefore = respectMob;
 		result.respectMax = respectMax;
-		List<BattleView.Hit> hits = result.hits;
-		for (BattleView.PlayerScore ps : result.players) {
-			List<String> words = List.of();
-			for (UUID u : players) if (names.get(u).equals(ps.name)) words = rhymeWords.getOrDefault(u, List.of());
-			List<Llm.LineScore> ls = v.playerLines().getOrDefault(ps.name, List.of());
-			for (int i = 0; i < ls.size(); i++) {
-				Llm.LineScore l = ls.get(i);
-				String word = i < words.size() ? words.get(i) : "";
-				// Weak bars bounce off strong mobs: below the rank's bar a line deals nothing, the rest goes through its defence.
-				int d = l.score() < rank.minLineScore() ? 0 : (int) Math.round(l.damage() * rank.defense());
-				hits.add(new BattleView.Hit(ps.name, (word.isEmpty() ? "" : "«" + word + "» · ") + l.note(), d, true, l.punch()));
-				roundDealt.merge(ps.name, d, Integer::sum);
-				battleDealt.merge(ps.name, d, Integer::sum);
-				if (d > bestLineDamage) {
-					bestLineDamage = d;
-					bestLine = ps.name + ": «" + word + "» · " + l.note();
+		List<Scoring.LineInput> teamInputs = new ArrayList<>();
+		Map<UUID, Integer> playerCursors = new HashMap<>();
+		for (UUID u : players) playerCursors.put(u, 0);
+
+		String mobId = opp.profile().id();
+		boolean skeletonStrict = mobId.equals("skeleton") || mobId.equals("stray") || mobId.equals("bogged") || mobId.equals("parched");
+		double whisperOnWin = skeletonStrict ? 0.22 : 0.30;
+		double micOnWin = skeletonStrict ? 0.26 : 0.35;
+		double flowScale = skeletonStrict ? 1.15 : 1.0;
+
+		Stats stats = Stats.of(world.getServer());
+		Map<UUID, McStyle> playerStyles = new HashMap<>();
+		Map<UUID, Trophies.TrophyPerk> playerPerks = new HashMap<>();
+		int extraStyleBonus = 0;
+		for (UUID u : players) {
+			playerStyles.put(u, stats.player(u).mcStyle());
+			Trophies.TrophyPerk perk = Trophies.equippedPerk(player(u));
+			playerPerks.put(u, perk);
+			if (perk == Trophies.TrophyPerk.DEFAULT) extraStyleBonus = 1;
+		}
+		Set<UUID> witherForgiven = new HashSet<>();
+		Set<UUID> guardianUsed = new HashSet<>();
+
+		int onBeatTotal = 0, timedTotal = 0;
+		if (view != null) {
+			for (BattleView.Row row : view.rows) {
+				if (row.mob) continue;
+				UUID u = playerUuidByName(row.reader);
+				if (u == null) continue;
+				int idx = playerCursors.getOrDefault(u, 0);
+				playerCursors.put(u, idx + 1);
+
+				String pName = names.get(u);
+				List<Llm.LineScore> ls = v.playerLines().getOrDefault(pName, List.of());
+				Llm.LineScore l = idx < ls.size() ? ls.get(idx) : Llm.LineScore.silent(lang);
+				List<Scoring.SlicedBar> sbs = slicedBarsByPlayer.getOrDefault(u, List.of());
+				Scoring.SlicedBar sb = idx < sbs.size() ? sbs.get(idx) : null;
+				List<Boolean> louds = playerBarLoud.getOrDefault(pName, List.of());
+				List<Integer> deltas = playerBarDeltaMs.getOrDefault(pName, List.of());
+				List<Boolean> silents = playerBarSilent.getOrDefault(pName, List.of());
+
+				boolean sttSilent = sb != null && sb.silent();
+				boolean micSilent = idx < silents.size() && Boolean.TRUE.equals(silents.get(idx));
+				boolean barSilent = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
+				Trophies.TrophyPerk perk = playerPerks.get(u);
+				boolean silenceForgiven = barSilent && perk == Trophies.TrophyPerk.WITHER && witherForgiven.add(u);
+				double wWin = whisperOnWin + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+				double mWin = micOnWin + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+				int deltaMs = idx < deltas.size() ? deltas.get(idx) : (idx < louds.size() && Boolean.TRUE.equals(louds.get(idx)) ? 0 : -1);
+				int beatState = barSilent ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
+					l.rhyme(), sttMissing, deltaMs, beatMs, wWin, mWin);
+				timedTotal++;
+				if (beatState == 2) {
+					onBeatTotal++;
+					if (perk == Trophies.TrophyPerk.ELDER_GUARDIAN) guardianUsed.add(u);
 				}
+				McStyle style = playerStyles.getOrDefault(u, McStyle.PUNCHER);
+				teamInputs.add(style.lineInput(pName, row.freestyle ? "★" : row.word, l.score(), l.meaning(),
+					l.punch(), l.rebuttal(), l.note(), beatState, barSilent, row.freestyle, flowScale, silenceForgiven));
 			}
+		}
+
+		int hypeVal = Math.max(-100, Math.min(100, (barsHit - barsMissed) * 18 - punchesFired.size() * 8));
+		Scoring.Bonuses bonuses = Scoring.computeBonuses(hypeVal, hasStyleBonus, allyBonus, extraStyleBonus);
+		int wardenNoise = noise > 0 ? 2 * noise : 0;
+		Scoring.RoundOutcome outcome = Scoring.evaluateRound(rank, teamInputs, bonuses, v.mobVerse(), wardenNoise);
+
+		List<BattleView.Hit> hits = result.hits;
+		for (Scoring.EvaluatedLine el : outcome.lines()) {
+			Scoring.LineInput in = el.input();
+			String word = in.targetWord() == null || in.targetWord().isEmpty() ? "" : "«" + in.targetWord() + "» · ";
+			hits.add(new BattleView.Hit(in.player(), word + in.note(), el.damage(), true, in.punch()));
+			roundDealt.merge(in.player(), el.damage(), Integer::sum);
+			battleDealt.merge(in.player(), el.damage(), Integer::sum);
+			if (el.damage() > bestLineDamage) {
+				bestLineDamage = el.damage();
+				bestLine = in.player() + ": " + word + in.note();
+			}
+		}
+		for (BattleView.PlayerScore ps : result.players) {
 			ps.score = roundDealt.getOrDefault(ps.name, 0);
 		}
-		int onBeatTotal = 0, timedTotal = 0;
-		for (UUID u : players) {
-			int[] tm = beatTiming(u);
-			if (tm == null) continue;
-			int on = count(tm, 2), near = count(tm, 1);
-			onBeatTotal += on;
-			timedTotal += tm.length;
-			int d = flowDamage(tm);
-			if (d > 0) {
-				hits.add(new BattleView.Hit(names.get(u),
-					Lang.t(lang, "rapbattle.battle.hit_rhymes_on_beat", on, tm.length)
-						+ (near > 0 ? Lang.t(lang, "rapbattle.battle.hit_rhymes_near", near) : ""),
-					d, true, false));
-				roundDealt.merge(names.get(u), d, Integer::sum);
-				battleDealt.merge(names.get(u), d, Integer::sum);
-			}
+		if (bonuses.styleBonus() > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_outfit"), bonuses.styleBonus(), true, false));
+		if (bonuses.allyBonus() > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_backup"), bonuses.allyBonus(), true, false));
+		if (bonuses.hypeBonus() > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_crowd"), bonuses.hypeBonus(), true, false));
+		if (outcome.mobVerseFinalDamage() > 0) {
+			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_mob_verse"), outcome.mobVerseFinalDamage(), false, false));
 		}
-		if (outfitBonus > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_outfit"), outfitBonus, true, false));
-		if (allyBonus > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_backup"), allyBonus, true, false));
-		int prize = crowd == null ? 0 : crowd.prize();
-		if (prize > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_crowd"), prize, true, false));
-		hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_mob_verse"), mobVerse * 3, false, false));
-		// Warden heard the team's noise during his verse.
+		if (outcome.silenceDamage() > 0) {
+			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_silence", outcome.silentBars()), outcome.silenceDamage(), false, false));
+		}
 		if (noise > 0) {
-			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_warden_noise", noise), 2 * noise, false, false));
+			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_warden_noise", noise), wardenNoise, false, false));
 			noise = 0;
 		}
-		for (BattleView.Hit h : hits) {
-			if (h.toMob) {
-				respectMob = Math.max(0, respectMob - h.damage);
-				roundToMob += h.damage;
-				dealtTotal += h.damage;
-			} else {
-				respectTeam = Math.max(0, respectTeam - h.damage);
-				roundToTeam += h.damage;
-			}
+		for (UUID u : players) {
+			Trophies.TrophyPerk perk = playerPerks.get(u);
+			if (perk == null) continue;
+			boolean triggered = switch (perk) {
+				case WARDEN -> wardenTriggered.contains(u);
+				case ENDER_DRAGON -> rank.revealBeats() > 0;
+				case WITHER -> witherForgiven.contains(u);
+				case ELDER_GUARDIAN -> guardianUsed.contains(u);
+				case DEFAULT -> extraStyleBonus > 0;
+			};
+			if (triggered) hits.add(new BattleView.Hit(names.get(u), perk.triggeredNote(lang), 0, true, false));
 		}
+
+		// Apply only the post-judging delta to live respect bars (live mob hits were already applied during TIMELINE).
+		respectMob = outcome.respectMobAfter();
+		respectTeam = outcome.respectTeamAfter();
+		roundToMob = outcome.totalToMob();
+		roundToTeam = outcome.totalToTeam();
+		dealtTotal += outcome.totalToMob();
+		bestCombo = Math.max(bestCombo, outcome.bestCombo());
+
 		result.respectTeam = respectTeam;
 		result.respectMob = respectMob;
-		boolean ko = respectMob <= 0 || respectTeam <= 0;
-		boolean roundPlayers = roundToMob > roundToTeam;
+		result.barTextTotal = outcome.barTextTotal();
+		result.barBeatDelta = outcome.barBeatDelta();
+		result.barRebuttalTotal = outcome.barRebuttalDamage();
+		result.mobParried = outcome.mobVerseParried();
+		result.rebuttalCount = outcome.rebuttalCount();
+		result.bonusHype = bonuses.hypeBonus();
+		result.bonusStyle = bonuses.styleBonus();
+		result.bonusAlly = bonuses.allyBonus();
+		result.bonusTotal = bonuses.total();
+		result.mobLiveDamage = outcome.mobLiveDamage();
+		result.mobVerseDamage = outcome.mobVerseFinalDamage();
+		result.silenceDamage = outcome.silenceDamage();
+		result.wardenNoiseDamage = wardenNoise;
+
+		boolean ko = outcome.knockout();
+		boolean roundPlayers = outcome.playersWinRound();
 		if (roundPlayers) winsPlayers++;
 		else winsMob++;
-		boolean done = ko || round >= rounds;
+		boolean done = ko || winsPlayers >= winsNeeded || winsMob >= winsNeeded || round >= rounds;
 		result.knockout = ko;
 		result.finalResult = done;
-		result.playersWin = done ? (respectMob <= 0 || (respectTeam > 0 && respectTeam > respectMob)) : roundPlayers;
+		result.playersWin = boss
+			? (done ? (respectMob <= 0 ? true : respectTeam <= 0 ? false : winsPlayers > winsMob) : roundPlayers)
+			: roundPlayers;
 		result.comment = v.comment();
 		result.mvp = players.size() > 1 ? battleDealt.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("") : "";
-		result.outfitBonus = outfitBonus;
+		result.outfitBonus = bonuses.styleBonus();
 		result.overdressed = overdressed;
 		result.mobLabel = mobTeam.size() > 1 ? Lang.t(lang, "rapbattle.battle.mob_and_crew", opp.profile().species(lang)) : opp.profile().species(lang);
 		result.teamLabel = String.join(" + ", namesList());
 		result.dealt = dealtTotal;
-		// Accuracy: from the word timings when speech recognition gave them, from the mic level otherwise.
 		result.accuracy = timedTotal > 0 ? onBeatTotal * 100 / timedTotal : linesTotal == 0 ? 0 : linesOnBeat * 100 / linesTotal;
 		result.bestCombo = bestCombo;
 		result.bestLine = bestLine;
@@ -1141,6 +1409,11 @@ public class Battle {
 			Crowd.react(this, roundPlayers ? Crowd.Moment.WIN_PLAYERS : Crowd.Moment.WIN_MOB);
 		}
 		setPhase(done ? Phase.RESULT : Phase.ROUND_RESULT, now);
+	}
+
+	private UUID playerUuidByName(String name) {
+		for (UUID u : players) if (names.get(u).equals(name)) return u;
+		return null;
 	}
 
 	// ------------------------------------------------------------------ sync
@@ -1169,6 +1442,7 @@ public class Battle {
 			mm.mvp = st.mvp;
 			mm.best = st.best;
 			mm.title = st.title(lang);
+			mm.style = st.mcStyle().label(lang);
 			v.team.add(mm);
 		}
 		int[] sp = stats.species(opp.profile().id());
@@ -1193,6 +1467,8 @@ public class Battle {
 		v.mobWins = rec.wins();
 		v.mobLosses = rec.losses();
 		v.mobStreak = rec.streak();
+		v.topic = chosenTopic;
+		v.targets = new ArrayList<>(targets);
 		Gangs.Gang gang = Gangs.of(opp.profile());
 		v.gangColor = gang == null ? -1 : gang.color();
 		v.requiredOutfit = levelLabel(Outfit.required(rank), lang);
@@ -1237,10 +1513,22 @@ public class Battle {
 		v.hype = Math.max(-100, Math.min(100, (barsHit - barsMissed) * 18 - punchesFired.size() * 8));
 		v.lobbyMsLeft = phase == Phase.LOBBY ? Math.max(0, lobbyEnd - System.currentTimeMillis()) : 0;
 		v.beatElapsedMs = timeline ? System.currentTimeMillis() - beatZero : -1;
+		v.topic = chosenTopic;
+		v.targets = new ArrayList<>(targets);
 		v.spectator = false;
+		Stats stats = Stats.of(world.getServer());
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
-			if (p != null) send(p, v);
+			if (p != null) {
+				v.canReroll = !rerolledPlayers.contains(u);
+				int targetCap = stats.player(u).mcStyle().targetCount();
+				v.targets = targets.size() > targetCap ? new ArrayList<>(targets.subList(0, targetCap)) : new ArrayList<>(targets);
+				Trophies.TrophyPerk perk = Trophies.equippedPerk(p);
+				v.revealBeats = (rank.revealBeats() > 0 && perk == Trophies.TrophyPerk.ENDER_DRAGON)
+					? rank.revealBeats() + 2
+					: rank.revealBeats();
+				send(p, v);
+			}
 		}
 		// Bystanders: beat, header and result only.
 		double r2 = cfg.spectatorRadius * cfg.spectatorRadius;
@@ -1336,15 +1624,18 @@ public class Battle {
 					? Text.translatable("rapbattle.battle.win_ko", team, verb, opp.name())
 					: Text.translatable("rapbattle.battle.win_ko_mvp", team, verb, opp.name(), result.mvp);
 			} else {
+				int sWin = boss ? winsPlayers : respectTeam;
+				int sLose = boss ? winsMob : respectMob;
 				msg = result.mvp.isEmpty()
-					? Text.translatable("rapbattle.battle.win_pts", team, verb, opp.name(), respectTeam, respectMob)
-					: Text.translatable("rapbattle.battle.win_pts_mvp", team, verb, opp.name(), respectTeam, respectMob, result.mvp);
+					? Text.translatable("rapbattle.battle.win_pts", team, verb, opp.name(), sWin, sLose)
+					: Text.translatable("rapbattle.battle.win_pts_mvp", team, verb, opp.name(), sWin, sLose, result.mvp);
 			}
 			broadcastChat(msg.copy().formatted(Formatting.GREEN));
 			ServerPlayerEntity killer = mvpPlayer;
 			Vec3d pos = new Vec3d(mob.getX(), mob.getY() + 0.5, mob.getZ());
 			int xp = overdressed ? rank.xp / 2 : rank.xp;
 			Trophies.give(killer, opp, lang);
+			if (crowd != null) crowd.dropGift(killer);
 			if (mob instanceof net.minecraft.entity.passive.IronGolemEntity golem) {
 				// The village golem is a character: it accepts the defeat instead of dying.
 				GolemDefender.respect(golem, killer, lang);
@@ -1353,18 +1644,20 @@ public class Battle {
 			}
 			// Some mobs refuse to accept it and go for the MVP instead of dying.
 			int margin = respectTeam - respectMob;
-			// A knockout or a clear win finishes the mob; a close one only hurts it, and it walks away.
-			boolean lethal = result.knockout || margin >= 40 || boss;
+			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
+			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
 			if (!lethal) {
 				DamageSource rap = new DamageSource(world.getRegistryManager().getOrThrow(RegistryKeys.DAMAGE_TYPE).getOrThrow(RAP_DEATH));
 				for (MobEntity m : new ArrayList<>(mobTeam)) {
-					float frac = (float) Math.max(0.3, Math.min(0.9, 0.3 + margin / 60.0));
+					float frac = (float) Math.max(0.3, Math.min(0.9, 0.3 + margin / 40.0));
 					float dmg = Math.min(m.getMaxHealth() * frac, m.getHealth() - 1);
 					if (dmg > 0) {
 						m.damage(world, rap, dmg);
 						DamagePop.spawn(world, m, "-" + Math.max(1, Math.round(dmg / 2)) + " ❤", 0xFF5050);
 					}
 				}
+				Vec3d awayFrom = killer != null ? new Vec3d(killer.getX(), killer.getY(), killer.getZ()) : pos;
+				Crowd.retreat(mobTeam, awayFrom, 15_000L);
 				broadcastChat(Text.translatable("rapbattle.battle.mob_escaped", opp.name(),
 					Text.translatable("rapbattle.battle.escaped." + rnd.nextInt(ESCAPED_LINES))).formatted(Formatting.GRAY));
 				ExperienceOrbEntity.spawn(world, pos, Math.max(1, xp / 2));
@@ -1398,7 +1691,7 @@ public class Battle {
 			Text verb = Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
 			Text msg = result.knockout
 				? Text.translatable("rapbattle.battle.win_ko", opp.name(), verb, team)
-				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, respectMob, respectTeam);
+				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, boss ? winsMob : respectMob, boss ? winsPlayers : respectTeam);
 			broadcastChat(msg.copy().formatted(Formatting.RED));
 			punishPlayers();
 			if (!boss) {

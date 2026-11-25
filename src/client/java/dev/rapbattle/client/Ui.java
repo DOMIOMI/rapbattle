@@ -66,7 +66,14 @@ final class Ui {
 		}
 	}
 
-	static Text bold(String s) { return Text.literal(s).formatted(Formatting.BOLD); }
+	/**
+	 * Fighting-game bold for all characters (ASCII, Cyrillic ф/ш/щ/ж/ё, ★): rendered as a crisp double pass
+	 * in {@link #text} instead of Minecraft's Formatting.BOLD, which smears dense Cyrillic strokes into blocks.
+	 */
+	static Text bold(String s) {
+		if (s == null || s.isEmpty()) return Text.empty();
+		return Text.literal(s).styled(st -> st.withInsertion("rapbattle:bold"));
+	}
 
 	static void text(DrawContext ctx, TextRenderer tr, String s, float x, float y, float scale, int color, float alpha, boolean shadow) {
 		text(ctx, tr, Text.literal(s), x, y, scale, color, alpha, shadow);
@@ -75,10 +82,15 @@ final class Ui {
 	static void text(DrawContext ctx, TextRenderer tr, Text s, float x, float y, float scale, int color, float alpha, boolean shadow) {
 		int c = alphaOf(color, alpha);
 		if ((c >>> 24) < 10) return;
+		boolean fauxBold = scale >= 1f && "rapbattle:bold".equals(s.getStyle().getInsertion());
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().translate(x, y);
 		ctx.getMatrices().scale(scale, scale);
 		ctx.drawText(tr, s, 0, 0, c, shadow);
+		if (fauxBold) {
+			ctx.getMatrices().translate(0.65f, 0f);
+			ctx.drawText(tr, s, 0, 0, c, false);
+		}
 		ctx.getMatrices().popMatrix();
 	}
 

@@ -35,7 +35,7 @@ public final class BattleManager {
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final long CHOICE_MS = 4000;
 
-	private record Pending(MobEntity mob, long until, boolean allowed, boolean golem) {}
+	private record Pending(MobEntity mob, long until, boolean allowed, boolean golem, boolean fromApproach) {}
 
 	/** Recently finished battles: if a fight breaks out right after, the crowd keeps it fair. */
 	private record Stage(MobEntity mob, Crowd crowd, long until, Set<UUID> attackers, Set<MobEntity> engaged) {}
@@ -73,7 +73,7 @@ public final class BattleManager {
 	static void challengeFrom(ServerPlayerEntity p, MobEntity golem) {
 		String lang = Lang.of(p);
 		Opponent o = Opponent.of(golem, new Random(), p, lang);
-		PENDING.put(p.getUuid(), new Pending(golem, System.currentTimeMillis() + 15_000, true, true));
+		PENDING.put(p.getUuid(), new Pending(golem, System.currentTimeMillis() + 15_000, true, true, false));
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.mobEntityId = golem.getId();
@@ -139,6 +139,15 @@ public final class BattleManager {
 	/** Mobs that already offered a choice on approach; they do not ask again for a while. */
 	private static final Map<UUID, Long> ASKED = new HashMap<>();
 	private static final long ASK_AGAIN_MS = 5 * 60_000;
+	/** Last time each player hit a mob or took damage: approach callouts stay quiet during active combat. */
+	private static final Map<UUID, Long> LAST_COMBAT = new HashMap<>();
+	private static final long COMBAT_QUIET_MS = 10_000;
+
+	private static boolean isRangedChallenger(MobEntity m) {
+		return m instanceof net.minecraft.entity.ai.RangedAttackMob
+			|| m instanceof net.minecraft.entity.mob.AbstractSkeletonEntity
+			|| m instanceof net.minecraft.entity.mob.PillagerEntity;
+	}
 
 	/** A hostile mob walking up to a player gives him the same choice as an empty-hand hit: rap or fight. */
 	private static void offerOnApproach(net.minecraft.server.MinecraftServer server) {
@@ -148,17 +157,43 @@ public final class BattleManager {
 			if (p.isSpectator() || p.isCreative() || !p.isAlive()) continue;
 			UUID u = p.getUuid();
 			if (byPlayer(u) != null || PvpBattle.byPlayer(u) != null || PENDING.containsKey(u)) continue;
+			if (now - LAST_COMBAT.getOrDefault(u, 0L) < COMBAT_QUIET_MS) continue;
 			Refused fight = BRAWLS.get(u);
 			if (fight != null && now < fight.until()) continue;
-			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(7),
-				m -> m.isAlive() && m.getTarget() == p && m instanceof net.minecraft.entity.mob.Monster
-					&& byMob(m) == null && !inAnyCrowd(m) && !ASKED.containsKey(m.getUuid()));
+			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(12),
+				m -> {
+					if (!m.isAlive() || m.getTarget() != p || !(m instanceof net.minecraft.entity.mob.Monster)) return false;
+					if (Opponent.isBoss(m) || byMob(m) != null || inAnyCrowd(m) || Crowd.inTruce(m) || ASKED.containsKey(m.getUuid())) return false;
+					double r = isRangedChallenger(m) ? 12.0 : 7.0;
+					return m.squaredDistanceTo(p) <= r * r;
+				});
 			if (near.isEmpty()) continue;
-			MobEntity mob = near.get(0);
-			ASKED.put(mob.getUuid(), now + ASK_AGAIN_MS);
-			mob.setTarget(null);
-			stareAt(mob, p, CHOICE_MS);
-			offerChoice(p, mob);
+			near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
+			String lang = Lang.of(p);
+			Random rnd = new Random();
+			Outfit.Score score = Outfit.of(p, lang);
+			for (MobEntity mob : near) {
+				Opponent o = Opponent.of(mob, rnd, p, lang);
+				boolean allowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
+					|| Gangs.isOwn(p, o.profile());
+				// If the mob walked up on its own and the player fails dress code, do not stop the mob at all.
+				if (!allowed) continue;
+				ASKED.put(mob.getUuid(), now + ASK_AGAIN_MS);
+				mob.setTarget(null);
+				stareAt(mob, p, CHOICE_MS);
+				offerChoice(p, mob, true);
+				break;
+			}
+		}
+	}
+
+	private static void restorePendingTarget(Pending pd, ServerPlayerEntity pl) {
+		if (pd == null || pl == null || !pd.mob.isAlive() || !pl.isAlive() || pl.isCreative() || pl.isSpectator()) return;
+		STARES.removeIf(s -> s.mob() == pd.mob);
+		if (pd.golem) {
+			GolemDefender.chickenedOut(pl, (net.minecraft.entity.passive.IronGolemEntity) pd.mob);
+		} else if (pd.fromApproach) {
+			pd.mob.setTarget(pl);
 		}
 	}
 
@@ -195,6 +230,7 @@ public final class BattleManager {
 			return false;
 		});
 		REFUSED.values().removeIf(r -> now > r.until() || !r.mob().isAlive());
+		LAST_COMBAT.values().removeIf(t -> now - t > 60_000);
 	}
 
 	private static boolean peaceful(MobEntity mob) {
@@ -262,13 +298,17 @@ public final class BattleManager {
 
 	/** Empty-hand hit: ask the player whether to rap or to fight. */
 	private static void offerChoice(ServerPlayerEntity p, MobEntity mob) {
+		offerChoice(p, mob, false);
+	}
+
+	private static void offerChoice(ServerPlayerEntity p, MobEntity mob, boolean fromApproach) {
 		String lang = Lang.of(p);
 		Random rnd = new Random();
 		Opponent o = Opponent.of(mob, rnd, p, lang);
 		Outfit.Score score = Outfit.of(p, lang);
 		boolean allowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
 			|| Gangs.isOwn(p, o.profile()); // crew colours: they never refuse their own
-		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false));
+		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false, fromApproach));
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.mobEntityId = mob.getId();
@@ -370,6 +410,7 @@ public final class BattleManager {
 			Refused fight = BRAWLS.get(sp.getUuid());
 			if (fight != null && fight.mob() == mob && now < fight.until()) {
 				brawl(sp, mob); // keep the fight going while he keeps swinging
+				LAST_COMBAT.put(sp.getUuid(), now);
 				return ActionResult.PASS;
 			}
 			Pending pending = PENDING.get(sp.getUuid());
@@ -377,12 +418,17 @@ public final class BattleManager {
 				// Second hit while the choice is open = "набить ебало": a normal fight, and the kin takes offence.
 				PENDING.remove(sp.getUuid());
 				REFUSED.remove(sp.getUuid());
+				STARES.removeIf(s -> s.mob() == mob);
 				closeChoice(sp);
 				if (pending.golem) GolemDefender.chickenedOut(sp, (net.minecraft.entity.passive.IronGolemEntity) mob);
-				else disrespect(sp, mob);
+				else {
+					if (pending.fromApproach) mob.setTarget(sp);
+					disrespect(sp, mob);
+				}
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				fightAfterBattle(sp, mob);
 				brawl(sp, mob);
+				LAST_COMBAT.put(sp.getUuid(), now);
 				return ActionResult.PASS;
 			}
 			Refused refused = REFUSED.get(sp.getUuid());
@@ -395,6 +441,7 @@ public final class BattleManager {
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				fightAfterBattle(sp, mob);
 				brawl(sp, mob);
+				LAST_COMBAT.put(sp.getUuid(), now);
 				return ActionResult.PASS;
 			}
 			if (!sp.getMainHandStack().isEmpty()) {
@@ -402,6 +449,7 @@ public final class BattleManager {
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				fightAfterBattle(sp, mob);
 				brawl(sp, mob);
+				LAST_COMBAT.put(sp.getUuid(), now);
 				return ActionResult.PASS;
 			}
 			if (RapConfig.get().skipChoice) {
@@ -412,11 +460,18 @@ public final class BattleManager {
 			return ActionResult.FAIL;
 		});
 
-		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) ->
-			!(entity instanceof ServerPlayerEntity p && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null))
+		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
+			boolean allowed = !(entity instanceof ServerPlayerEntity p && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null))
 				&& byMob(entity) == null
 				// The crowd is a truce zone: no zombie turning its neighbour villager into a zombie villager mid-show.
-				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker()));
+				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker());
+			if (allowed && amount > 0) {
+				long now = System.currentTimeMillis();
+				if (entity instanceof ServerPlayerEntity sp) LAST_COMBAT.put(sp.getUuid(), now);
+				if (entity instanceof MobEntity && source.getAttacker() instanceof ServerPlayerEntity sp) LAST_COMBAT.put(sp.getUuid(), now);
+			}
+			return allowed;
+		});
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (Battle b : new ArrayList<>(BATTLES)) {
@@ -435,13 +490,13 @@ public final class BattleManager {
 			long now = System.currentTimeMillis();
 			for (Map.Entry<UUID, Pending> e : new ArrayList<>(PENDING.entrySet())) {
 				Pending pd = e.getValue();
-				if (now <= pd.until) continue;
-				PENDING.remove(e.getKey());
-				// Ignored the golem's call: that's a fight.
 				ServerPlayerEntity pl = server.getPlayerManager().getPlayer(e.getKey());
-				if (pd.golem && pl != null && pd.mob.isAlive()) {
+				boolean walkedAway = pl != null && pd.mob.isAlive() && pl.squaredDistanceTo(pd.mob) > 15 * 15;
+				if (now <= pd.until && !walkedAway) continue;
+				PENDING.remove(e.getKey());
+				if (pl != null) {
 					closeChoice(pl);
-					GolemDefender.chickenedOut(pl, (net.minecraft.entity.passive.IronGolemEntity) pd.mob);
+					restorePendingTarget(pd, pl);
 				}
 			}
 			// While he decides, the mob that asked stands still and waits.
@@ -461,6 +516,7 @@ public final class BattleManager {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			UUID u = handler.player.getUuid();
 			PENDING.remove(u);
+			LAST_COMBAT.remove(u);
 			for (Battle b : new ArrayList<>(BATTLES)) b.onPlayerLeft(u);
 			PvpBattle pvp = PvpBattle.byPlayer(u);
 			if (pvp != null) pvp.leave(u);
@@ -480,9 +536,12 @@ public final class BattleManager {
 			DamagePop.clearAll();
 			Later.clear();
 			GolemDefender.clear();
+			Crowd.clear();
 			RECENT.clear();
 			BATTLES.clear();
 			PENDING.clear();
+			LAST_COMBAT.clear();
+			ASKED.clear();
 		});
 
 		ServerPlayNetworking.registerGlobalReceiver(Payloads.ActionC2S.ID, (payload, ctx) -> {
@@ -499,17 +558,34 @@ public final class BattleManager {
 						Battle b = byPlayer(p.getUuid());
 						if (b != null) b.startEarly(p);
 					}
+					case "topic" -> {
+						Battle b = byPlayer(p.getUuid());
+						if (b != null) b.setTopic(p, o.get("topic").getAsInt());
+					}
+					case "reroll" -> {
+						Battle b = byPlayer(p.getUuid());
+						if (b != null) b.onReroll(p);
+					}
 					case "rap" -> {
 						Pending pending = PENDING.remove(p.getUuid());
 						if (pending == null || !pending.allowed || !pending.mob.isAlive() || byMob(pending.mob) != null
-							|| byPlayer(p.getUuid()) != null || pending.mob.squaredDistanceTo(p) > 12 * 12) {
+							|| byPlayer(p.getUuid()) != null || pending.mob.squaredDistanceTo(p) > 16 * 16) {
 							closeChoice(p);
 							return;
 						}
+						STARES.removeIf(s -> s.mob() == pending.mob);
 						closeChoice(p);
 						start(p, pending.mob);
 					}
-					case "cancel" -> PENDING.remove(p.getUuid());
+					case "cancel" -> {
+						Pending pd = PENDING.remove(p.getUuid());
+						closeChoice(p);
+						restorePendingTarget(pd, p);
+					}
+					case "gaze" -> {
+						Battle b = byPlayer(p.getUuid());
+						if (b != null) b.onGaze(p);
+					}
 					case "keystatus" -> {
 						// Only whether the keys are set, never the keys.
 						BattleView kv = new BattleView();
@@ -517,6 +593,17 @@ public final class BattleManager {
 						kv.keysLlm = RapConfig.get().hasLlm();
 						kv.keysStt = !RapConfig.get().sttKey().isEmpty();
 						ServerPlayNetworking.send(p, new Payloads.StateS2C(kv.toJson()));
+					}
+					case "style_status" -> sendStyleStatus(p);
+					case "set_style" -> {
+						Stats stats = Stats.of(p.getEntityWorld().getServer());
+						Stats.Player st = stats.player(p.getUuid());
+						McStyle ms = McStyle.of(o.has("style") ? o.get("style").getAsString() : "");
+						if (ms.isUnlocked(st.respect)) {
+							st.style = ms.id;
+							stats.markDirty();
+						}
+						sendStyleStatus(p);
 					}
 					case "silent" -> {
 						Battle b = byPlayer(p.getUuid());
@@ -527,10 +614,13 @@ public final class BattleManager {
 						if (b != null) b.onNoise(p, o.get("n").getAsInt());
 					}
 					case "bar" -> {
+						boolean loud = o.get("loud").getAsBoolean();
+						int deltaMs = o.has("deltaMs") ? o.get("deltaMs").getAsInt() : -1;
+						boolean silentBar = o.has("silent") && o.get("silent").getAsBoolean();
 						Battle b = byPlayer(p.getUuid());
-						if (b != null) b.onBar(p, o.get("loud").getAsBoolean());
+						if (b != null) b.onBar(p, loud, deltaMs, silentBar);
 						PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
-						if (pvp != null) pvp.onBar(p, o.get("loud").getAsBoolean());
+						if (pvp != null) pvp.onBar(p, loud, deltaMs, silentBar);
 					}
 					case "leave" -> {
 						Battle b = byPlayer(p.getUuid());
@@ -551,6 +641,15 @@ public final class BattleManager {
 			PvpBattle pvp = PvpBattle.byId(payload.battleId());
 			if (pvp != null) pvp.onAudio(ctx.player(), payload);
 		});
+	}
+
+	private static void sendStyleStatus(ServerPlayerEntity p) {
+		Stats.Player st = Stats.of(p.getEntityWorld().getServer()).player(p.getUuid());
+		BattleView sv = new BattleView();
+		sv.type = "style_status";
+		sv.playerRespect = st.respect;
+		sv.playerStyle = st.mcStyle().id;
+		ServerPlayNetworking.send(p, new Payloads.StateS2C(sv.toJson()));
 	}
 
 	private static void closeChoice(ServerPlayerEntity p) {

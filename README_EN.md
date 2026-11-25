@@ -74,11 +74,27 @@ On your own server you can set the keys with environment variables: `OPENROUTER_
 
 ## How to play
 - **Challenge a mob:** punch it with an empty hand → choose **R** (battle) or punch again (fight).
+- **Pick a topic in the lobby:** the challenger can press **1 / 2 / 3** to set the angle ("Fit & Flex", "Whose Turf", or "No Brakes").
 - **Challenge a player:** punch a player with an empty hand → they press **Y** (accept) or **N**.
 - **Countdown 4-3-2-1**, your opponent's turn, a "GET READY" bar, then your lines. A yellow dot moves across the beats,
   and the rhyme from the coloured cell must land on the 4th beat.
+- **Rebuttals, reroll & freestyle:** flip the anchor words shown under "FLIP" to parry the mob's verse damage; press **R** once per round to swap an awkward rhyme; on Gold+ the 4th bar of each block is **★ OWN RHYME** with extra punchline damage.
+- **Crowd & mob gimmicks:** combos win neutral fans (and even mob fans at 6+) over to your side with stage gifts after a win; hold an emerald in your off-hand against a villager or illager to drop their rank.
 - **If your rhymes don't count as "on beat":** settings → "Latency" → run the calibration (clap along to the clicks).
 - Crowd volume is the "Friendly Creatures" slider in the game's sound settings.
+
+## MC Styles & Trophy Mic Perks
+
+- **MC Style** (`/rapbattle` → "MC Style"): horizontal progression unlocked by cumulative Respect (never spent), shown on the fighter card and active in both PvE and PvP:
+  - **Puncher** (default): punchlines add `+3` instead of `+2`.
+  - **Metronome** (500 Respect): on-beat streak starts at the 2nd hit with a `1.3x` base on-beat multiplier; weak lines (`meaning <= 1`) lose `1` point.
+  - **Provoker** (1500 Respect): `+1` anchor target (3 instead of 2) and each rebuttal heals `+4` Respect for the team; punches without a rebuttal add `+1` instead of `+2`.
+- **Trophy Microphone Perks** (active while held in your **off-hand**, no stacking):
+  - **Warden Mic**: immune to the 1st mob trick per round.
+  - **Dragon Mic**: rhymes reveal 2 beats earlier.
+  - **Wither Mic**: 1st silent bar per round is forgiven (no `+5` silence penalty).
+  - **Elder Guardian Mic**: on-beat window is `0.05` beat wider.
+  - **Other Trophy Mics**: `+1` to style bonus (within the `+10` cap).
 
 ## Building
 ```

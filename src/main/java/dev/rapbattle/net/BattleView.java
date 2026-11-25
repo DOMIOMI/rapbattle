@@ -61,6 +61,14 @@ public class BattleView {
 	public boolean fuse;
 	/** Warden: he hears every noise you make while he reads. */
 	public boolean silence;
+	/** Creaking: looking directly at him freezes his interference. */
+	public boolean creakingGaze;
+	/** Anchor words from the mob's verse that players can flip for rebuttals. */
+	public List<String> targets = new ArrayList<>();
+	/** Chosen lobby topic: 0 = random, 1 = outfit/flex, 2 = turf/biome, 3 = no brakes. */
+	public int topic;
+	/** Whether the receiving player still has their once-per-round rhyme reroll. */
+	public boolean canReroll = true;
 	/** One-line hint about this mob's trick, shown in the lobby. */
 	public String trick = "";
 	public int mobStreak;
@@ -72,6 +80,9 @@ public class BattleView {
 	public String beatTrack;
 	/** Type "keys": are the server's keys set (never the keys themselves). */
 	public boolean keysLlm, keysStt;
+	/** Type "style": player's cumulative Respect and active MC style id. */
+	public int playerRespect;
+	public String playerStyle = "";
 	/** Player against player: team[0] is the challenger (left, blue), mobName is the other player (right, red). */
 	public boolean pvp;
 	/** Stage centre and crowd ring radius (0 = no stage yet): for the haze and the spotlights. */
@@ -108,6 +119,7 @@ public class BattleView {
 		public int entityId;
 		public int wins, losses, streak, mvp, best;
 		public String title = "";
+		public String style = "";
 
 		public Member() {}
 
@@ -136,6 +148,8 @@ public class BattleView {
 		public int line;
 		public int lines;
 		public int startBeat;
+		/** True for the 4th bar of a block on Gold+ ranks: player invents their own rhyme. */
+		public boolean freestyle;
 	}
 
 	/** One player's recording window: from the get-ready bar to the end of their last line. */
@@ -166,6 +180,10 @@ public class BattleView {
 		public String mvp = "";
 		public int outfitBonus;
 		public boolean overdressed;
+		/** Summary bars at the top of the breakdown: Text & Meaning, Beat (flow delta), Rebuttals, Bonuses, Mob breakdown. */
+		public int barTextTotal, barBeatDelta, barRebuttalTotal, mobParried, rebuttalCount;
+		public int bonusHype, bonusStyle, bonusAlly, bonusTotal;
+		public int mobLiveDamage, mobVerseDamage, silenceDamage, wardenNoiseDamage;
 		public List<PlayerScore> players = new ArrayList<>();
 	}
 

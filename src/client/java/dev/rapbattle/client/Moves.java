@@ -79,13 +79,25 @@ public final class Moves {
 				rightLeg.pitch = kf(p, 0.18f, -0.08f, 0.18f, -0.08f);
 				leftLeg.pitch = kf(p, -0.08f, 0.18f, -0.08f, 0.18f);
 				if (player) {
-					// Mic to the mouth, free hand tells the story: point, rise, chop, up high.
-					rightArm.pitch = -1.95f + 0.08f * hit;
-					rightArm.yaw = -0.45f;
-					rightArm.roll = 0;
-					leftArm.pitch = kf(p, -0.5f, -1.7f, -0.9f, -2.5f);
-					leftArm.yaw = kf(p, 0.2f, 0.55f, -0.15f, 0.3f);
-					leftArm.roll = kf(p, 0f, -0.35f, 0f, -0.2f);
+					float voiceAmp = 0.6f + 0.8f * ClientBattle.smoothMicLevel();
+					if (ClientBattle.silentBeats() > 2f) {
+						// Forgot lyrics: mic lowers, head looks side to side.
+						head.yaw += (float) Math.sin(p * Math.PI) * 0.45f;
+						rightArm.pitch = -0.35f;
+						rightArm.yaw = -0.15f;
+						rightArm.roll = 0;
+						leftArm.pitch = -0.25f;
+						leftArm.yaw = 0.1f;
+						leftArm.roll = 0;
+					} else {
+						// Mic to the mouth, free hand tells the story: point, rise, chop, up high.
+						rightArm.pitch = -1.95f + 0.08f * hit * voiceAmp;
+						rightArm.yaw = -0.45f;
+						rightArm.roll = 0;
+						leftArm.pitch = kf(p, -0.5f, -1.7f, -0.9f, -2.5f) * Math.min(1.35f, voiceAmp);
+						leftArm.yaw = kf(p, 0.2f, 0.55f, -0.15f, 0.3f);
+						leftArm.roll = kf(p, 0f, -0.35f, 0f, -0.2f);
+					}
 				} else if (t.equals("enderman")) {
 					head.yaw = snap(p, 0.5f, -0.5f, 0.3f, -0.3f);
 					rightArm.pitch = snap(p, -1.6f, -0.2f, -1.6f, -0.2f);

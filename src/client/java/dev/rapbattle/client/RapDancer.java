@@ -1,5 +1,6 @@
 package dev.rapbattle.client;
 
+import net.minecraft.client.render.entity.model.EntityModel;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 
 /**
@@ -13,5 +14,6 @@ public interface RapDancer {
 	/** Called after every {@code model.setAngles(state)} the game makes for rendering. */
 	static void after(Object model, Object state) {
 		if (model instanceof RapDancer d && state instanceof LivingEntityRenderState s) d.rapbattle$dance(s);
+		else if (model instanceof EntityModel<?> em && state instanceof LivingEntityRenderState s) MobMoves.universal(em, s);
 	}
 }
