@@ -53,4 +53,9 @@ public final class Acts {
 		if (margin >= 25) return WITHER_SKULL_CHANCE_25;
 		return 0.0;
 	}
+
+	/** Act 4: Enderman drops 2-4 ender pearls on early knockout, 1-2 on normal win. */
+	public static int enderPearls(boolean knockout, java.util.Random rnd) {
+		return knockout ? 2 + rnd.nextInt(3) : 1 + rnd.nextInt(2);
+	}
 }

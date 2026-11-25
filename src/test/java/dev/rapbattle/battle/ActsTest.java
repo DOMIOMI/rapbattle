@@ -62,4 +62,15 @@ class ActsTest {
 		assertEquals(0.10, Acts.witherSkullChance(false, 39), 1e-6);
 		assertEquals(0.0, Acts.witherSkullChance(false, 24), 1e-6);
 	}
+
+	@Test
+	void endermanDropsMatchKnockoutVsRegularWin() {
+		java.util.Random rnd = new java.util.Random(7);
+		for (int i = 0; i < 20; i++) {
+			int ko = Acts.enderPearls(true, rnd);
+			int reg = Acts.enderPearls(false, rnd);
+			assertTrue(ko >= 2 && ko <= 4);
+			assertTrue(reg >= 1 && reg <= 2);
+		}
+	}
 }

@@ -1686,6 +1686,20 @@ public class Battle {
 			if (mob instanceof net.minecraft.entity.mob.PiglinBruteEntity && BastionBattle.inBastion(world, mob.getBlockPos())) {
 				BastionBattle.onWin(world, players, mob.getBlockPos());
 			}
+			if (opp.profile().id().equals("warden")) {
+				for (UUID u : players) {
+					PlayerStatus.grant(u, PlayerStatus.WARDEN_QUIET, 15 * 60_000L, mob.getBlockPos(), 48);
+					ServerPlayerEntity pl = player(u);
+					if (pl != null) pl.sendMessage(Text.translatable("rapbattle.act4.warden_quiet").formatted(Formatting.DARK_AQUA), false);
+				}
+			}
+			if (opp.profile().id().equals("enderman") && !overdressed) {
+				int pearls = Acts.enderPearls(result.knockout, rnd);
+				var pearlDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+					new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENDER_PEARL, pearls));
+				pearlDrop.setToDefaultPickupDelay();
+				world.spawnEntity(pearlDrop);
+			}
 			// Some mobs refuse to accept it and go for the MVP instead of dying.
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
