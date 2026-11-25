@@ -9,7 +9,7 @@ import net.minecraft.client.util.math.MatrixStack;
 
 /**
  * Shared detailed microphone model (used in third person on mobs/players and in first person):
- * tapered 2-part dark handle, coloured button, bright metallic collar ring, and a 3-cube rounded light-grey mesh head.
+ * tapered black handle with an end cap and a coloured button, a flared metal collar and a rounded silver head.
  */
 public final class MicModel {
 	private MicModel() {}
@@ -21,10 +21,11 @@ public final class MicModel {
 	 * @param scale 1/16f for entity model pixels, or ~0.045f for first-person view.
 	 */
 	public static void render(MatrixStack m, OrderedRenderCommandQueue q, int light, float scale, Trophies.TrophyPerk perk) {
-		BlockState lowerGrip = Blocks.BLACK_CONCRETE.getDefaultState();
-		BlockState upperGrip = Blocks.GRAY_TERRACOTTA.getDefaultState();
+		BlockState grip = Blocks.BLACK_CONCRETE.getDefaultState();
+		BlockState cap = Blocks.GRAY_CONCRETE.getDefaultState();
 		BlockState ring = Blocks.IRON_BLOCK.getDefaultState();
-		BlockState mesh = Blocks.LIGHT_GRAY_CONCRETE.getDefaultState();
+		BlockState mesh = Blocks.WHITE_CONCRETE.getDefaultState();
+		BlockState seam = Blocks.GRAY_CONCRETE.getDefaultState();
 		BlockState button = Blocks.RED_CONCRETE.getDefaultState();
 		int headLight = light;
 
@@ -39,17 +40,19 @@ public final class MicModel {
 			};
 		}
 
-		// Lower tapered grip (narrower)
-		block(m, q, light, scale, lowerGrip, 0f, 0f, -0.35f, 0.75f, 0.75f, 1.7f);
-		// Upper grip (slightly wider) + power button
-		block(m, q, light, scale, upperGrip, 0f, 0f, -1.85f, 0.95f, 0.95f, 1.45f);
-		block(m, q, headLight, scale, button, 0f, -0.52f, -1.75f, 0.38f, 0.25f, 0.48f);
-		// Bright metallic ring collar
-		block(m, q, headLight, scale, ring, 0f, 0f, -2.78f, 1.25f, 1.25f, 0.45f);
-		// Light-grey rounded mesh head (3 intersecting cubes, wider than handle, <= 2px)
-		block(m, q, headLight, scale, mesh, 0f, 0f, -3.75f, 1.65f, 1.65f, 1.65f);
-		block(m, q, headLight, scale, mesh, 0f, 0f, -3.75f, 1.95f, 1.35f, 1.35f);
-		block(m, q, headLight, scale, mesh, 0f, 0f, -3.75f, 1.35f, 1.95f, 1.35f);
+		// Handle: black, tapering toward the bottom, with a grey end cap. Origin = middle of the grip.
+		block(m, q, light, scale, cap, 0f, 0f, 2.55f, 0.75f, 0.75f, 0.5f);
+		block(m, q, light, scale, grip, 0f, 0f, 1.2f, 0.85f, 0.85f, 2.3f);
+		block(m, q, light, scale, grip, 0f, 0f, -0.9f, 1.05f, 1.05f, 2.0f);
+		block(m, q, headLight, scale, button, 0f, -0.56f, -0.6f, 0.4f, 0.12f, 0.6f);
+		// Collar: a flared silver band under the head.
+		block(m, q, headLight, scale, ring, 0f, 0f, -2.05f, 1.3f, 1.3f, 0.35f);
+		block(m, q, headLight, scale, ring, 0f, 0f, -2.35f, 1.6f, 1.6f, 0.3f);
+		// Ball head: a smooth silver body, a narrower dome on top and a darker seam band, so it reads as round.
+		block(m, q, headLight, scale, mesh, 0f, 0f, -3.4f, 2.3f, 2.3f, 1.7f);
+		block(m, q, headLight, scale, seam, 0f, 0f, -3.4f, 2.42f, 2.42f, 0.3f);
+		block(m, q, headLight, scale, mesh, 0f, 0f, -4.45f, 1.7f, 1.7f, 0.45f);
+		block(m, q, headLight, scale, mesh, 0f, 0f, -2.65f, 1.85f, 1.85f, 0.25f);
 	}
 
 	private static void block(MatrixStack m, OrderedRenderCommandQueue q, int light, float scale, BlockState b,

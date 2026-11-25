@@ -29,8 +29,10 @@ public abstract class HeldItemRendererMixin {
 			matrices.push();
 			FirstPersonMic.applyFistOffset(player, matrices);
 			this.renderArmHoldingItem(matrices, queue, light, 0f, swingProgress, Arm.RIGHT);
+			// renderArmHoldingItem leaves its arm transform on the stack: follow it down to the fist.
+			org.joml.Vector3f fist = FirstPersonMic.fistPosition(matrices);
 			matrices.pop();
-			FirstPersonMic.renderMicCameraSpace(player, matrices, queue, light);
+			FirstPersonMic.renderMicCameraSpace(player, matrices, queue, light, fist);
 			ci.cancel();
 			return;
 		}
