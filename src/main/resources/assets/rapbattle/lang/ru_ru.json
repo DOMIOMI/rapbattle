@@ -481,5 +481,8 @@
   "rapbattle.act2.village_defended": "Жители видели, как ты разнёс врага: репутация в деревне выросла!",
   "rapbattle.act2.raid_callout": "Это наш район! Выходи на бит, если не струсил!",
   "rapbattle.act2.raid_broken": "Рейд сломлен на битах! Разбойники бросают оружие и бегут!",
-  "rapbattle.act2.raid_enraged": "Рейд в ярости! Разбойники получили Силу и Скорость!"
+  "rapbattle.act2.raid_enraged": "Рейд в ярости! Разбойники получили Силу и Скорость!",
+  "rapbattle.status.bastion_guest": "Гость бастиона %s",
+  "rapbattle.act3.bastion_guest": "Пиглины признали тебя: статус «Почётный гость бастиона» на 10 минут!",
+  "rapbattle.act3.wither_skull": "С %s выбит череп иссушителя!"
 }

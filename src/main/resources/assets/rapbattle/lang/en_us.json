@@ -481,5 +481,8 @@
   "rapbattle.act2.village_defended": "Villagers saw you body the threat: village reputation increased!",
   "rapbattle.act2.raid_callout": "This is our turf! Step up to the mic if you dare!",
   "rapbattle.act2.raid_broken": "The raid is broken! Raiders drop their weapons and flee!",
-  "rapbattle.act2.raid_enraged": "The raid is enraged! Raiders gained Strength and Speed!"
+  "rapbattle.act2.raid_enraged": "The raid is enraged! Raiders gained Strength and Speed!",
+  "rapbattle.status.bastion_guest": "Bastion Guest %s",
+  "rapbattle.act3.bastion_guest": "Piglins respect you: Honored Bastion Guest for 10 minutes!",
+  "rapbattle.act3.wither_skull": "%s dropped a Wither Skeleton Skull!"
 }

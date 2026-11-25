@@ -35,4 +35,22 @@ public final class Acts {
 												 int maxWaves, boolean captainAlive) {
 		return hasRaid && raidActive && maxWaves > 0 && groupsSpawned >= maxWaves && captainAlive;
 	}
+
+	public static final int BLAZE_RODS_LETHAL_MIN = 2;
+	public static final int BLAZE_RODS_LETHAL_MAX = 3;
+	public static final int BLAZE_RODS_CLOSE = 1;
+	public static final double WITHER_SKULL_CHANCE_40 = 0.30;
+	public static final double WITHER_SKULL_CHANCE_25 = 0.10;
+
+	/** Act 3: extra blaze rods beyond vanilla drops. */
+	public static int blazeExtraRods(boolean lethal, java.util.Random rnd) {
+		return lethal ? BLAZE_RODS_LETHAL_MIN + rnd.nextInt(BLAZE_RODS_LETHAL_MAX - BLAZE_RODS_LETHAL_MIN + 1) : BLAZE_RODS_CLOSE;
+	}
+
+	/** Act 3: wither skeleton skull drop chance by win margin (30% on KO/40+, 10% on 25-39, 0 otherwise). */
+	public static double witherSkullChance(boolean knockout, int margin) {
+		if (knockout || margin >= 40) return WITHER_SKULL_CHANCE_40;
+		if (margin >= 25) return WITHER_SKULL_CHANCE_25;
+		return 0.0;
+	}
 }

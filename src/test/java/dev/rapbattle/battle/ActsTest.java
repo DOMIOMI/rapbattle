@@ -47,4 +47,19 @@ class ActsTest {
 		assertFalse(Acts.isFinalWaveWithCaptain(true, true, 2, 3, true));
 		assertFalse(Acts.isFinalWaveWithCaptain(true, true, 3, 3, false));
 	}
+
+	@Test
+	void fortressRewardsMatchBlazeAndWitherSkullRules() {
+		java.util.Random rnd = new java.util.Random(42);
+		for (int i = 0; i < 20; i++) {
+			int r = Acts.blazeExtraRods(true, rnd);
+			assertTrue(r >= Acts.BLAZE_RODS_LETHAL_MIN && r <= Acts.BLAZE_RODS_LETHAL_MAX);
+		}
+		assertEquals(1, Acts.blazeExtraRods(false, rnd));
+		assertEquals(0.30, Acts.witherSkullChance(true, 10), 1e-6);
+		assertEquals(0.30, Acts.witherSkullChance(false, 40), 1e-6);
+		assertEquals(0.10, Acts.witherSkullChance(false, 25), 1e-6);
+		assertEquals(0.10, Acts.witherSkullChance(false, 39), 1e-6);
+		assertEquals(0.0, Acts.witherSkullChance(false, 24), 1e-6);
+	}
 }

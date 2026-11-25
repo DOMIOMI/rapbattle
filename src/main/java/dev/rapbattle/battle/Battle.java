@@ -1683,10 +1683,30 @@ public class Battle {
 					broadcastChat(Text.translatable("rapbattle.act2.village_defended").formatted(Formatting.GREEN));
 				}
 			}
+			if (mob instanceof net.minecraft.entity.mob.PiglinBruteEntity && BastionBattle.inBastion(world, mob.getBlockPos())) {
+				BastionBattle.onWin(world, players, mob.getBlockPos());
+			}
 			// Some mobs refuse to accept it and go for the MVP instead of dying.
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
 			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
+			if (opp.profile().id().equals("blaze") && !overdressed) {
+				int extraRods = Acts.blazeExtraRods(lethal, rnd);
+				var rodDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+					new net.minecraft.item.ItemStack(net.minecraft.item.Items.BLAZE_ROD, extraRods));
+				rodDrop.setToDefaultPickupDelay();
+				world.spawnEntity(rodDrop);
+			}
+			if (opp.profile().id().equals("wither_skeleton") && !overdressed) {
+				double skullChance = Acts.witherSkullChance(result.knockout, margin);
+				if (skullChance > 0 && rnd.nextDouble() < skullChance) {
+					var skullDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.WITHER_SKELETON_SKULL));
+					skullDrop.setToDefaultPickupDelay();
+					world.spawnEntity(skullDrop);
+					broadcastChat(Text.translatable("rapbattle.act3.wither_skull", opp.name()).formatted(Formatting.GOLD));
+				}
+			}
 			if (raid != null) {
 				Vec3d awayFrom = killer != null ? new Vec3d(killer.getX(), killer.getY(), killer.getZ()) : pos;
 				RaidBattle.onWin(world, raid, players, lethal, pos, awayFrom, mob, rnd);
@@ -1762,6 +1782,9 @@ public class Battle {
 			}
 			if (raid != null) {
 				RaidBattle.onLoss(world, raid, new Vec3d(mob.getX(), mob.getY(), mob.getZ()));
+			}
+			if (mob instanceof net.minecraft.entity.mob.PiglinBruteEntity && BastionBattle.inBastion(world, mob.getBlockPos())) {
+				BastionBattle.onLoss(world, challenger(), mob.getBlockPos());
 			}
 		}
 		RapBattle.LOG.info("Battle {} finished: players {} respect {} vs mob {} (ko {}, rank {})", id, result.playersWin ? "won" : "lost",
