@@ -43,13 +43,13 @@ public final class FirstPersonMic {
 		boolean silentDrop = myTurn && ClientBattle.silentBeats() > 2f;
 
 		if (silentDrop) {
-			m.translate(0.05f, -0.05f, 0.0f);
+			m.translate(-0.08f, 0.14f, 0.0f);
 			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-20f));
 		} else if (myTurn) {
 			float bounce = 0.04f * voice + 0.015f * pu;
-			m.translate(-0.16f, 0.24f + bounce, 0.0f);
+			m.translate(-0.22f, 0.42f + bounce, 0.04f);
 		} else {
-			m.translate(-0.02f, 0.14f - 0.02f * pu, 0.0f);
+			m.translate(-0.12f, 0.32f - 0.02f * pu, 0.0f);
 			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(5f * wave));
 		}
 	}
@@ -65,17 +65,17 @@ public final class FirstPersonMic {
 
 		m.push();
 		if (silentDrop) {
-			m.translate(0.46f, -0.44f, -0.68f);
+			m.translate(0.42f, -0.26f, -0.68f);
 			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(15f));
 		} else if (myTurn) {
 			float bounce = 0.04f * voice + 0.015f * pu;
-			m.translate(0.28f, -0.15f + bounce, -0.64f);
-			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(20f));
-			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(68f - 6f * voice));
+			m.translate(0.32f, -0.02f + bounce, -0.64f);
+			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(22f));
+			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(66f - 6f * voice));
 		} else {
-			m.translate(0.42f, -0.25f - 0.02f * pu, -0.68f);
+			m.translate(0.40f, -0.11f - 0.02f * pu, -0.68f);
 			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(5f * wave));
-			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(14f));
+			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(16f));
 			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(62f));
 		}
 		Trophies.TrophyPerk perk = offhandPerk(player.getOffHandStack());
