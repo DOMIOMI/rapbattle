@@ -353,6 +353,15 @@ public final class BroadcastHud {
 		ctx.getMatrices().popMatrix();
 	}
 
+	private static void summaryBar(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label, String val, int col, float fill) {
+		ctx.fill(x, y, x + w, y + 20, 0xFF151826);
+		ctx.drawStrokedRectangle(x, y, w, 20, alphaOf(col, 0.45f));
+		ctx.drawText(tr, BattleHud.fit(tr, label, w - 6), x + 3, y + 2, DIM, false);
+		ctx.drawText(tr, BattleHud.fit(tr, val, w - 6), x + 3, y + 11, col, false);
+		int fw = Math.max(0, Math.min(w - 2, Math.round((w - 2) * fill)));
+		ctx.fill(x + 1, y + 18, x + 1 + fw, y + 19, col);
+	}
+
 	/** A big number popping on every beat with an expanding frame, and a slanted caption above it. */
 	private static void countdown(DrawContext ctx, TextRenderer tr, String number, String caption, int color, int drop, float fr, int w, int h) {
 		float pop = easeOutCubic(fr / 0.35f);
@@ -511,17 +520,50 @@ public final class BroadcastHud {
 			text(ctx, tr, ht, w / 2f - tr.getWidth(ht) / 2f, under + 3, 1f, col, a, false);
 		}
 
-		// The breakdown on the left: line by line, each sliding in, newest at the bottom.
-		int cw = Math.min(214, w / 2 - 20), cx = 8, cy = under + 30;
-		int maxRows = Math.max(4, Math.min(10, (h - 120 - cy) / 11));
+		// The breakdown on the left: 3 summary bars on top (Text / Beat / Rebuttals), bonus line, then lines & mob damage.
+		int cw = Math.min(230, w / 2 - 16), cx = 8, cy = under + 28;
+		int summaryH = 26 + (r.bonusTotal > 0 ? 11 : 0);
+		int maxRows = Math.max(3, Math.min(8, (h - 140 - cy - summaryH) / 11));
 		int from = Math.max(0, n - maxRows);
 		int rows = n - from;
-		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 11) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
-		int ph = 6 + rows * 11 + statsH + 2;
+		boolean hasMobInfo = r.mobLiveDamage + r.mobVerseDamage + r.silenceDamage + r.wardenNoiseDamage > 0;
+		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 12) + (hasMobInfo ? 11 : 0) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
+		int ph = 6 + summaryH + rows * 11 + statsH + 2;
 		tab(ctx, tr, I18n.translate("rapbattle.broadcast.breakdown"), cx, cy, GOLD, DARK);
 		panel(ctx, cx, cy, cw, ph, GOLD);
 		ctx.fill(cx, cy, cx + 3, cy + ph, GOLD);
 		int ry = cy + 5;
+
+		// Top 3 summary pills: TEXT, BEAT, REBUTTALS
+		int gap = 3, innerW = cw - 12, pw3 = (innerW - gap * 2) / 3;
+		summaryBar(ctx, tr, cx + 7, ry, pw3, I18n.translate("rapbattle.broadcast.summary.text"),
+			String.valueOf(r.barTextTotal), CYAN, Math.min(1f, r.barTextTotal / 70f));
+		String beatVal = (r.barBeatDelta >= 0 ? "+" : "") + r.barBeatDelta;
+		int beatCol = r.barBeatDelta >= 0 ? GREEN : LOSS;
+		summaryBar(ctx, tr, cx + 7 + pw3 + gap, ry, pw3, I18n.translate("rapbattle.broadcast.summary.beat"),
+			beatVal, beatCol, Math.min(1f, Math.abs(r.barBeatDelta) / 25f));
+		String rebVal = r.mobParried > 0 ? (r.barRebuttalTotal + " (-" + r.mobParried + ")") : String.valueOf(r.barRebuttalTotal);
+		summaryBar(ctx, tr, cx + 7 + (pw3 + gap) * 2, ry, pw3, I18n.translate("rapbattle.broadcast.summary.rebuttal"),
+			rebVal, ORANGE, Math.min(1f, (r.barRebuttalTotal + r.mobParried) / 24f));
+		ry += 24;
+		if (r.bonusTotal > 0) {
+			StringBuilder bParts = new StringBuilder();
+			if (r.bonusHype > 0) bParts.append(I18n.translate("rapbattle.battle.hit_crowd")).append(" +").append(r.bonusHype);
+			if (r.bonusStyle > 0) {
+				if (bParts.length() > 0) bParts.append(" · ");
+				bParts.append(I18n.translate("rapbattle.battle.hit_outfit")).append(" +").append(r.bonusStyle);
+			}
+			if (r.bonusAlly > 0) {
+				if (bParts.length() > 0) bParts.append(" · ");
+				bParts.append(I18n.translate("rapbattle.battle.hit_backup")).append(" +").append(r.bonusAlly);
+			}
+			ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.summary.bonuses", r.bonusTotal, bParts.toString()), cw - 14),
+				cx + 8, ry, GREEN, false);
+			ry += 11;
+		}
+		ctx.fill(cx + 8, ry - 1, cx + cw - 6, ry, alphaOf(GOLD, 0.35f));
+		ry += 2;
+
 		for (int i = from; i < n; i++) {
 			BattleView.Hit hit = r.hits.get(i);
 			long since = now - (revealAt + FIRST_HIT_MS + i * HIT_MS);
@@ -551,7 +593,27 @@ public final class BroadcastHud {
 			ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.stats_summary", r.dealt, r.accuracy, r.bestCombo), cw - 14), cx + 9, ry + 1, CYAN, false);
 			ry += 11;
 			if (!r.bestLine.isEmpty()) {
-				ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.best_line", r.bestLine), cw - 14), cx + 9, ry + 1, DIM, false);
+				ctx.fill(cx + 7, ry, cx + cw - 6, ry + 10, 0x40E8C14A);
+				ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.best_punch", r.bestLine), cw - 16), cx + 9, ry + 1, GOLD, false);
+				ry += 12;
+			}
+			if (hasMobInfo) {
+				StringBuilder ms = new StringBuilder();
+				if (r.mobLiveDamage > 0) ms.append(I18n.translate("rapbattle.broadcast.summary.mob_live", r.mobLiveDamage));
+				if (r.mobVerseDamage > 0 || r.mobParried > 0) {
+					if (ms.length() > 0) ms.append(" · ");
+					ms.append(I18n.translate("rapbattle.broadcast.summary.mob_verse", r.mobVerseDamage));
+					if (r.mobParried > 0) ms.append(" (").append(I18n.translate("rapbattle.broadcast.summary.parried", r.mobParried)).append(")");
+				}
+				if (r.silenceDamage > 0) {
+					if (ms.length() > 0) ms.append(" · ");
+					ms.append(I18n.translate("rapbattle.broadcast.summary.mob_silence", r.silenceDamage));
+				}
+				if (r.wardenNoiseDamage > 0) {
+					if (ms.length() > 0) ms.append(" · ");
+					ms.append(I18n.translate("rapbattle.broadcast.summary.mob_warden", r.wardenNoiseDamage));
+				}
+				ctx.drawText(tr, BattleHud.fit(tr, ms.toString(), cw - 14), cx + 9, ry + 1, LOSS, false);
 				ry += 11;
 			}
 			if (r.players.size() > 1) {
@@ -589,6 +651,13 @@ public final class BroadcastHud {
 		}
 		if (!mine.isEmpty()) ctx.drawText(tr, BattleHud.fit(tr, mine, lw - 18), lx + 9, ty + 1, alphaOf(0xFF6F7590, up), false);
 		ctx.getMatrices().popMatrix();
+	}
+
+	private static void drawSummaryPill(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label, String value, int accent) {
+		ctx.fill(x, y, x + w, y + 21, 0xE0141722);
+		ctx.fill(x, y, x + w, y + 1, alphaOf(accent, 0.85f));
+		ctx.drawText(tr, BattleHud.fit(tr, label, w - 6), x + 3, y + 3, DIM, false);
+		ctx.drawText(tr, BattleHud.fit(tr, value, w - 6), x + 3, y + 12, accent, false);
 	}
 
 	// ------------------------------------------------------------------ bystanders

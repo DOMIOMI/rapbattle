@@ -166,6 +166,10 @@ public class BattleView {
 		public String mvp = "";
 		public int outfitBonus;
 		public boolean overdressed;
+		/** Summary bars at the top of the breakdown: Text & Meaning, Beat (flow delta), Rebuttals, Bonuses, Mob breakdown. */
+		public int barTextTotal, barBeatDelta, barRebuttalTotal, mobParried, rebuttalCount;
+		public int bonusHype, bonusStyle, bonusAlly, bonusTotal;
+		public int mobLiveDamage, mobVerseDamage, silenceDamage, wardenNoiseDamage;
 		public List<PlayerScore> players = new ArrayList<>();
 	}
 
