@@ -2,6 +2,7 @@ package dev.rapbattle.battle;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 import dev.rapbattle.net.BattleView;
@@ -63,26 +64,27 @@ public final class BattleManager {
 				if (target == null) continue;
 				fan.setTarget(target);
 				s.engaged().add(fan);
-				Speech.bubble(fan, "Двое на одного? Не по-честному!", 0xFF8080, 2500);
+				Speech.bubble(fan, Lang.t(Lang.of(target), "rapbattle.manager.two_on_one"), 0xFF8080, 2500);
 			}
 		}
 	}
 
 	/** The village golem calls the player out: answer with R, or it's a fight. */
 	static void challengeFrom(ServerPlayerEntity p, MobEntity golem) {
-		Opponent o = Opponent.of(golem, new Random(), p);
+		String lang = Lang.of(p);
+		Opponent o = Opponent.of(golem, new Random(), p, lang);
 		PENDING.put(p.getUuid(), new Pending(golem, System.currentTimeMillis() + 15_000, true, true));
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.mobEntityId = golem.getId();
 		v.mobName = o.name();
-		v.mobSpecies = o.profile().species();
-		v.rankArmor = o.rank().armor;
-		v.rankStreet = o.rank().street;
+		v.mobSpecies = o.profile().species(lang);
+		v.rankArmor = o.rank().armor(lang);
+		v.rankStreet = o.rank().street(lang);
 		v.rankLevel = o.rank().level();
 		v.rankColor = o.rank().color;
 		v.allowed = true;
-		v.challengeFrom = "ВЫЗОВ ОТ ГОЛЕМА";
+		v.challengeFrom = Lang.t(lang, "rapbattle.manager.golem_challenge");
 		v.choiceMs = 15_000;
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 	}
@@ -92,6 +94,11 @@ public final class BattleManager {
 		"С таким прикидом я не баттлюсь.",
 		"Сначала оденься, потом микрофон проси.",
 		"Ты одет как блок земли.");
+	private static final List<String> REFUSALS_EN = List.of(
+		"You showed up in THAT? Go change.",
+		"I'm not battling anyone in that fit.",
+		"Get some gear first, then ask for the mic.",
+		"You're dressed like a dirt block.");
 	private static final Map<String, String> SPECIES_REFUSAL = Map.of(
 		"piglin", "Ни грамма золота? Нищеброд.",
 		"enderman", "Ты одет как блок земли. Не смотри на меня.",
@@ -99,6 +106,13 @@ public final class BattleManager {
 		"villager", "Хммм. Сначала оденься, потом торгуйся.",
 		"zombie", "Ммозги… и прикид… у тебя… нету…",
 		"skeleton", "*клац* Даже у меня на костях больше брони.");
+	private static final Map<String, String> SPECIES_REFUSAL_EN = Map.of(
+		"piglin", "Not a speck of gold? Broke.",
+		"enderman", "You're dressed like a dirt block. Don't look at me.",
+		"warden", "*thump-thump*… I can hear your leather creaking.",
+		"villager", "Hmmm. Get dressed first, then we talk.",
+		"zombie", "Brrraiiins… and drip… you got… neither…",
+		"skeleton", "*clack* Even my bare bones got more armor.");
 	/** Peaceful mobs hit instead of rapped with: no threats, they are hurt and scared. */
 	private static final List<String> PEACEFUL_HURT = List.of(
 		"Ай! За что?!",
@@ -107,6 +121,13 @@ public final class BattleManager {
 		"Ну и иди, раз микрофон не осилил…",
 		"Псих! Все врассыпную!",
 		"Больно же, дурак!");
+	private static final List<String> PEACEFUL_HURT_EN = List.of(
+		"Ow! What was that for?!",
+		"I was just chewing grass…",
+		"Mom! He's hitting me!",
+		"Fine, leave then, guess you can't handle a mic…",
+		"Psycho! Scatter, everybody!",
+		"That hurts, idiot!");
 	/** A player the mob refused over the outfit: a hit from him within this time is a fight, no second refusal. */
 	private static final long REFUSED_MS = 60_000;
 	private record Refused(MobEntity mob, long until) {}
@@ -151,6 +172,10 @@ public final class BattleManager {
 		"Без слов? Пацаны, нас не уважают!",
 		"Ах так? Ну давай по-плохому.",
 		"Микрофон не осилил, полез драться? Свои, сюда!");
+	private static final List<String> DISRESPECT_EN = List.of(
+		"No words? Boys, we're getting disrespected!",
+		"Oh, like that? Alright, the hard way it is.",
+		"Couldn't handle the mic so you threw hands? Crew, over here!");
 
 	public static Battle byPlayer(UUID uuid) {
 		for (Battle b : BATTLES) if (!b.finished && b.hasPlayer(uuid)) return b;
@@ -193,17 +218,21 @@ public final class BattleManager {
 		return b;
 	}
 
-	private static String refusalLine(Opponent o) {
+	private static String refusalLine(Opponent o, String lang, int fallbackIdx) {
+		Map<String, String> spec = Lang.isRu(lang) ? SPECIES_REFUSAL : SPECIES_REFUSAL_EN;
+		List<String> pool = Lang.isRu(lang) ? REFUSALS : REFUSALS_EN;
 		String kin = o.profile().kin();
-		String s = SPECIES_REFUSAL.get(o.profile().id());
-		if (s == null) s = SPECIES_REFUSAL.get(kin);
-		return s != null ? s : REFUSALS.get(new Random().nextInt(REFUSALS.size()));
+		String s = spec.get(o.profile().id());
+		if (s == null) s = spec.get(kin);
+		return s != null ? s : pool.get(fallbackIdx % pool.size());
 	}
 
 	/** Empty-hand hit: ask the player whether to rap or to fight. */
 	private static void offerChoice(ServerPlayerEntity p, MobEntity mob) {
-		Opponent o = Opponent.of(mob, new Random(), p);
-		Outfit.Score score = Outfit.of(p);
+		String lang = Lang.of(p);
+		Random rnd = new Random();
+		Opponent o = Opponent.of(mob, rnd, p, lang);
+		Outfit.Score score = Outfit.of(p, lang);
 		boolean allowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
 			|| Gangs.isOwn(p, o.profile()); // crew colours: they never refuse their own
 		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false));
@@ -211,17 +240,18 @@ public final class BattleManager {
 		v.type = "choice";
 		v.mobEntityId = mob.getId();
 		v.mobName = o.name();
-		v.mobSpecies = o.profile().species();
-		v.rankArmor = o.rank().armor;
-		v.rankStreet = o.rank().street;
+		v.mobSpecies = o.profile().species(lang);
+		v.rankArmor = o.rank().armor(lang);
+		v.rankStreet = o.rank().street(lang);
 		v.rankLevel = o.rank().level();
 		v.rankColor = o.rank().color;
 		v.boss = o.rank().isBoss();
 		v.tags = o.tags();
 		v.allowed = allowed;
-		v.yourOutfit = score.label();
-		v.requiredOutfit = Battle.levelLabel(Outfit.required(o.rank()));
-		if (!allowed) v.refusal = refusalLine(o);
+		v.yourOutfit = score.label(lang);
+		v.requiredOutfit = Battle.levelLabel(Outfit.required(o.rank()), lang);
+		int refIdx = rnd.nextInt(REFUSALS.size());
+		if (!allowed) v.refusal = refusalLine(o, lang, refIdx);
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 		if (!allowed) {
 			REFUSED.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + REFUSED_MS));
@@ -229,7 +259,9 @@ public final class BattleManager {
 			Speech.bubble(mob, v.refusal, 0xFF8080, 3500);
 			for (ServerPlayerEntity near : p.getEntityWorld().getPlayers()) {
 				if (near.squaredDistanceTo(mob) < 24 * 24) {
-					near.sendMessage(Text.literal("<" + o.name() + "> " + v.refusal).formatted(Formatting.GOLD), false);
+					String nl = Lang.of(near);
+					String nm = nl.equals(lang) ? o.name() : Opponent.nameOf(mob, o.profile(), rnd, nl);
+					near.sendMessage(Text.literal("<" + nm + "> " + refusalLine(o, nl, refIdx)).formatted(Formatting.GOLD), false);
 				}
 			}
 		}
@@ -237,22 +269,28 @@ public final class BattleManager {
 
 	/** Chose to fight instead of rap: disrespect. Kin nearby jumps in. */
 	private static void disrespect(ServerPlayerEntity p, MobEntity mob) {
-		String title = Stats.of(p.getEntityWorld().getServer()).chickened(p.getUuid());
-		if (title != null) p.sendMessage(Text.literal("Новый титул: «" + title + "». Три раза выбрал кулаки вместо микрофона.")
+		String lang = Lang.of(p);
+		String title = Stats.of(p.getEntityWorld().getServer()).chickened(p.getUuid(), lang);
+		if (title != null) p.sendMessage(Text.translatable("rapbattle.manager.chickened_title", title)
 			.formatted(Formatting.GRAY), false);
 		boolean calm = peaceful(mob);
 		// Peaceful mobs do not threaten anyone: they are hurt and run. Hostile ones call their people.
-		List<String> pool = calm ? PEACEFUL_HURT : DISRESPECT;
-		String line = pool.get(new Random().nextInt(pool.size()));
+		Random rnd = new Random();
+		List<String> poolRu = calm ? PEACEFUL_HURT : DISRESPECT;
+		List<String> poolEn = calm ? PEACEFUL_HURT_EN : DISRESPECT_EN;
+		int idx = rnd.nextInt(poolRu.size());
+		String line = (Lang.isRu(lang) ? poolRu : poolEn).get(idx);
 		Speech.bubble(mob, line, calm ? 0xFFE0A0 : 0xFF5050, 3000);
+		MobProfiles.Profile prof = MobProfiles.of(mob.getType());
 		for (ServerPlayerEntity near : p.getEntityWorld().getPlayers()) {
 			if (near.squaredDistanceTo(mob) < 24 * 24) {
-				near.sendMessage(Text.literal("<" + Opponent.of(mob, new Random()).name() + "> " + line)
+				String nl = Lang.of(near);
+				String nearLine = (Lang.isRu(nl) ? poolRu : poolEn).get(idx);
+				near.sendMessage(Text.literal("<" + Opponent.nameOf(mob, prof, rnd, nl) + "> " + nearLine)
 					.formatted(calm ? Formatting.YELLOW : Formatting.RED), false);
 			}
 		}
 		if (!RapConfig.get().kinRevenge || calm) return;
-		MobProfiles.Profile prof = MobProfiles.of(mob.getType());
 		List<MobEntity> kin = p.getEntityWorld().getEntitiesByClass(MobEntity.class, mob.getBoundingBox().expand(16),
 			m -> m.isAlive() && byMob(m) == null && MobProfiles.of(m.getType()).kin().equals(prof.kin())
 				&& !(m instanceof TameableEntity t && t.isTamed()));
@@ -345,7 +383,7 @@ public final class BattleManager {
 					b.tick();
 				} catch (RuntimeException e) {
 					RapBattle.LOG.error("Battle {} crashed", b.id, e);
-					b.abort("Баттл сломался, смотри лог сервера");
+					b.abort(Text.translatable("rapbattle.battle.crashed"));
 				}
 			}
 			BATTLES.removeIf(b -> b.finished);
@@ -382,14 +420,13 @@ public final class BattleManager {
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			if (!RapConfig.get().hasLlm() || RapConfig.get().sttKey().isEmpty()) {
 				if (server.isSingleplayer() && server.isHost(handler.player.getPlayerConfigEntry())) {
-					handler.player.sendMessage(Text.literal("[Рэп-баттл] Нейросеть или распознавание голоса не настроены, баттлы в запасном режиме. "
-						+ "Ключи: config/rapbattle-server.json").formatted(Formatting.YELLOW), false);
+					handler.player.sendMessage(Text.translatable("rapbattle.manager.fallback_notice").formatted(Formatting.YELLOW), false);
 				}
 			}
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-			for (Battle b : BATTLES) b.abort("Сервер остановлен");
+			for (Battle b : BATTLES) b.abort(Text.translatable("rapbattle.manager.server_stopped"));
 			Speech.clearAll();
 			DamagePop.clearAll();
 			Later.clear();

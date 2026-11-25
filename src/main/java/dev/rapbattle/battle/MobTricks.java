@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import dev.rapbattle.net.BattleView;
 
 import java.util.ArrayList;
@@ -40,6 +41,32 @@ public final class MobTricks {
 		Map.entry("wolf", "Зовёт стаю."),
 		Map.entry("zombie", "Ночью приходит ордой, днём слабее на солнце."));
 
+	private static final Map<String, String> HINTS_EN = Map.ofEntries(
+		Map.entry("witch", "Throws a disruption potion at your board."),
+		Map.entry("fox", "Steals one of your rhymes: finish the line with your own word."),
+		Map.entry("frog", "Snatches one of your rhymes with its tongue."),
+		Map.entry("blaze", "Rhymes burn up: only visible for 2 beats, memorize them."),
+		Map.entry("squid", "Sprays ink: only the current line is visible."),
+		Map.entry("llama", "Spits on your board: the start of the line is covered."),
+		Map.entry("trader_llama", "Spits on your board: the start of the line is covered."),
+		Map.entry("goat", "Headbutts your board: it flies off to the side."),
+		Map.entry("illusioner", "Fake clone rhymes: the real one only shows on beat 4."),
+		Map.entry("enderman", "Don't look him in the eyes while he raps, or he scrambles your rhymes."),
+		Map.entry("creeper", "Stay silent for a full bar and he blows up."),
+		Map.entry("warden", "Stay quiet while he raps: he hears every sound."),
+		Map.entry("ghast", "Deflect the fireball: use his own rhyme back against him."),
+		Map.entry("guardian", "Stick to one topic across all your lines."),
+		Map.entry("elder_guardian", "Stick to one topic across all your lines."),
+		Map.entry("shulker", "Hides in its shell and doesn't listen to you."),
+		Map.entry("skeleton", "Strict on rhythm: don't fall off beat."),
+		Map.entry("pig", "Hold a carrot in your hand and he gets distracted."),
+		Map.entry("piglin", "Respects gold armor on you."),
+		Map.entry("cat", "Hold fish in your hand and she goes easier on you."),
+		Map.entry("cow", "Slow flow: lower tempo."),
+		Map.entry("chicken", "Easiest opponent, perfect to start with."),
+		Map.entry("wolf", "Calls the pack."),
+		Map.entry("zombie", "Comes as a horde at night, weaker in the sun during the day."));
+
 	private static final Map<String, String> JUDGE = Map.of(
 		"ghast", "Если игрок использовал рифму или слово из куплета гаста против него — это «отбитый фаербол», большой бонус игроку.",
 		"guardian", "Игрок должен держать одну тему во всех строках: штрафуй за скачки темы.",
@@ -50,17 +77,36 @@ public final class MobTricks {
 		"donkey", "Осёл повторяет одну и ту же строку: штрафуй повторы с обеих сторон.",
 		"mule", "Мул повторяет одну и ту же строку: штрафуй повторы с обеих сторон.");
 
-	public static String hint(String id) { return HINTS.getOrDefault(id, ""); }
+	private static final Map<String, String> JUDGE_EN = Map.of(
+		"ghast", "If the player used a rhyme or word from the ghast's verse back against him, that's a 'deflected fireball' — big bonus for the player.",
+		"guardian", "The player must stick to one topic across all lines: penalize topic jumping.",
+		"elder_guardian", "The player must stick to one topic across all lines: penalize topic jumping.",
+		"shulker", "The shulker hid in its shell and didn't listen to the opponent: score the shulker's verse 2 points lower.",
+		"skeleton", "The skeleton is strict on rhythm: heavily penalize choppy, off-beat delivery.",
+		"parrot", "The parrot repeats after others: penalize the player if they repeated themselves.",
+		"donkey", "The donkey repeats the same line over and over: penalize repetition on both sides.",
+		"mule", "The mule repeats the same line over and over: penalize repetition on both sides.");
 
-	public static String judgeHint(String id) { return JUDGE.getOrDefault(id, ""); }
+	public static String hint(String id, String lang) { return (Lang.isRu(lang) ? HINTS : HINTS_EN).getOrDefault(id, ""); }
+
+	@Deprecated
+	public static String hint(String id) { return hint(id, Lang.RU); }
+
+	public static String judgeHint(String id, String lang) { return (Lang.isRu(lang) ? JUDGE : JUDGE_EN).getOrDefault(id, ""); }
+
+	@Deprecated
+	public static String judgeHint(String id) { return judgeHint(id, Lang.RU); }
 
 	/** Mobs whose interference is decided on the client from the player's own camera / microphone. */
-	public static void flags(String id, BattleView v) {
+	public static void flags(String id, BattleView v, String lang) {
 		v.gaze = id.equals("enderman");
 		v.fuse = id.equals("creeper");
 		v.silence = id.equals("warden");
-		v.trick = hint(id);
+		v.trick = hint(id, lang);
 	}
+
+	@Deprecated
+	public static void flags(String id, BattleView v) { flags(id, v, Lang.RU); }
 
 	/** Puts the mob's interference on the players' rows. {@code rowsByPlayer} keeps each player's rows in order. */
 	public static void apply(String id, List<List<BattleView.Row>> rowsByPlayer, Random rnd) {

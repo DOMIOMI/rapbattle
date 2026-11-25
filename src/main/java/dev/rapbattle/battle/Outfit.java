@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.DyedColorComponent;
 import net.minecraft.entity.EquipmentSlot;
@@ -21,13 +22,20 @@ public final class Outfit {
 		/** Rank-style level 0..6 (0 = naked). */
 		public int level() { return (int) Math.floor(value + 1e-6); }
 
-		public String label() {
+		public String label(String lang) {
 			int l = level();
-			return l <= 0 ? "ГОЛЫЙ" : Rank.ofLevel(l).armor;
+			return l <= 0 ? (Lang.isRu(lang) ? "ГОЛЫЙ" : "NAKED") : Rank.ofLevel(l).armor(lang);
 		}
+
+		@Deprecated
+		public String label() { return label(Lang.RU); }
 	}
 
-	public static Score of(LivingEntity e) {
+	@Deprecated
+	public static Score of(LivingEntity e) { return of(e, Lang.RU); }
+
+	public static Score of(LivingEntity e, String lang) {
+		boolean ru = Lang.isRu(lang);
 		double sum = 0, style = 0;
 		int material = -1;
 		boolean sameMaterial = true;
@@ -40,11 +48,11 @@ public final class Outfit {
 			int m = material(s);
 			if (s.isOf(Items.CARVED_PUMPKIN)) {
 				style -= 1;
-				note.append("тыква на голове; ");
+				note.append(ru ? "тыква на голове; " : "pumpkin on head; ");
 			}
 			if (isMobHead(s)) {
 				style += 0.5;
-				note.append("трофейная голова; ");
+				note.append(ru ? "трофейная голова; " : "trophy head; ");
 			}
 			sum += Math.max(0, m);
 			if (material == -1) material = m;
@@ -68,14 +76,15 @@ public final class Outfit {
 		}
 		if (fullGang) {
 			style += 0.5;
-			note.append("форма банды «").append(set.name()).append("»; ");
+			if (ru) note.append("форма банды «").append(set.name(lang)).append("»; ");
+			else note.append("full ").append(set.name(lang)).append(" crew fit; ");
 		} else if (sameMaterial && material > 0) {
 			style += 0.25;
-			note.append("полный комплект; ");
+			note.append(ru ? "полный комплект; " : "full matching set; ");
 		}
 		if (leather == 4 && sameDye && dye != null) {
 			style += 0.5;
-			note.append("кожанка в цвет; ");
+			note.append(ru ? "кожанка в цвет; " : "matching dyed leather; ");
 		}
 		style = Math.max(-1, Math.min(1, style));
 		double value = Math.max(0, sum / 4.0 + style);

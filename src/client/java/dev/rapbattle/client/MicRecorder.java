@@ -1,5 +1,7 @@
 package dev.rapbattle.client;
 
+import net.minecraft.client.resource.language.I18n;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
@@ -23,13 +25,13 @@ public final class MicRecorder {
 	public String start() {
 		try {
 			DataLine.Info info = new DataLine.Info(TargetDataLine.class, FORMAT);
-			if (!AudioSystem.isLineSupported(info)) return "микрофон не найден";
+			if (!AudioSystem.isLineSupported(info)) return I18n.translate("rapbattle.mic.not_found");
 			line = (TargetDataLine) AudioSystem.getLine(info);
 			line.open(FORMAT, 16000);
 			line.start();
 		} catch (Exception e) {
 			line = null;
-			return "не удалось открыть микрофон: " + e.getMessage();
+			return I18n.translate("rapbattle.mic.open_failed", e.getMessage());
 		}
 		running = true;
 		thread = new Thread(() -> {

@@ -2,6 +2,7 @@ package dev.rapbattle.battle;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import dev.rapbattle.Lang;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.PersistentState;
 import net.minecraft.world.PersistentStateType;
@@ -14,6 +15,24 @@ import java.util.*;
  * Saved with the world.
  */
 public class Stats extends PersistentState {
+	private static final Map<String, String> TITLE_EN = Map.of(
+		"Овцеубийца", "Sheep Slayer",
+		"Гробовщик", "Undertaker",
+		"Сапёр", "Bomb Squad",
+		"Кожаный король", "Leather King",
+		"Укротитель дракона", "Dragon Tamer",
+		"Трёхголовый ноль", "Three-Headed Zero",
+		"Громче Вардена", "Louder Than the Warden",
+		"Босс-киллер", "Boss Killer",
+		"Серийный", "Streak Machine",
+		"Зассал", "Chickened Out");
+
+	/** Translates a stored (Russian) title for display in {@code lang}. */
+	public static String translateTitle(String title, String lang) {
+		if (title == null || title.isEmpty() || Lang.isRu(lang)) return title == null ? "" : title;
+		return TITLE_EN.getOrDefault(title, title);
+	}
+
 	public static final class Player {
 		public int wins, losses, streak, bestStreak, mvp, best, chickened, respect;
 		public Map<String, Integer> speciesWins = new HashMap<>();
@@ -39,6 +58,8 @@ public class Stats extends PersistentState {
 		}));
 
 		public String title() { return titles.isEmpty() ? "" : titles.get(titles.size() - 1); }
+
+		public String title(String lang) { return translateTitle(title(), lang); }
 
 		void addTitle(String t) { if (!titles.contains(t)) titles.add(t); }
 	}
@@ -142,5 +163,10 @@ public class Stats extends PersistentState {
 			return "Зассал";
 		}
 		return null;
+	}
+
+	public String chickened(UUID u, String lang) {
+		String t = chickened(u);
+		return t == null ? null : translateTitle(t, lang);
 	}
 }

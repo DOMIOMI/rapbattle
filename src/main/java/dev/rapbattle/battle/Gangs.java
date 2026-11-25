@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.DyedColorComponent;
 import net.minecraft.component.type.LoreComponent;
@@ -25,40 +26,47 @@ import java.util.*;
 public final class Gangs {
 	private Gangs() {}
 
-	public record Gang(String id, String name, int color, int tier, String members) {}
+	public record Gang(String id, String name, int color, int tier, String members) {
+		public String name(String lang) { return Lang.isRu(lang) ? name : NAME_EN.getOrDefault(id, name); }
+
+		public String members(String lang) { return Lang.isRu(lang) ? members : MEMBERS_EN.getOrDefault(id, members); }
+	}
 
 	private static final String TAG = "rapbattle_gang";
 	private static final Map<String, Gang> BY_KIN = new HashMap<>();
+	private static final Map<String, String> NAME_EN = new HashMap<>();
+	private static final Map<String, String> MEMBERS_EN = new HashMap<>();
 
-	private static void g(String kin, String name, int color, int tier, String members) {
+	private static void g(String kin, String name, String nameEn, int color, int tier, String members, String membersEn) {
 		BY_KIN.put(kin, new Gang(kin, name, color, tier, members));
+		NAME_EN.put(kin, nameEn);
+		MEMBERS_EN.put(kin, membersEn);
 	}
 
 	static {
-		g("zombie", "Гниль", 0x4C7A34, 3, "зомби, кадавры, утопленники");
-		g("skeleton", "Кости", 0xE8E2D0, 3, "скелеты, зимогоры, болотники");
-		g("illager", "Рейд", 0x5A5F66, 4, "разбойники, поборники, вызыватели, ведьмы");
-		g("piglin", "Голд", 0xF2C94C, 4, "пиглины и бруты");
-		g("zombified_piglin", "Гнилой Голд", 0x9C6B5A, 3, "зомби-пиглины");
-		g("spider", "Паутина", 0x2B1B1B, 3, "пауки");
-		g("villager", "Деревня", 0x8B5A2B, 3, "жители, торговцы, големы");
-		g("enderman", "Варп", 0x2A1240, 4, "эндермены");
-		g("creeper", "Тротил", 0x3E8E3E, 4, "криперы");
-		g("wolf", "Стая", 0x9AA0A6, 3, "волки");
-		g("sheep", "Шерсть", 0xF0F0F0, 2, "овцы");
-		g("cow", "Ферма", 0x5C4033, 2, "коровы");
-		g("pig", "Хрю", 0xF4A6B8, 2, "свиньи");
-		g("chicken", "Курятник", 0xD93A3A, 1, "курицы");
-		g("slime", "Слизь", 0x7CCF5C, 2, "слизни и магмовые кубы");
-		g("blaze", "Огонь", 0xE86A17, 4, "ифриты");
-		g("bee", "Улей", 0xF2C230, 2, "пчёлы");
-		g("guardian", "Глубина", 0x3E7C87, 4, "стражи");
-		g("hoglin", "Кабаны", 0x8B4A3C, 5, "хоглины");
-		g("ghast", "Слёзы", 0xDCDCE6, 4, "гасты");
+		g("zombie", "Гниль", "Rot", 0x4C7A34, 3, "зомби, кадавры, утопленники", "zombies, husks, drowned");
+		g("skeleton", "Кости", "Bones", 0xE8E2D0, 3, "скелеты, зимогоры, болотники", "skeletons, strays, bogged");
+		g("illager", "Рейд", "Raid", 0x5A5F66, 4, "разбойники, поборники, вызыватели, ведьмы", "pillagers, vindicators, evokers, witches");
+		g("piglin", "Голд", "Gold", 0xF2C94C, 4, "пиглины и бруты", "piglins and brutes");
+		g("zombified_piglin", "Гнилой Голд", "Rotten Gold", 0x9C6B5A, 3, "зомби-пиглины", "zombified piglins");
+		g("spider", "Паутина", "Web", 0x2B1B1B, 3, "пауки", "spiders");
+		g("villager", "Деревня", "Village", 0x8B5A2B, 3, "жители, торговцы, големы", "villagers, traders, golems");
+		g("enderman", "Варп", "Warp", 0x2A1240, 4, "эндермены", "endermen");
+		g("creeper", "Тротил", "TNT", 0x3E8E3E, 4, "криперы", "creepers");
+		g("wolf", "Стая", "Pack", 0x9AA0A6, 3, "волки", "wolves");
+		g("sheep", "Шерсть", "Wool", 0xF0F0F0, 2, "овцы", "sheep");
+		g("cow", "Ферма", "Farm", 0x5C4033, 2, "коровы", "cows");
+		g("pig", "Хрю", "Oink", 0xF4A6B8, 2, "свиньи", "pigs");
+		g("chicken", "Курятник", "Coop", 0xD93A3A, 1, "курицы", "chickens");
+		g("slime", "Слизь", "Slime", 0x7CCF5C, 2, "слизни и магмовые кубы", "slimes and magma cubes");
+		g("blaze", "Огонь", "Blaze", 0xE86A17, 4, "ифриты", "blazes");
+		g("bee", "Улей", "Hive", 0xF2C230, 2, "пчёлы", "bees");
+		g("guardian", "Глубина", "Deep", 0x3E7C87, 4, "стражи", "guardians");
+		g("hoglin", "Кабаны", "Boars", 0x8B4A3C, 5, "хоглины", "hoglins");
+		g("ghast", "Слёзы", "Tears", 0xDCDCE6, 4, "гасты", "ghasts");
 	}
 
 	private static final Item[] PIECES = {Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS};
-	private static final String[] PIECE_NAMES = {"Бандана", "Куртка", "Треники", "Кроссы"};
 
 	public static Gang of(MobProfiles.Profile p) { return BY_KIN.get(p.kin()); }
 
@@ -66,13 +74,14 @@ public final class Gangs {
 	public static ItemStack piece(Gang g, int index) {
 		ItemStack s = new ItemStack(PIECES[index]);
 		s.set(DataComponentTypes.DYED_COLOR, new DyedColorComponent(g.color()));
-		s.set(DataComponentTypes.CUSTOM_NAME, Text.literal(PIECE_NAMES[index] + " банды «" + g.name() + "»")
+		Text gangName = Text.translatable("rapbattle.gangs.name." + g.id());
+		s.set(DataComponentTypes.CUSTOM_NAME, Text.translatable("rapbattle.gangs.piece." + index, gangName)
 			.styled(st -> st.withItalic(false).withColor(g.color() == 0xF0F0F0 || g.color() == 0xE8E2D0 ? 0xFFFFFF : g.color())));
 		s.set(DataComponentTypes.LORE, new LoreComponent(List.of(
-			Text.literal("Шмот банды «" + g.name() + "»").formatted(Formatting.GOLD),
-			Text.literal("Свой у: " + g.members()).formatted(Formatting.GRAY),
-			Text.literal("Дресс-код: считается как " + Rank.ofLevel(g.tier()).armor).formatted(Formatting.AQUA),
-			Text.literal("Полный комплект: +стиль, свои не отказывают").formatted(Formatting.DARK_GRAY))));
+			Text.translatable("rapbattle.gangs.lore.gear", gangName).formatted(Formatting.GOLD),
+			Text.translatable("rapbattle.gangs.lore.members", Text.translatable("rapbattle.gangs.members." + g.id())).formatted(Formatting.GRAY),
+			Text.translatable("rapbattle.gangs.lore.dresscode", Text.translatable("rapbattle.gangs.tier." + g.tier())).formatted(Formatting.AQUA),
+			Text.translatable("rapbattle.gangs.lore.fullset").formatted(Formatting.DARK_GRAY))));
 		NbtCompound nbt = new NbtCompound();
 		nbt.putString(TAG, g.id());
 		s.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));

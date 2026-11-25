@@ -55,14 +55,16 @@ public final class Bling {
 			BlockState chain = r <= 1 ? Blocks.IRON_BLOCK.getDefaultState() : r <= 4 ? Blocks.GOLD_BLOCK.getDefaultState()
 				: r == 5 ? Blocks.DIAMOND_BLOCK.getDefaultState() : Blocks.GOLD_BLOCK.getDefaultState();
 			BlockState pendant = r >= 6 ? Blocks.DIAMOND_BLOCK.getDefaultState() : r >= 4 ? Blocks.EMERALD_BLOCK.getDefaultState() : chain;
-			boolean glasses = r >= 3 || "На понтах".equals(v.mobMood) || "Опасный".equals(v.mobMood);
+			boolean glasses = r >= 3 || "На понтах".equals(v.mobMood) || "Опасный".equals(v.mobMood)
+				|| "Flexing".equals(v.mobMood) || "Dangerous".equals(v.mobMood);
 			BlockState cap = v.gangColor >= 0 && !helmet ? concrete(v.gangColor) : null;
 			return new Kit(chain, pendant, glasses, cap, true);
 		}
 		if (smokes(id)) return new Kit(null, null, false, null, true);
 		for (BattleView.Member mm : v.team) {
 			if (mm.entityId != id) continue;
-			boolean boss = mm.title.contains("Босс") || mm.title.contains("дракон");
+			boolean boss = mm.title.contains("Босс") || mm.title.contains("дракон")
+				|| mm.title.contains("Boss") || mm.title.contains("Dragon");
 			BlockState chain = boss ? Blocks.DIAMOND_BLOCK.getDefaultState() : mm.wins >= 1 ? Blocks.GOLD_BLOCK.getDefaultState()
 				: Blocks.IRON_BLOCK.getDefaultState();
 			BlockState pendant = mm.mvp >= 3 ? Blocks.EMERALD_BLOCK.getDefaultState() : chain;

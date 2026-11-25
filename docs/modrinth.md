@@ -51,7 +51,7 @@
 - Без ключей мод тоже работает: мобы читают заготовленные куплеты, судья оценивает «на слух».
 
 В мультиплеере мод нужен на сервере и у всех игроков, ключи — только на сервере.
-Мод сейчас на русском: и куплеты, и судья, и толпа.
+Мод поддерживает **русский и английский** языки: язык выбирается по языку клиента Minecraft каждого игрока (в баттле с игроками на разных языках используется язык того, кто вызвал баттл).
 
 ## Можно брать
 Лицензия MIT. Бери мод, включай в свои сборки, переделывай, выкладывай свои версии. Спрашивать не надо,
@@ -62,6 +62,7 @@
 ---
 
 **English, briefly:** rap battles against mobs and friends. You rap into your microphone over a real beat, an LLM
-writes the mob's verse and judges every line, the crowd cheers or boos. Russian-language only for now.
+writes the mob's verse and judges every line, the crowd cheers or boos. Supports both **English and Russian**
+(automatically follows each player's Minecraft language).
 Fully AI-written (Claude), this description included; beats and crowd voices made with ElevenLabs. MIT: use it in modpacks, fork it, change it.
 A just-for-fun project made for friends. Found a bug? Open an issue on GitHub: https://github.com/DOMIOMI/rapbattle/issues

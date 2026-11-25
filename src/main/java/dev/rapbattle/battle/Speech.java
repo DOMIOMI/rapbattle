@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 import dev.rapbattle.ai.Llm;
@@ -61,9 +62,34 @@ public final class Speech {
 		Map.entry("silverfish", List.of("*скрр* Мы в стенах.")),
 		Map.entry("endermite", List.of("*скрр* Мелкий, но кусачий.")));
 
-	private static Map<String, List<String>> generated = new HashMap<>();
-	private static long generatedAt;
-	private static boolean generating;
+	private static final Map<String, List<String>> BASE_EN = Map.ofEntries(
+		Map.entry("zombie", List.of("Brrains… yours… mine…", "I'm dead and my flow's still livelier than yours.", "{p}… you look… tasty…", "Ughhh… dinner walked right up.")),
+		Map.entry("skeleton", List.of("*clack* Already got you in my sights, meatbag.", "Arrow to the knee — no more rapping for you.", "{p}, bones don't lie: you're done.")),
+		Map.entry("creeper", List.of("Tsss… give me a hug, bro.", "Tsss… {p}, let's skip the talk.", "Tsss… got a little surprise for you.")),
+		Map.entry("spider", List.of("Eight eyes, all on you.", "Sss… web's already spun.", "{p}, you're all tangled up.")),
+		Map.entry("enderman", List.of("You. Looked. Me. In the eyes.", "Vrrp… shouldn't have stared.", "Block by block, and you're next.")),
+		Map.entry("illager", List.of("Hmph! This village is ours, you're in the way.", "The raid is here, {p}, run.", "Hmph-hmph! Axe is freshly sharpened.")),
+		Map.entry("piglin", List.of("Where's the gold? WHERE'S THE GOLD?", "Broke-ass on our turf!", "Snort! {p}, no gold, no pass.")),
+		Map.entry("zombified_piglin", List.of("Touch one of us, answer to all of us.", "Snort… we don't leave our own behind.")),
+		Map.entry("wolf", List.of("Awoo! The pack caught your scent.", "Grrr… you're on our turf.")),
+		Map.entry("bee", List.of("Bzz! Hands off the hive!", "Bzz-bzz, stinger's locked and loaded.")),
+		Map.entry("blaze", List.of("Fshhh… about to get hot in here.", "Fire doesn't ask twice, {p}.")),
+		Map.entry("ghast", List.of("*sob* Nobody loves me… and they won't love you either.", "Catch a fireball and some tears.")),
+		Map.entry("slime", List.of("Splat! I'm sticky and mad.", "Splat-splat, I'll catch up.")),
+		Map.entry("guardian", List.of("*bzzz* I see right through you.", "The deep doesn't forgive.")),
+		Map.entry("phantom", List.of("No sleep for three nights? I'm here for you.", "Insomnia, {p}, that's me.")),
+		Map.entry("hoglin", List.of("*SNORT* Gonna flatten you!", "*snort-snort* Run while you can.")),
+		Map.entry("polar_bear", List.of("*growl* Stay away from mine.", "White fur, pure rage.")),
+		Map.entry("villager", List.of("Hmmm! You messed with my people.", "This village is protected. Mic or fists?")),
+		Map.entry("warden", List.of("*thump-thump*… I hear you…", "*thump-thump*… silence… or death…")),
+		Map.entry("creaking", List.of("*creak*… don't look… don't look…")),
+		Map.entry("breeze", List.of("Whoosh! Gonna blow your flow away.")),
+		Map.entry("silverfish", List.of("*skrr* We're in the walls.")),
+		Map.entry("endermite", List.of("*skrr* Tiny, but I bite.")));
+
+	private static final Map<String, Map<String, List<String>>> generated = new HashMap<>();
+	private static final Map<String, Long> generatedAt = new HashMap<>();
+	private static final Set<String> generating = new HashSet<>();
 
 	// ------------------------------------------------------------------ bubbles
 
@@ -121,24 +147,27 @@ public final class Speech {
 		Long p = PLAYER_COOLDOWN.get(player.getUuid());
 		if (p != null && now - p < 8_000) return;
 		MobProfiles.Profile prof = MobProfiles.of(mob.getType());
-		String line = pick(prof, player.getName().getString());
+		String lang = Lang.of(player);
+		String line = pick(prof, player.getName().getString(), lang);
 		if (line == null) return;
 		MOB_COOLDOWN.put(mob.getUuid(), now);
 		PLAYER_COOLDOWN.put(player.getUuid(), now);
-		String name = Opponent.nameOf(mob, prof, RND);
+		String name = Opponent.nameOf(mob, prof, RND, lang);
 		bubble(mob, name + ": " + line, 0xFFD27F, 3500);
 		mob.playAmbientSound();
 		int shown = HINTS_SHOWN.merge(player.getUuid(), 1, Integer::sum);
 		if (shown <= 3) {
-			player.sendMessage(Text.literal("ударь пустой рукой — ответишь за базар").formatted(Formatting.DARK_GRAY), true);
+			player.sendMessage(Text.translatable("rapbattle.speech.aggro_hint").formatted(Formatting.DARK_GRAY), true);
 		}
 	}
 
-	private static String pick(MobProfiles.Profile prof, String playerName) {
-		refreshIfStale();
+	private static String pick(MobProfiles.Profile prof, String playerName, String lang) {
+		refreshIfStale(lang);
+		Map<String, List<String>> base = Lang.isRu(lang) ? BASE : BASE_EN;
+		Map<String, List<String>> gen = generated.getOrDefault(lang, Map.of());
 		List<String> pool = new ArrayList<>();
-		pool.addAll(BASE.getOrDefault(prof.id(), BASE.getOrDefault(prof.kin(), List.of())));
-		pool.addAll(generated.getOrDefault(prof.kin(), List.of()));
+		pool.addAll(base.getOrDefault(prof.id(), base.getOrDefault(prof.kin(), List.of())));
+		pool.addAll(gen.getOrDefault(prof.kin(), List.of()));
 		if (pool.isEmpty()) return null;
 		String line = pool.get(RND.nextInt(pool.size()));
 		if (line.contains("{p}")) line = line.replace("{p}", playerName);
@@ -148,45 +177,54 @@ public final class Speech {
 
 	// ------------------------------------------------------------------ daily refresh by the model
 
-	private static Path cacheFile() { return FabricLoader.getInstance().getConfigDir().resolve("rapbattle-phrases.json"); }
+	private static Path cacheFile(String lang) {
+		return FabricLoader.getInstance().getConfigDir().resolve(Lang.isRu(lang) ? "rapbattle-phrases.json" : "rapbattle-phrases-en.json");
+	}
 
-	private static void refreshIfStale() {
+	private static void refreshIfStale(String lang) {
 		long now = System.currentTimeMillis();
-		if (generatedAt == 0) loadCache();
-		if (generating || now - generatedAt < 24 * 3600_000L || !RapConfig.get().hasLlm()) return;
-		generating = true;
+		long at = generatedAt.getOrDefault(lang, 0L);
+		if (at == 0) {
+			loadCache(lang);
+			at = generatedAt.getOrDefault(lang, 1L);
+		}
+		if (generating.contains(lang) || now - at < 24 * 3600_000L || !RapConfig.get().hasLlm()) return;
+		generating.add(lang);
+		Map<String, List<String>> base = Lang.isRu(lang) ? BASE : BASE_EN;
 		CompletableFuture.runAsync(() -> {
 			Map<String, List<String>> out = new HashMap<>();
-			for (String kin : BASE.keySet()) {
+			for (String kin : base.keySet()) {
 				MobProfiles.Profile any = null;
 				for (MobProfiles.Profile p : MobProfiles.all()) if (p.kin().equals(kin) || p.id().equals(kin)) { any = p; break; }
 				if (any == null) continue;
-				List<String> lines = Llm.aggroLines(any.species(), any.style(), any.adlib(), BASE.get(kin), 10);
+				List<String> lines = Llm.aggroLines(any.species(lang), any.style(lang), any.adlib(lang), base.get(kin), 10, lang);
 				if (lines != null) out.put(kin, lines);
 			}
 			if (!out.isEmpty()) {
-				generated = out;
-				generatedAt = System.currentTimeMillis();
+				long ts = System.currentTimeMillis();
+				generated.put(lang, out);
+				generatedAt.put(lang, ts);
 				try {
-					Files.writeString(cacheFile(), new Gson().toJson(Map.of("at", generatedAt, "lines", out)), StandardCharsets.UTF_8);
+					Files.writeString(cacheFile(lang), new Gson().toJson(Map.of("at", ts, "lines", out)), StandardCharsets.UTF_8);
 				} catch (Exception e) {
 					RapBattle.LOG.warn("Could not save phrase cache", e);
 				}
 			}
-			generating = false;
+			generating.remove(lang);
 		});
 	}
 
-	private static void loadCache() {
-		generatedAt = 1;
+	private static void loadCache(String lang) {
+		generatedAt.put(lang, 1L);
 		try {
-			if (!Files.exists(cacheFile())) return;
-			Map<String, Object> m = new Gson().fromJson(Files.readString(cacheFile(), StandardCharsets.UTF_8),
+			Path f = cacheFile(lang);
+			if (!Files.exists(f)) return;
+			Map<String, Object> m = new Gson().fromJson(Files.readString(f, StandardCharsets.UTF_8),
 				new TypeToken<Map<String, Object>>() {}.getType());
-			generatedAt = ((Number) m.get("at")).longValue();
+			generatedAt.put(lang, ((Number) m.get("at")).longValue());
 			Map<String, List<String>> lines = new Gson().fromJson(new Gson().toJson(m.get("lines")),
 				new TypeToken<Map<String, List<String>>>() {}.getType());
-			if (lines != null) generated = lines;
+			if (lines != null) generated.put(lang, lines);
 		} catch (Exception e) {
 			RapBattle.LOG.warn("Could not read phrase cache", e);
 		}

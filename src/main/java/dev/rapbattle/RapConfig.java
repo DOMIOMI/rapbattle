@@ -33,6 +33,7 @@ public class RapConfig {
 	/** Empty = read RAPBATTLE_STT_KEY env var. */
 	public String sttApiKey = "";
 	public String sttModel = "whisper-large-v3";
+	/** Fallback/override STT language code; battles pass their own language ("ru" or "en") unless a custom code is set here. */
 	public String sttLanguage = "ru";
 
 	/** Seconds the lobby stays open for friends to join (bosses get double). */

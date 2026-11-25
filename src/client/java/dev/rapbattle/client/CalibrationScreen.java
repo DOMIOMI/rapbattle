@@ -25,36 +25,36 @@ public class CalibrationScreen extends Screen {
 	private long micStart = -1;
 	private final List<Long> clickAt = new ArrayList<>();
 	private int measured = -1;
-	private String message = "Нажми «Старт» и хлопай в ладоши ровно на каждый щелчок (или говори «та»). Наушники тоже подходят.";
+	private Text message = Text.translatable("rapbattle.calib.prompt");
 	private ButtonWidget start, save;
 
 	public CalibrationScreen(Screen parent) {
-		super(Text.literal("Рэп-баттлы: калибровка задержки"));
+		super(Text.translatable("rapbattle.calib.title"));
 		this.parent = parent;
 	}
 
 	@Override
 	protected void init() {
 		int y = height / 2 + 20;
-		start = addDrawableChild(ButtonWidget.builder(Text.literal("Старт"), b -> begin()).dimensions(width / 2 - 154, y, 100, 20).build());
-		save = addDrawableChild(ButtonWidget.builder(Text.literal("Сохранить"), b -> {
+		start = addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.calib.start"), b -> begin()).dimensions(width / 2 - 154, y, 100, 20).build());
+		save = addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.calib.save"), b -> {
 			ClientConfig.get().latencyMs = measured;
 			ClientConfig.save();
 			close();
 		}).dimensions(width / 2 - 50, y, 100, 20).build());
 		save.active = measured >= 0;
-		addDrawableChild(ButtonWidget.builder(Text.literal("Сбросить на 0"), b -> {
+		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.calib.reset"), b -> {
 			ClientConfig.get().latencyMs = 0;
 			ClientConfig.save();
-			message = "Задержка сброшена: 0 мс.";
+			message = Text.translatable("rapbattle.calib.reset_done");
 		}).dimensions(width / 2 + 54, y, 100, 20).build());
-		addDrawableChild(ButtonWidget.builder(Text.literal("Назад"), b -> close()).dimensions(width / 2 - 100, height - 28, 200, 20).build());
+		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.calib.back"), b -> close()).dimensions(width / 2 - 100, height - 28, 200, 20).build());
 	}
 
 	private void begin() {
 		String err = mic.start();
 		if (err != null) {
-			message = "Микрофон не открылся: " + err;
+			message = Text.translatable("rapbattle.calib.mic_failed", err);
 			return;
 		}
 		micStart = System.currentTimeMillis();
@@ -62,7 +62,7 @@ public class CalibrationScreen extends Screen {
 		measured = -1;
 		start.active = false;
 		save.active = false;
-		message = "Слушай щелчки и хлопай вместе с ними…";
+		message = Text.translatable("rapbattle.calib.listening");
 	}
 
 	@Override
@@ -78,8 +78,8 @@ public class CalibrationScreen extends Screen {
 		}
 		super.render(ctx, mouseX, mouseY, delta);
 		ctx.drawCenteredTextWithShadow(textRenderer, title, width / 2, 14, 0xFFFFFFFF);
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("Сейчас: " + ClientConfig.get().latencyMs + " мс"), width / 2, 30, 0xFFB0B6CC);
-		var lines = textRenderer.wrapLines(Text.literal(message), Math.min(320, width - 20));
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.translatable("rapbattle.calib.current", ClientConfig.get().latencyMs), width / 2, 30, 0xFFB0B6CC);
+		var lines = textRenderer.wrapLines(message, Math.min(320, width - 20));
 		int my = height / 2 - 12 - lines.size() * 10;
 		for (var line : lines) {
 			ctx.drawCenteredTextWithShadow(textRenderer, line, width / 2, my, 0xFFFFD84A);
@@ -100,12 +100,12 @@ public class CalibrationScreen extends Screen {
 		start.active = true;
 		int lat = analyse(wav);
 		if (lat < 0) {
-			message = "Не расслышал хлопки. Хлопай громче или поднеси микрофон ближе и попробуй ещё раз.";
+			message = Text.translatable("rapbattle.calib.not_heard");
 			return;
 		}
 		measured = lat;
 		save.active = true;
-		message = "Твоя задержка: " + lat + " мс. Нажми «Сохранить».";
+		message = Text.translatable("rapbattle.calib.measured", lat);
 	}
 
 	/** Median gap between each click and the first loud sound after it, in ms; -1 if too few were heard. */

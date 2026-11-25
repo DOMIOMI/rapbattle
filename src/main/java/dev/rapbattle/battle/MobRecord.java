@@ -2,6 +2,7 @@ package dev.rapbattle.battle;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
@@ -9,11 +10,11 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.Identifier;
 
 /**
- * A mob's own battle history and its rap name, saved inside the mob, so the same sheep stays "Биг Шерсть"
- * forever. Lost when the mob dies.
+ * A mob's own battle history and its rap name (per language), saved inside the mob, so the same sheep stays
+ * "Биг Шерсть" / "Big Wool" forever. Lost when the mob dies.
  */
-public record MobRecord(int wins, int losses, int streak, String name, java.util.List<String> memory) {
-	public static final MobRecord EMPTY = new MobRecord(0, 0, 0, "", java.util.List.of());
+public record MobRecord(int wins, int losses, int streak, String name, String nameEn, java.util.List<String> memory) {
+	public static final MobRecord EMPTY = new MobRecord(0, 0, 0, "", "", java.util.List.of());
 
 	/** One remembered opponent: who, how it ended for the mob, and a line of theirs. */
 	public record Rival(String player, boolean mobWon, String line) {}
@@ -23,6 +24,7 @@ public record MobRecord(int wins, int losses, int streak, String name, java.util
 		Codec.INT.fieldOf("losses").forGetter(MobRecord::losses),
 		Codec.INT.fieldOf("streak").forGetter(MobRecord::streak),
 		Codec.STRING.optionalFieldOf("name", "").forGetter(MobRecord::name),
+		Codec.STRING.optionalFieldOf("name_en", "").forGetter(MobRecord::nameEn),
 		Codec.STRING.listOf().optionalFieldOf("memory", java.util.List.of()).forGetter(MobRecord::memory)
 	).apply(i, MobRecord::new));
 
@@ -38,19 +40,31 @@ public record MobRecord(int wins, int losses, int streak, String name, java.util
 		return r == null ? EMPTY : r;
 	}
 
-	public static void setName(Entity e, String name) {
+	/** Saved rap name in the given language, or empty string if not assigned yet. */
+	public String name(String lang) {
+		return Lang.isRu(lang) ? name : nameEn;
+	}
+
+	public static void setName(Entity e, String name, String lang) {
 		MobRecord r = of(e);
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, name, r.memory));
+		String ru = Lang.isRu(lang) ? name : r.name;
+		String en = Lang.isRu(lang) ? r.nameEn : name;
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, ru, en, r.memory));
+	}
+
+	@Deprecated
+	public static void setName(Entity e, String name) {
+		setName(e, name, Lang.RU);
 	}
 
 	public static void win(Entity e) {
 		MobRecord r = of(e);
-		e.setAttached(TYPE, new MobRecord(r.wins + 1, r.losses, Math.max(0, r.streak) + 1, r.name, r.memory));
+		e.setAttached(TYPE, new MobRecord(r.wins + 1, r.losses, Math.max(0, r.streak) + 1, r.name, r.nameEn, r.memory));
 	}
 
 	public static void loss(Entity e) {
 		MobRecord r = of(e);
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses + 1, Math.min(0, r.streak) - 1, r.name, r.memory));
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses + 1, Math.min(0, r.streak) - 1, r.name, r.nameEn, r.memory));
 	}
 
 	/** Remembers a battle with this player (the last 4 opponents are kept). */
@@ -62,7 +76,7 @@ public record MobRecord(int wins, int losses, int streak, String name, java.util
 		if (clean.length() > 90) clean = clean.substring(0, 89) + "…";
 		mem.add(player + "\t" + (mobWon ? "1" : "0") + "\t" + clean);
 		while (mem.size() > 4) mem.remove(0);
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, r.name, java.util.List.copyOf(mem)));
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, r.name, r.nameEn, java.util.List.copyOf(mem)));
 	}
 
 	/** What this mob remembers about the player, or null if they never met. */

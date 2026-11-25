@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
@@ -66,6 +67,32 @@ public final class SoreLosers {
 		Map.entry("cow", List.of("Муу… я медленная, но я тебя найду.")),
 		Map.entry("rabbit", List.of("Я быстрее тебя! И кусаюсь!")));
 
+	private static final List<String> GENERIC_EN = List.of(
+		"The judge is bought!", "Doesn't count, my beat was lagging!", "You're all in on this!", "Rematch, bitch! Right now, fists up!",
+		"That judging was rigged as hell!", "Let me explain this without a beat.", "Weak bars, huh? Watch my fists rhyme.",
+		"Draw! That was a draw!", "Mic's broken, let's settle it the old way.", "You didn't win, you just yelled louder.");
+	private static final Map<String, List<String>> OWN_EN = Map.ofEntries(
+		Map.entry("zombie", List.of("Brrains… robbed… brains…", "I'm already dead, got nothing to lose!", "Appeal… ughhh… by fist!")),
+		Map.entry("piglin", List.of("That gold was fake! And the judge is fake!", "No broke-ass beats me!", "SNORT! Give me my gold!")),
+		Map.entry("zombified_piglin", List.of("You hit one of us with words. Now we all hit you.")),
+		Map.entry("illager", List.of("JOHNNY DOESN'T LOSE!", "My axe knows how to rhyme too.", "Hmph! The raid ain't over!")),
+		Map.entry("hoglin", List.of("*snort*… *SNORT*!")),
+		Map.entry("spider", List.of("Eight legs against two. Let's see who wins.", "Tangled in my rhymes? Now get tangled in my web.")),
+		Map.entry("enderman", List.of("You. Stared. Too. Much.", "I'm calling that my win. In another dimension.")),
+		Map.entry("wolf", List.of("The pack won't forget this.")),
+		Map.entry("polar_bear", List.of("I'll maul you over my rhymes.")),
+		Map.entry("goat", List.of("BAAAAH!")),
+		Map.entry("skeleton", List.of("*clack* Missed the rhyme, won't miss the arrow.", "You got lucky, meatbag. Luck's out.")),
+		Map.entry("blaze", List.of("You fired me up. Big mistake.")),
+		Map.entry("bee", List.of("Bzz! Stinger in the rhyme, stinger in your face!")),
+		Map.entry("llama", List.of("*ptoo*. That's for the judge. And for you. *PTOO*.")),
+		Map.entry("creeper", List.of("Tsss… if I didn't win… nobody wins…")),
+		Map.entry("sheep", List.of("Baa-a-a! Catch this wool to the face!", "Small fry in a rage, told you!")),
+		Map.entry("chicken", List.of("BAWK-BAWK-BAWK-BAWK!")),
+		Map.entry("pig", List.of("Oink! That was my carrot, not your win!")),
+		Map.entry("cow", List.of("Moo… I'm slow, but I will find you.")),
+		Map.entry("rabbit", List.of("I'm faster than you! And I bite!")));
+
 	private record Blast(MobEntity mob, long at) {}
 
 	private static final List<Blast> BLASTS = new ArrayList<>();
@@ -111,7 +138,7 @@ public final class SoreLosers {
 	 * Rolls whether the beaten mob refuses to accept it. If it does, it stays alive in a rage and goes for the MVP.
 	 * @return true when the mob raged (the caller must not kill it)
 	 */
-	public static boolean tryRage(Opponent opp, MobRecord before, int margin, ServerPlayerEntity mvp, Random rnd) {
+	public static boolean tryRage(Opponent opp, MobRecord before, int margin, ServerPlayerEntity mvp, Random rnd, String lang) {
 		MobEntity mob = opp.mob();
 		String id = opp.profile().id();
 		if (opp.rank().isBoss() || mvp == null || (mob instanceof TameableEntity t && t.isTamed())) return false;
@@ -121,8 +148,9 @@ public final class SoreLosers {
 		if (base == null) return false;
 		int chance = base;
 		String mood = opp.mood();
-		if (mood.equals("Мелочь в ярости") || mood.equals("Обиженный") || mood.equals("Опасный")) chance += 20;
-		if (mood.equals("Серьёзный")) chance -= 10;
+		if (mood.equals("Мелочь в ярости") || mood.equals("Обиженный") || mood.equals("Опасный")
+			|| mood.equals("Raging Runt") || mood.equals("Salty") || mood.equals("Dangerous")) chance += 20;
+		if (mood.equals("Серьёзный") || mood.equals("Dead Serious")) chance -= 10;
 		if (before.wins() > 0 && before.losses() <= 1) chance += 25; // first defeat of a champion (already counted)
 		if (margin >= 10) chance += 15;
 		if (margin <= 2) chance -= 10;
@@ -130,22 +158,24 @@ public final class SoreLosers {
 		if (mob.getType().isIn(net.minecraft.registry.tag.EntityTypeTags.UNDEAD) && Opponent.isNight(w)) chance += 10;
 		if (rnd.nextInt(100) >= chance) return false;
 
-		List<String> pool = OWN.getOrDefault(id, OWN.getOrDefault(opp.profile().kin(), GENERIC));
-		String line = rnd.nextInt(3) == 0 ? GENERIC.get(rnd.nextInt(GENERIC.size())) : pool.get(rnd.nextInt(pool.size()));
+		List<String> generic = Lang.isRu(lang) ? GENERIC : GENERIC_EN;
+		Map<String, List<String>> own = Lang.isRu(lang) ? OWN : OWN_EN;
+		List<String> pool = own.getOrDefault(id, own.getOrDefault(opp.profile().kin(), generic));
+		String line = rnd.nextInt(3) == 0 ? generic.get(rnd.nextInt(generic.size())) : pool.get(rnd.nextInt(pool.size()));
 		for (ServerPlayerEntity p : ((ServerWorld) w).getPlayers()) {
 			if (p.squaredDistanceTo(mob) < 32 * 32) {
-				p.sendMessage(Text.literal("НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! ").formatted(Formatting.DARK_RED, Formatting.BOLD)
+				p.sendMessage(Text.translatable("rapbattle.sorelosers.refuse").formatted(Formatting.DARK_RED, Formatting.BOLD)
 					.append(Text.literal("<" + opp.name() + "> " + line).formatted(Formatting.RED)), false);
 			}
 		}
-		Speech.bubble(mob, "НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! " + line, 0xFF4040, 4000);
+		Speech.bubble(mob, Lang.pick(lang, "НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! ", "WON'T ACCEPT DEFEAT! ") + line, 0xFF4040, 4000);
 		DOUBLE_DROP.put(mob.getUuid(), System.currentTimeMillis() + 5 * 60_000);
 		mob.setHealth(Math.max(1, mob.getMaxHealth() / 2));
 
 		if (mob instanceof CreeperEntity) {
 			// The creeper's tantrum is a blast: damage, but no broken blocks, and 1.5 s to run.
 			for (ServerPlayerEntity p : ((ServerWorld) w).getPlayers()) {
-				if (p.squaredDistanceTo(mob) < 16 * 16) p.sendMessage(Text.literal("БЕГИ!").formatted(Formatting.RED, Formatting.BOLD), true);
+				if (p.squaredDistanceTo(mob) < 16 * 16) p.sendMessage(Text.translatable("rapbattle.sorelosers.run").formatted(Formatting.RED, Formatting.BOLD), true);
 			}
 			w.playSound(null, mob.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_CREEPER_PRIMED, net.minecraft.sound.SoundCategory.HOSTILE, 1f, 0.5f);
 			BLASTS.add(new Blast(mob, System.currentTimeMillis() + 1500));
@@ -163,5 +193,10 @@ public final class SoreLosers {
 		mob.setTarget(mvp);
 		if (!(mob instanceof HostileEntity)) mob.setAttacker(mvp);
 		return true;
+	}
+
+	@Deprecated
+	public static boolean tryRage(Opponent opp, MobRecord before, int margin, ServerPlayerEntity mvp, Random rnd) {
+		return tryRage(opp, before, margin, mvp, rnd, Lang.RU);
 	}
 }

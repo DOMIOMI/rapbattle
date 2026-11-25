@@ -3,6 +3,7 @@ package dev.rapbattle.client;
 import dev.rapbattle.battle.BeatTracks;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.resource.language.I18n;
 import net.minecraft.client.sound.OggAudioStream;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
@@ -41,10 +42,10 @@ public final class ClipRecorder {
 		last = new Take(voiceWav, voiceStart, from, to, track, beatMs, opponent);
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player == null) return;
-		Text button = Text.literal("[Сохранить клип куплета]").styled(s -> s.withColor(Formatting.AQUA).withUnderline(true)
+		Text button = Text.translatable("rapbattle.clip.save_button").styled(s -> s.withColor(Formatting.AQUA).withUnderline(true)
 			.withClickEvent(new ClickEvent.RunCommand("/rapbattle clip"))
-			.withHoverEvent(new HoverEvent.ShowText(Text.literal("Твой голос под бит, WAV в папку rapbattle-clips"))));
-		mc.player.sendMessage(Text.literal("[Рэп-баттл] ").formatted(Formatting.GOLD).append(button), false);
+			.withHoverEvent(new HoverEvent.ShowText(Text.translatable("rapbattle.clip.save_hover"))));
+		mc.player.sendMessage(Text.translatable("rapbattle.clip.prefix").formatted(Formatting.GOLD).append(button), false);
 	}
 
 	/** /rapbattle clip: mixes and saves the last verse in the background. */
@@ -52,7 +53,7 @@ public final class ClipRecorder {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		Take t = last;
 		if (t == null || saving) {
-			if (mc.player != null) mc.player.sendMessage(Text.literal(saving ? "Клип уже сохраняется…" : "Пока нечего сохранять: сначала зачитай куплет.")
+			if (mc.player != null) mc.player.sendMessage(Text.translatable(saving ? "rapbattle.clip.already_saving" : "rapbattle.clip.nothing_to_save")
 				.formatted(Formatting.GRAY), false);
 			return;
 		}
@@ -61,12 +62,13 @@ public final class ClipRecorder {
 			saving = false;
 			if (mc.player == null) return;
 			if (err != null || path == null) {
-				mc.player.sendMessage(Text.literal("Не удалось сохранить клип: " + (err == null ? "нет звука" : err.getMessage())).formatted(Formatting.RED), false);
+				Object reason = err == null ? Text.translatable("rapbattle.clip.no_audio") : err.getMessage();
+				mc.player.sendMessage(Text.translatable("rapbattle.clip.save_failed", reason).formatted(Formatting.RED), false);
 				return;
 			}
 			Text open = Text.literal(path.getFileName().toString()).styled(s -> s.withColor(Formatting.GREEN).withUnderline(true)
 				.withClickEvent(new ClickEvent.OpenFile(path.getParent())));
-			mc.player.sendMessage(Text.literal("Клип сохранён: ").formatted(Formatting.GOLD).append(open), false);
+			mc.player.sendMessage(Text.translatable("rapbattle.clip.saved").formatted(Formatting.GOLD).append(open), false);
 		}));
 	}
 
@@ -116,8 +118,10 @@ public final class ClipRecorder {
 			}
 			Path dir = FabricLoader.getInstance().getGameDir().resolve("rapbattle-clips");
 			Files.createDirectories(dir);
-			String name = "баттл-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
-				+ (t.opponent() == null || t.opponent().isBlank() ? "" : "-против-" + t.opponent().replaceAll("[^\\p{L}\\p{N}_-]", "")) + ".wav";
+			String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+			String name = t.opponent() == null || t.opponent().isBlank()
+				? I18n.translate("rapbattle.clip.file_solo", ts)
+				: I18n.translate("rapbattle.clip.file_vs", ts, t.opponent().replaceAll("[^\\p{L}\\p{N}_-]", ""));
 			Path file = dir.resolve(name);
 			Files.write(file, wav(out));
 			return file;

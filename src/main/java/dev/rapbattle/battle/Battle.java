@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 import dev.rapbattle.ai.Fallback;
@@ -57,6 +58,8 @@ public class Battle {
 		RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(RapBattle.MOD_ID, "rap_battle"));
 
 	public final int id = IDS.getAndIncrement();
+	/** "ru" or "en": the challenger's Minecraft language; everything the battle says is in it. */
+	public final String lang;
 	public final ServerWorld world;
 	public final MobEntity mob;
 	public final Opponent opp;
@@ -127,9 +130,10 @@ public class Battle {
 	private BattleView.Result result;
 
 	public Battle(ServerPlayerEntity challenger, MobEntity mob) {
+		this.lang = Lang.of(challenger);
 		this.world = (ServerWorld) mob.getEntityWorld();
 		this.mob = mob;
-		this.opp = Opponent.of(mob, rnd, challenger);
+		this.opp = Opponent.of(mob, rnd, challenger, lang);
 		this.rank = opp.rank();
 		this.boss = rank.isBoss();
 		this.rounds = boss ? 3 : 1;
@@ -198,12 +202,13 @@ public class Battle {
 
 	public void invite(ServerPlayerEntity p) {
 		invited.add(p.getUuid());
-		Outfit.Score score = Outfit.of(p);
+		String pl = Lang.of(p);
+		Outfit.Score score = Outfit.of(p, pl);
 		BattleView inv = baseView();
 		inv.type = "invite";
 		inv.allowed = !cfg.dressCode || score.level() >= Outfit.requiredToJoin(rank) || Gangs.isOwn(p, opp.profile());
-		inv.yourOutfit = score.label();
-		inv.requiredOutfit = levelLabel(Outfit.requiredToJoin(rank));
+		inv.yourOutfit = score.label(pl);
+		inv.requiredOutfit = levelLabel(Outfit.requiredToJoin(rank), pl);
 		send(p, inv);
 	}
 
@@ -211,15 +216,16 @@ public class Battle {
 	public void answerInvite(ServerPlayerEntity p, boolean accept) {
 		if (!invited.contains(p.getUuid())) return;
 		if (accept && phase == Phase.LOBBY && !hasPlayer(p.getUuid())) {
-			Outfit.Score score = Outfit.of(p);
+			String pl = Lang.of(p);
+			Outfit.Score score = Outfit.of(p, pl);
 			if (cfg.dressCode && score.level() < Outfit.requiredToJoin(rank) && !Gangs.isOwn(p, opp.profile())) {
-				p.sendMessage(Text.literal(opp.name() + ": «Переоденься. Нужен прикид от " + levelLabel(Outfit.requiredToJoin(rank))
-					+ ", а у тебя " + score.label() + ".»").formatted(Formatting.RED), false);
+				p.sendMessage(Text.translatable("rapbattle.battle.dress_code_reject", opp.name(),
+					levelLabel(Outfit.requiredToJoin(rank), pl), score.label(pl)).formatted(Formatting.RED), false);
 				invite(p); // re-send so the banner shows the current outfit
 				return;
 			}
 			addPlayer(p);
-			broadcastChat(Text.literal(p.getName().getString() + " вписывается в баттл!").formatted(Formatting.AQUA));
+			broadcastChat(Text.translatable("rapbattle.battle.player_joined", p.getName().getString()).formatted(Formatting.AQUA));
 			broadcastState();
 		} else {
 			invited.remove(p.getUuid());
@@ -242,7 +248,7 @@ public class Battle {
 			return;
 		}
 		if (players.size() == 1 || phase == Phase.LOBBY && uuid.equals(players.get(0))) {
-			abort("Баттл сорвался: игрок ушёл");
+			abort(Text.translatable("rapbattle.battle.abort_player_left"));
 			return;
 		}
 		// Coop partner left mid-battle: keep going, their verse just counts as silence.
@@ -327,14 +333,14 @@ public class Battle {
 			kin.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(mob)));
 			for (MobEntity m : kin) {
 				if (extra-- <= 0) break;
-				Opponent o = Opponent.of(m, rnd);
+				Opponent o = Opponent.of(m, rnd, lang);
 				String n = o.name();
 				if (mobNames.containsValue(n)) n = n + " " + (mobTeam.size() + 1);
 				addMob(m, n);
 			}
 			placeCrew();
 			if (mobTeam.size() > 1) {
-				broadcastChat(Text.literal(opp.name() + " позвал своих: " + String.join(", ", mobTeamNames())).formatted(Formatting.GOLD));
+				broadcastChat(Text.translatable("rapbattle.battle.mob_called_crew", opp.name(), String.join(", ", mobTeamNames())).formatted(Formatting.GOLD));
 			}
 		}
 		crowd = new Crowd(this);
@@ -348,7 +354,7 @@ public class Battle {
 				p.getBoundingBox().expand(12), t -> t.isTamed() && t.isOwner(p) && t.isAlive())) {
 				if (allyBonus < 2) {
 					allyBonus++;
-					broadcastChat(Text.literal("Бэк-вокал: " + t.getName().getString() + " вписывается за " + p.getName().getString() + " (+1 Респекта)")
+					broadcastChat(Text.translatable("rapbattle.battle.backup_vocals", t.getName().getString(), p.getName().getString())
 						.formatted(Formatting.AQUA));
 				}
 			}
@@ -357,7 +363,7 @@ public class Battle {
 		double sum = 0;
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
-			if (p != null) sum += Outfit.of(p).value();
+			if (p != null) sum += Outfit.of(p, lang).value();
 		}
 		double avg = sum / Math.max(1, players.size());
 		int above = (int) Math.floor(avg) - Outfit.required(rank);
@@ -367,7 +373,7 @@ public class Battle {
 			ServerPlayerEntity p = player(u);
 			if (p != null && Gangs.isOwn(p, opp.profile())) {
 				outfitBonus = Math.min(4, outfitBonus + 1);
-				broadcastChat(Text.literal(p.getName().getString() + " в цветах банды «" + Gangs.of(opp.profile()).name() + "», свой на районе: +1 Респекта")
+				broadcastChat(Text.translatable("rapbattle.battle.gang_colors", p.getName().getString(), Gangs.of(opp.profile()).name(lang))
 					.formatted(Formatting.GOLD));
 				break;
 			}
@@ -396,7 +402,7 @@ public class Battle {
 			recordingStart.put(u, chunk.startMs());
 			List<String> hints = rhymeWords.getOrDefault(u, List.of());
 			transcripts.put(u, CompletableFuture.supplyAsync(() -> {
-				Transcriber.Result r = Transcriber.transcribeTimed(wav, hints);
+				Transcriber.Result r = Transcriber.transcribeTimed(wav, hints, lang);
 				if (r == null) {
 					sttMissing = true;
 					return "";
@@ -412,8 +418,8 @@ public class Battle {
 	/** Creeper: a player stayed silent for a whole bar of their own. The fuse burns out. */
 	public void onSilentBar(ServerPlayerEntity p) {
 		if (phase != Phase.TIMELINE || !hasPlayer(p.getUuid()) || !(mob instanceof net.minecraft.entity.mob.CreeperEntity)) return;
-		broadcastChat(Text.literal(p.getName().getString() + " промолчал целый такт. Фитиль догорел!").formatted(Formatting.RED));
-		forfeit("Молчание — фитиль догорел. Крипер не прощает тишину.");
+		broadcastChat(Text.translatable("rapbattle.battle.creeper_silent_chat", p.getName().getString()).formatted(Formatting.RED));
+		forfeit(Lang.t(lang, "rapbattle.battle.creeper_silent_comment"));
 		SoreLosers.blast(mob, 1500);
 	}
 
@@ -440,21 +446,13 @@ public class Battle {
 		} else {
 			combo = 0;
 			liveHit(false, 2, who);
-			DamagePop.spawn(world, p, "-2 запнулся", 0xFF6060);
+			DamagePop.spawn(world, p, Lang.t(lang, "rapbattle.battle.stumbled_pop"), 0xFF6060);
 		}
 		Crowd.react(this, loud ? Crowd.Moment.PLAYER_HIT : Crowd.Moment.PLAYER_MISS);
 		broadcastState(); // the crowd meter moved
 	}
 
-	/** Damage during the verse: the bar never drops below 1 here, the knockout is the judge's call. */
-	private static final List<String> WIN = List.of("разъебал", "уничтожил", "разнёс", "вынес", "похоронил", "закопал",
-		"растоптал", "сломал", "порвал", "стёр в пыль", "задавил", "переехал");
-	private static final List<String> TEAM_WIN = List.of("разъебали", "уничтожили", "разнесли", "вынесли", "похоронили",
-		"закопали", "растоптали", "порвали", "переехали");
-	private static final List<String> ESCAPED = List.of("еле унёс ноги.", "уполз зализывать раны.", "сбежал, роняя достоинство.",
-		"ушёл, прихрамывая на все лапы.", "свалил в закат с позором.", "уковылял в свой биом.");
-
-	private String pick(List<String> pool) { return pool.get(rnd.nextInt(pool.size())); }
+	private static final int WIN_VERBS = 12, TEAM_WIN_VERBS = 9, ESCAPED_LINES = 6;
 
 	private void rememberPlayers(boolean mobWon) {
 		if (result == null) return;
@@ -466,11 +464,20 @@ public class Battle {
 		MobRecord.Rival rv = MobRecord.rival(mob, p.getName().getString());
 		if (rv == null) return;
 		String n = p.getName().getString();
-		List<String> lines = rv.mobWon()
-			? List.of("Опять ты, " + n + "? Мало тебе прошлого раза?", n + ", я ещё помню, как ты мямлил. Повторим?",
-				"О, " + n + " вернулся за добавкой!")
-			: List.of("Реванш, " + n + ". Сегодня ты ляжешь.", n + "… Я ждал тебя. Теперь моя очередь.",
-				"Тебе тогда повезло, " + n + ". Второй раз не прокатит.");
+		List<String> lines;
+		if (Lang.isRu(lang)) {
+			lines = rv.mobWon()
+				? List.of("Опять ты, " + n + "? Мало тебе прошлого раза?", n + ", я ещё помню, как ты мямлил. Повторим?",
+					"О, " + n + " вернулся за добавкой!")
+				: List.of("Реванш, " + n + ". Сегодня ты ляжешь.", n + "… Я ждал тебя. Теперь моя очередь.",
+					"Тебе тогда повезло, " + n + ". Второй раз не прокатит.");
+		} else {
+			lines = rv.mobWon()
+				? List.of("You again, " + n + "? Didn't get enough last time?", n + ", I still remember you mumbling. Run it back?",
+					"Oh, " + n + " came back for seconds!")
+				: List.of("Rematch, " + n + ". Tonight you're going down.", n + "… I've been waiting. My turn now.",
+					"You got lucky last time, " + n + ". Not happening twice.");
+		}
 		Speech.bubble(mob, lines.get(rnd.nextInt(lines.size())), rv.mobWon() ? 0xFFD27F : 0xFF8080, 3500);
 	}
 
@@ -480,9 +487,15 @@ public class Battle {
 		for (UUID u : players) {
 			MobRecord.Rival rv = MobRecord.rival(mob, names.get(u));
 			if (rv == null) continue;
-			sb.append("Моб уже баттлился с ").append(rv.player()).append(" и ").append(rv.mobWon() ? "победил его" : "проиграл ему").append('.');
-			if (!rv.line().isBlank()) sb.append(" Тогда игрок читал: «").append(rv.line()).append("».");
-			sb.append(rv.mobWon() ? " Напомни ему тот позор и процитируй его слабую строку." : " Это реванш: моб злой, хочет отыграться, процитируй строку игрока и переверни её против него.");
+			if (Lang.isRu(lang)) {
+				sb.append("Моб уже баттлился с ").append(rv.player()).append(" и ").append(rv.mobWon() ? "победил его" : "проиграл ему").append('.');
+				if (!rv.line().isBlank()) sb.append(" Тогда игрок читал: «").append(rv.line()).append("».");
+				sb.append(rv.mobWon() ? " Напомни ему тот позор и процитируй его слабую строку." : " Это реванш: моб злой, хочет отыграться, процитируй строку игрока и переверни её против него.");
+			} else {
+				sb.append("The mob has battled ").append(rv.player()).append(" before and ").append(rv.mobWon() ? "beat them" : "lost to them").append('.');
+				if (!rv.line().isBlank()) sb.append(" Back then the player rapped: \"").append(rv.line()).append("\".");
+				sb.append(rv.mobWon() ? " Remind them of that embarrassment and quote their weak line." : " This is a rematch: the mob is mad and wants payback, quote the player's line and flip it on them.");
+			}
 			sb.append(' ');
 		}
 		return sb.toString().trim();
@@ -507,23 +520,29 @@ public class Battle {
 	 * 2 on the beat (within 0.3 of a beat), 1 close (within 0.7), 0 off or not said. Null without word timestamps.
 	 */
 	private int[] beatTiming(UUID u) {
-		return view == null ? null : beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs);
+		return view == null ? null : beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs, lang);
 	}
 
-	static int[] beatTiming(dev.rapbattle.ai.Transcriber.Result r, Integer start, List<BattleView.Row> rows, String name, long beatMs) {
+	static int[] beatTiming(dev.rapbattle.ai.Transcriber.Result r, Integer start, List<BattleView.Row> rows, String name, long beatMs, String lang) {
 		if (r == null || start == null || r.words().isEmpty()) return null;
 		List<BattleView.Row> mine = new ArrayList<>();
 		for (BattleView.Row row : rows) if (!row.mob && name.equals(row.reader)) mine.add(row);
 		if (mine.isEmpty()) return null;
+		boolean ru = Lang.isRu(lang);
 		int[] out = new int[mine.size()];
 		for (int i = 0; i < mine.size(); i++) {
 			BattleView.Row row = mine.get(i);
-			String stem = stem(row.word);
+			String target = ru ? stemRu(row.word) : lastWordEn(row.word);
 			double expected = (row.startBeat + 3) * (double) beatMs;
 			double best = Double.MAX_VALUE;
 			for (dev.rapbattle.ai.Transcriber.Word w : r.words()) {
-				if (!stem(w.text()).startsWith(stem) && !stem.startsWith(stem(w.text()))) continue;
-				if (stem(w.text()).length() < 3) continue;
+				if (ru) {
+					String ws = stemRu(w.text());
+					if (!ws.startsWith(target) && !target.startsWith(ws)) continue;
+					if (ws.length() < 3) continue;
+				} else {
+					if (!matchesEn(w.text(), target)) continue;
+				}
 				double at = start + w.start() * 1000;
 				best = Math.min(best, Math.abs(at - expected) / beatMs);
 			}
@@ -532,9 +551,25 @@ public class Battle {
 		return out;
 	}
 
-	private static String stem(String word) {
+	private static String stemRu(String word) {
 		String w = word.toLowerCase(java.util.Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "");
 		return w.length() > 4 ? w.substring(0, w.length() - 2) : w;
+	}
+
+	private static String lastWordEn(String phrase) {
+		String[] parts = phrase.trim().split("\\s+");
+		String last = parts.length == 0 ? "" : parts[parts.length - 1];
+		return last.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}]", "");
+	}
+
+	private static boolean matchesEn(String spoken, String target) {
+		if (target.isEmpty()) return false;
+		String w = spoken.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}]", "");
+		if (w.length() < 2) return false;
+		if (w.equals(target)) return true;
+		if (w.equals(target + "s") || w.equals(target + "es") || w.equals(target + "ed") || w.equals(target + "d")) return true;
+		if (target.equals(w + "s") || target.equals(w + "es") || target.equals(w + "ed") || target.equals(w + "d")) return true;
+		return false;
 	}
 
 	/** A beat close to the rank's tempo (bosses get the boss track), random among the close ones. */
@@ -571,17 +606,17 @@ public class Battle {
 	/** A participant threw a punch during the battle: street law broken, the mob wins and its people come for him. */
 	public void violation(ServerPlayerEntity p) {
 		if (finished || phase == Phase.RESULT) return;
-		broadcastChat(Text.literal(p.getName().getString() + " полез в драку посреди баттла. Закон улиц нарушен!").formatted(Formatting.DARK_RED));
-		Speech.bubble(mob, "На баттле не бьют! Пацаны, его!", 0xFF4040, 3500);
+		broadcastChat(Text.translatable("rapbattle.battle.street_law_chat", p.getName().getString()).formatted(Formatting.DARK_RED));
+		Speech.bubble(mob, Lang.t(lang, "rapbattle.battle.street_law_bubble"), 0xFF4040, 3500);
 		streetLaw = true;
 		if (crowd != null) for (MobEntity m : crowd.fighters(Crowd.Side.MOB)) m.setTarget(p);
-		forfeit(p.getName().getString() + " нарушил закон улиц: на баттле не дерутся.");
+		forfeit(Lang.t(lang, "rapbattle.battle.street_law_comment", p.getName().getString()));
 	}
 
 	/** Breaking the rules ends the battle in the mob's favour. */
 	public void forfeit(String comment) {
 		if (finished || view == null) {
-			abort(comment);
+			abort(Text.literal(comment));
 			return;
 		}
 		clearGlow();
@@ -594,9 +629,9 @@ public class Battle {
 		result.playersWin = false;
 		result.finalResult = true;
 		result.comment = comment;
-		result.mobLabel = opp.profile().species();
+		result.mobLabel = opp.profile().species(lang);
 		result.teamLabel = String.join(" + ", namesList());
-		for (UUID u : players) result.players.add(new BattleView.PlayerScore(names.get(u), 0, "(сорвался)"));
+		for (UUID u : players) result.players.add(new BattleView.PlayerScore(names.get(u), 0, Lang.t(lang, "rapbattle.battle.forfeit_status")));
 		winsMob = winsNeeded;
 		view.result = result;
 		setPhase(Phase.RESULT, System.currentTimeMillis());
@@ -631,7 +666,7 @@ public class Battle {
 		long now = System.currentTimeMillis();
 
 		if (!mob.isAlive() || mob.isRemoved()) {
-			abort("Баттл окончен: соперник пропал");
+			abort(Text.translatable("rapbattle.battle.abort_mob_gone"));
 			return;
 		}
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
@@ -732,7 +767,7 @@ public class Battle {
 			if (r.mob && beat == r.startBeat + 3 && mobLinesFired.add(i)) {
 				int d = rank.lineDamage * (r.punch ? 2 : 1);
 				liveHit(false, d, null);
-				for (UUID u : players) DamagePop.spawn(world, player(u), "-" + d + (r.punch ? " ПАНЧ" : ""), 0xFF6060);
+				for (UUID u : players) DamagePop.spawn(world, player(u), "-" + d + (r.punch ? " " + Lang.t(lang, "rapbattle.battle.punch_pop") : ""), 0xFF6060);
 				broadcastState();
 			}
 		}
@@ -772,7 +807,7 @@ public class Battle {
 		List<Llm.Rapper> rappers = new ArrayList<>();
 		for (MobEntity m : mobTeam) {
 			MobProfiles.Profile p = MobProfiles.of(m.getType());
-			rappers.add(new Llm.Rapper(mobNames.get(m), p.species(), p.adlib(), p.style()));
+			rappers.add(new Llm.Rapper(mobNames.get(m), p.species(lang), p.adlib(lang), p.style(lang)));
 		}
 		// Usually the rank's length, sometimes a longer verse (two more lines), never shorter.
 		int lineCount = rank.mobLines + Math.max(0, players.size() - 1) + (rnd.nextInt(3) == 0 ? 2 : 0);
@@ -784,12 +819,12 @@ public class Battle {
 		String rivalry = rivalryText();
 		int r = round;
 		contentFuture = CompletableFuture.supplyAsync(() -> {
-			Llm.Content c = Llm.roundContent(rappers, rank.label(), opp.mood(), opp.profile().language(), lineCount,
-				opponents, groupsNeeded, rank.rhymeDifficulty, r, prev, rivalry);
+			Llm.Content c = Llm.roundContent(rappers, rank.label(lang), opp.mood(), opp.profile().language(lang), lineCount,
+				opponents, groupsNeeded, rank.rhymeDifficulty, r, prev, rivalry, lang);
 			if (c == null) {
 				List<String> speakers = new ArrayList<>();
 				for (Llm.Rapper rp : rappers) speakers.add(rp.name());
-				c = new Llm.Content(Fallback.mobVerse(speakers, opponents, lineCount, rnd), List.of());
+				c = new Llm.Content(Fallback.mobVerse(speakers, opponents, lineCount, rnd, lang), List.of());
 			}
 			return c;
 		}, POOL);
@@ -813,7 +848,7 @@ public class Battle {
 		beatZero = zero;
 		List<String> speakers = mobTeamNames();
 		List<Llm.MobLine> lines = content != null ? content.lines()
-			: Fallback.mobVerse(speakers, namesList(), rank.mobLines, rnd);
+			: Fallback.mobVerse(speakers, namesList(), rank.mobLines, rnd, lang);
 		mobLines = lines;
 		BattleView v = baseView();
 		int beat = 4; // 4-3-2-1 countdown
@@ -844,7 +879,7 @@ public class Battle {
 		List<List<String>> groups = new ArrayList<>();
 		if (content != null) groups.addAll(content.rhymes());
 		Collections.shuffle(groups, rnd);
-		if (groups.size() < blocks * players.size()) groups.addAll(RhymeBank.pickBlocks(blocks * players.size() - groups.size(), rnd));
+		if (groups.size() < blocks * players.size()) groups.addAll(RhymeBank.pickBlocks(blocks * players.size() - groups.size(), rnd, lang));
 		Map<UUID, List<String>> words = new LinkedHashMap<>();
 		int g = 0;
 		for (UUID u : players) {
@@ -859,9 +894,15 @@ public class Battle {
 		if (opp.profile().id().equals("pig") && players.stream().map(this::player).anyMatch(pl -> pl != null
 			&& pl.getMainHandStack().isOf(net.minecraft.item.Items.CARROT))) {
 			BattleView.Row chew = v.rows.get(rnd.nextInt(v.rows.size()));
-			chew.fullLine = "*хрум-хрум* …морковка…";
-			chew.cols = new String[]{"*хрум-хрум*", "…", "…"};
-			chew.word = "хрум";
+			if (Lang.isRu(lang)) {
+				chew.fullLine = "*хрум-хрум* …морковка…";
+				chew.cols = new String[]{"*хрум-хрум*", "…", "…"};
+				chew.word = "хрум";
+			} else {
+				chew.fullLine = "*crunch-crunch* …carrot…";
+				chew.cols = new String[]{"*crunch-crunch*", "…", "…"};
+				chew.word = "crunch";
+			}
 		}
 		int firstPlayerRow = v.rows.size();
 		int colorIdx = rnd.nextInt(BLOCK_COLORS.length);
@@ -962,7 +1003,9 @@ public class Battle {
 				String text = f != null ? f.getNow("") : "";
 				int[] tm = beatTiming(u);
 				String note = tm == null || text == null || text.isBlank() ? ""
-					: " [по таймингу: в бит " + count(tm, 2) + " из " + tm.length + " рифм, рядом с долей " + count(tm, 1) + "]";
+					: Lang.isRu(lang)
+						? " [по таймингу: в бит " + count(tm, 2) + " из " + tm.length + " рифм, рядом с долей " + count(tm, 1) + "]"
+						: " [timing: on beat " + count(tm, 2) + " of " + tm.length + " rhymes, near beat " + count(tm, 1) + "]";
 				verses.add(new Llm.PlayerVerse(names.get(u), rhymeWords.getOrDefault(u, List.of()), text == null ? "" : text + note));
 			}
 			List<String> mobCopy = new ArrayList<>();
@@ -970,27 +1013,27 @@ public class Battle {
 			boolean noStt = sttMissing;
 			verdictStart = now;
 			verdictFuture = CompletableFuture.supplyAsync(() -> {
-				String expectation = rank.judgeExpectation() + " " + MobTricks.judgeHint(opp.profile().id());
-				Llm.Verdict v = noStt ? null : Llm.judge(opp.name(), opp.profile().species(), rank.label(), expectation,
-					rank.verseLo, rank.verseHi, mobCopy, verses);
+				String expectation = rank.judgeExpectation(lang) + " " + MobTricks.judgeHint(opp.profile().id(), lang);
+				Llm.Verdict v = noStt ? null : Llm.judge(opp.name(), opp.profile().species(lang), rank.label(lang), expectation,
+					rank.verseLo, rank.verseHi, mobCopy, verses, lang);
 				if (v == null) {
-					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, rnd);
+					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, rnd, lang);
 					if (noStt) v = new Llm.Verdict(v.mobVerse(), v.playerLines(),
-						"Распознавание речи не настроено, судья судил на слух. " + v.comment());
+						Lang.t(lang, "rapbattle.battle.no_stt_prefix") + v.comment());
 				}
 				return v;
 			}, POOL);
 			result = new BattleView.Result();
 			for (Llm.PlayerVerse v : verses) {
-				result.players.add(new BattleView.PlayerScore(v.name(), 0, v.transcript().isBlank() ? "(тишина)" : v.transcript()));
-				history.append(v.name()).append(": ").append(v.transcript().isBlank() ? "(молчал)" : v.transcript()).append('\n');
+				result.players.add(new BattleView.PlayerScore(v.name(), 0, v.transcript().isBlank() ? Lang.t(lang, "rapbattle.battle.silence") : v.transcript()));
+				history.append(v.name()).append(": ").append(v.transcript().isBlank() ? Lang.t(lang, "rapbattle.battle.silent_history") : v.transcript()).append('\n');
 			}
 			return;
 		}
 		if (t < MIN_JUDGING_MS) return;
 		if (!verdictFuture.isDone() && now - verdictStart < JUDGE_WAIT_MS) return;
 		Llm.Verdict v = verdictFuture.getNow(null);
-		if (v == null) v = Fallback.judge(rank.verseLo, rank.verseHi, List.of(), rnd);
+		if (v == null) v = Fallback.judge(rank.verseLo, rank.verseHi, List.of(), rnd, lang);
 
 		// The breakdown: every player line hits the mob, the bonuses too; the mob's verse hits the team.
 		int mobVerse = Math.max(rank.verseLo, Math.min(rank.verseHi, v.mobVerse()));
@@ -1025,19 +1068,22 @@ public class Battle {
 			timedTotal += tm.length;
 			int d = on * 3 + near;
 			if (d > 0) {
-				hits.add(new BattleView.Hit(names.get(u), "рифмы в бит " + on + "/" + tm.length + (near > 0 ? ", рядом " + near : ""), d, true, false));
+				hits.add(new BattleView.Hit(names.get(u),
+					Lang.t(lang, "rapbattle.battle.hit_rhymes_on_beat", on, tm.length)
+						+ (near > 0 ? Lang.t(lang, "rapbattle.battle.hit_rhymes_near", near) : ""),
+					d, true, false));
 				roundDealt.merge(names.get(u), d, Integer::sum);
 				battleDealt.merge(names.get(u), d, Integer::sum);
 			}
 		}
-		if (outfitBonus > 0) hits.add(new BattleView.Hit("", "прикид", outfitBonus, true, false));
-		if (allyBonus > 0) hits.add(new BattleView.Hit("", "бэк-вокал", allyBonus, true, false));
+		if (outfitBonus > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_outfit"), outfitBonus, true, false));
+		if (allyBonus > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_backup"), allyBonus, true, false));
 		int prize = crowd == null ? 0 : crowd.prize();
-		if (prize > 0) hits.add(new BattleView.Hit("", "зал за вас", prize, true, false));
-		hits.add(new BattleView.Hit(opp.name(), "куплет моба", mobVerse * 3, false, false));
+		if (prize > 0) hits.add(new BattleView.Hit("", Lang.t(lang, "rapbattle.battle.hit_crowd"), prize, true, false));
+		hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_mob_verse"), mobVerse * 3, false, false));
 		// Warden heard the team's noise during his verse.
 		if (noise > 0) {
-			hits.add(new BattleView.Hit(opp.name(), "слышал шум x" + noise, 2 * noise, false, false));
+			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_warden_noise", noise), 2 * noise, false, false));
 			noise = 0;
 		}
 		for (BattleView.Hit h : hits) {
@@ -1064,7 +1110,7 @@ public class Battle {
 		result.mvp = players.size() > 1 ? battleDealt.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("") : "";
 		result.outfitBonus = outfitBonus;
 		result.overdressed = overdressed;
-		result.mobLabel = mobTeam.size() > 1 ? opp.profile().species() + " и кореша" : opp.profile().species();
+		result.mobLabel = mobTeam.size() > 1 ? Lang.t(lang, "rapbattle.battle.mob_and_crew", opp.profile().species(lang)) : opp.profile().species(lang);
 		result.teamLabel = String.join(" + ", namesList());
 		result.dealt = dealtTotal;
 		// Accuracy: from the word timings when speech recognition gave them, from the mic level otherwise.
@@ -1097,23 +1143,23 @@ public class Battle {
 		Stats stats = Stats.of(world.getServer());
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
-			Outfit.Score s = p == null ? new Outfit.Score(0, "") : Outfit.of(p);
-			BattleView.Member mm = new BattleView.Member(names.get(u), s.label(), s.level(), p == null ? -1 : p.getId());
+			Outfit.Score s = p == null ? new Outfit.Score(0, "") : Outfit.of(p, lang);
+			BattleView.Member mm = new BattleView.Member(names.get(u), s.label(lang), s.level(), p == null ? -1 : p.getId());
 			Stats.Player st = stats.player(u);
 			mm.wins = st.wins;
 			mm.losses = st.losses;
 			mm.streak = st.streak;
 			mm.mvp = st.mvp;
 			mm.best = st.best;
-			mm.title = st.title();
+			mm.title = st.title(lang);
 			v.team.add(mm);
 		}
 		int[] sp = stats.species(opp.profile().id());
 		v.speciesMobWins = sp[0];
 		v.speciesPlayerWins = sp[1];
 		v.mobName = opp.name();
-		v.mobSpecies = opp.profile().species();
-		v.mobLanguage = opp.profile().language();
+		v.mobSpecies = opp.profile().species(lang);
+		v.mobLanguage = opp.profile().language(lang);
 		v.mobMood = opp.mood();
 		v.mobType = net.minecraft.registry.Registries.ENTITY_TYPE.getId(mob.getType()).toString();
 		v.mobEntityId = mob.getId();
@@ -1121,8 +1167,8 @@ public class Battle {
 			v.mobEntityIds.add(m.getId());
 			v.mobTeam.add(mobNames.get(m));
 		}
-		v.rankArmor = rank.armor;
-		v.rankStreet = rank.street;
+		v.rankArmor = rank.armor(lang);
+		v.rankStreet = rank.street(lang);
 		v.rankLevel = rank.level();
 		v.rankColor = rank.color;
 		v.tags = new ArrayList<>(opp.tags());
@@ -1132,12 +1178,14 @@ public class Battle {
 		v.mobStreak = rec.streak();
 		Gangs.Gang gang = Gangs.of(opp.profile());
 		v.gangColor = gang == null ? -1 : gang.color();
-		v.requiredOutfit = levelLabel(Outfit.required(rank));
-		MobTricks.flags(opp.profile().id(), v);
+		v.requiredOutfit = levelLabel(Outfit.required(rank), lang);
+		MobTricks.flags(opp.profile().id(), v, lang);
 		return v;
 	}
 
-	static String levelLabel(int level) { return level <= 0 ? "любого" : Rank.ofLevel(level).armor; }
+	static String levelLabel(int level, String lang) {
+		return level <= 0 ? Lang.t(lang, "rapbattle.battle.any_outfit") : Rank.ofLevel(level).armor(lang);
+	}
 
 	private void setPhase(Phase p, long now) {
 		phase = p;
@@ -1238,12 +1286,16 @@ public class Battle {
 		clearGlow();
 	}
 
-	public void abort(String reason) {
+	public void abort(Text reason) {
 		if (finished) return;
 		finished = true;
 		releaseMobs();
-		broadcastChat(Text.literal(reason).formatted(Formatting.GRAY));
+		broadcastChat(reason.copy().formatted(Formatting.GRAY));
 		sendEnd();
+	}
+
+	public void abort(String reason) {
+		abort(Text.literal(reason));
 	}
 
 	private void finish() {
@@ -1258,16 +1310,27 @@ public class Battle {
 		if (result.playersWin) {
 			MobRecord.loss(mob);
 			rememberPlayers(false);
-			broadcastChat(Text.literal(team + " " + pick(players.size() > 1 ? TEAM_WIN : WIN) + " " + opp.name()
-				+ (result.knockout ? " нокаутом" : " по очкам (" + respectTeam + " : " + respectMob + ")")
-				+ (result.mvp.isEmpty() ? "" : " · MVP: " + result.mvp)).formatted(Formatting.GREEN));
+			Text verb = players.size() > 1
+				? Text.translatable("rapbattle.battle.team_win_verb." + rnd.nextInt(TEAM_WIN_VERBS))
+				: Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
+			Text msg;
+			if (result.knockout) {
+				msg = result.mvp.isEmpty()
+					? Text.translatable("rapbattle.battle.win_ko", team, verb, opp.name())
+					: Text.translatable("rapbattle.battle.win_ko_mvp", team, verb, opp.name(), result.mvp);
+			} else {
+				msg = result.mvp.isEmpty()
+					? Text.translatable("rapbattle.battle.win_pts", team, verb, opp.name(), respectTeam, respectMob)
+					: Text.translatable("rapbattle.battle.win_pts_mvp", team, verb, opp.name(), respectTeam, respectMob, result.mvp);
+			}
+			broadcastChat(msg.copy().formatted(Formatting.GREEN));
 			ServerPlayerEntity killer = mvpPlayer;
 			Vec3d pos = new Vec3d(mob.getX(), mob.getY() + 0.5, mob.getZ());
 			int xp = overdressed ? rank.xp / 2 : rank.xp;
-			Trophies.give(killer, opp);
+			Trophies.give(killer, opp, lang);
 			if (mob instanceof net.minecraft.entity.passive.IronGolemEntity golem) {
 				// The village golem is a character: it accepts the defeat instead of dying.
-				GolemDefender.respect(golem, killer);
+				GolemDefender.respect(golem, killer, lang);
 				ExperienceOrbEntity.spawn(world, pos, xp);
 				return;
 			}
@@ -1285,11 +1348,12 @@ public class Battle {
 						DamagePop.spawn(world, m, "-" + Math.max(1, Math.round(dmg / 2)) + " ❤", 0xFF5050);
 					}
 				}
-				broadcastChat(Text.literal(opp.name() + " " + pick(ESCAPED) + " Дожми нокаутом или разносом, будет дроп.").formatted(Formatting.GRAY));
+				broadcastChat(Text.translatable("rapbattle.battle.mob_escaped", opp.name(),
+					Text.translatable("rapbattle.battle.escaped." + rnd.nextInt(ESCAPED_LINES))).formatted(Formatting.GRAY));
 				ExperienceOrbEntity.spawn(world, pos, Math.max(1, xp / 2));
 				return;
 			}
-			boolean raged = SoreLosers.tryRage(opp, MobRecord.of(mob), margin, killer, rnd);
+			boolean raged = SoreLosers.tryRage(opp, MobRecord.of(mob), margin, killer, rnd, lang);
 			// The battle is already marked finished, so the damage guard no longer protects the mob team.
 			for (MobEntity m : new ArrayList<>(mobTeam)) {
 				if (raged && m == mob) continue;
@@ -1307,16 +1371,18 @@ public class Battle {
 				net.minecraft.entity.ItemEntity drop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z, gear);
 				drop.setToDefaultPickupDelay();
 				world.spawnEntity(drop);
-				broadcastChat(Text.literal("Выпал шмот: " + gear.getName().getString()).formatted(Formatting.GOLD));
+				broadcastChat(Text.translatable("rapbattle.battle.gear_dropped", gear.getName()).formatted(Formatting.GOLD));
 			}
-			if (overdressed) broadcastChat(Text.literal("Награда урезана: пришли слишком нарядными на " + rank.armor.toLowerCase() + "о моба.")
-				.formatted(Formatting.GRAY));
+			if (overdressed) broadcastChat(Text.translatable("rapbattle.battle.overdressed",
+				Text.translatable("rapbattle.rank.armor_lower." + rank.name().toLowerCase(Locale.ROOT))).formatted(Formatting.GRAY));
 		} else {
 			MobRecord.win(mob);
 			rememberPlayers(true);
-			broadcastChat(Text.literal(opp.name() + " " + pick(WIN) + " " + team
-				+ (result.knockout ? " нокаутом" : " по очкам (" + respectMob + " : " + respectTeam + ")"))
-				.formatted(Formatting.RED));
+			Text verb = Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
+			Text msg = result.knockout
+				? Text.translatable("rapbattle.battle.win_ko", opp.name(), verb, team)
+				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, respectMob, respectTeam);
+			broadcastChat(msg.copy().formatted(Formatting.RED));
 			punishPlayers();
 			if (!boss) {
 				int wins = MobRecord.of(mob).wins();
@@ -1340,14 +1406,15 @@ public class Battle {
 		for (UUID u : players) {
 			scores.put(u, battleDealt.getOrDefault(names.get(u), 0));
 			ServerPlayerEntity p = player(u);
-			if (p != null) outfits.put(u, Outfit.of(p).level());
+			if (p != null) outfits.put(u, Outfit.of(p, lang).level());
 		}
 		Map<UUID, List<String>> titles = stats.record(players, scores, mvpPlayer == null ? null : mvpPlayer.getUuid(),
 			result.playersWin, opp, outfits);
 		titles.forEach((u, list) -> {
 			for (String t : list) {
 				for (ServerPlayerEntity p : world.getPlayers()) {
-					p.sendMessage(Text.literal(names.get(u) + " получает титул «" + t + "»").formatted(Formatting.LIGHT_PURPLE), false);
+					p.sendMessage(Text.translatable("rapbattle.battle.earned_title", names.get(u), Stats.translateTitle(t, Lang.of(p)))
+						.formatted(Formatting.LIGHT_PURPLE), false);
 				}
 			}
 		});
@@ -1356,11 +1423,16 @@ public class Battle {
 	/** The boss's last word and its signature attack, then the death the team signed up for. */
 	private void bossFinisher(ServerPlayerEntity p) {
 		String id = opp.profile().id();
-		String line = switch (id) {
+		String line = Lang.isRu(lang) ? switch (id) {
 			case "ender_dragon" -> "Край вечен. Ты — нет.";
 			case "wither" -> "Три головы. Ноль шансов.";
 			case "warden" -> "*тук-тук*… тишина…";
 			default -> "Ты пришёл не по адресу.";
+		} : switch (id) {
+			case "ender_dragon" -> "The End is eternal. You are not.";
+			case "wither" -> "Three heads. Zero chance.";
+			case "warden" -> "*thump-thump*… silence…";
+			default -> "You came to the wrong place.";
 		};
 		Speech.bubble(mob, line, 0xB48CFF, 3000);
 		var sound = switch (id) {
@@ -1416,7 +1488,7 @@ public class Battle {
 						mob.equipStack(EquipmentSlot.MAINHAND, held.copy());
 						mob.setDropGuaranteed(EquipmentSlot.MAINHAND);
 						p.getInventory().setStack(p.getInventory().getSelectedSlot(), ItemStack.EMPTY);
-						p.sendMessage(Text.literal(opp.name() + " забрал " + held.getName().getString() + " как трофей. Верни реваншем.")
+						p.sendMessage(Text.translatable("rapbattle.battle.mob_took_trophy", opp.name(), held.getName())
 							.formatted(Formatting.GOLD), false);
 					}
 				}

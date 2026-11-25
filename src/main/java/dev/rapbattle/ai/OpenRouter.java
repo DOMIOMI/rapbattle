@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 
@@ -22,6 +23,10 @@ final class OpenRouter {
 	private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
 	static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens) {
+		return ask(system, user, schema, maxTokens, Lang.RU);
+	}
+
+	static JsonObject ask(String system, String user, Map<String, Object> schema, long maxTokens, String lang) {
 		RapConfig cfg = RapConfig.get();
 		JsonObject body = new JsonObject();
 		body.addProperty("model", cfg.openRouterModel);
@@ -32,7 +37,10 @@ final class OpenRouter {
 		reasoning.addProperty("enabled", false);
 		body.add("reasoning", reasoning);
 		JsonArray messages = new JsonArray();
-		messages.add(msg("system", system + "\nОтвечай только JSON-объектом по схеме, без пояснений и без ```."));
+		String jsonRule = Lang.isRu(lang)
+			? "\nОтвечай только JSON-объектом по схеме, без пояснений и без ```."
+			: "\nReply only with a JSON object matching the schema, with no explanations and no ```.";
+		messages.add(msg("system", system + jsonRule));
 		messages.add(msg("user", user));
 		body.add("messages", messages);
 

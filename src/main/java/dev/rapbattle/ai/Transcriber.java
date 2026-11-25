@@ -2,6 +2,7 @@ package dev.rapbattle.ai;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 
@@ -28,13 +29,18 @@ public final class Transcriber {
 	public record Result(String text, List<Word> words) {}
 
 	/** Returns the recognised text, "" for silence, or null when STT is not configured / failed. */
-	public static String transcribe(byte[] wav, List<String> hintWords) {
-		Result r = transcribeTimed(wav, hintWords);
+	public static String transcribe(byte[] wav, List<String> hintWords, String lang) {
+		Result r = transcribeTimed(wav, hintWords, lang);
 		return r == null ? null : r.text();
 	}
 
+	@Deprecated
+	public static String transcribe(byte[] wav, List<String> hintWords) {
+		return transcribe(wav, hintWords, Lang.RU);
+	}
+
 	/** Like {@link #transcribe}, with word timestamps; null when STT is not configured / failed. */
-	public static Result transcribeTimed(byte[] wav, List<String> hintWords) {
+	public static Result transcribeTimed(byte[] wav, List<String> hintWords, String lang) {
 		RapConfig cfg = RapConfig.get();
 		String key = cfg.sttKey();
 		if (key.isEmpty()) {
@@ -46,12 +52,14 @@ public final class Transcriber {
 			String boundary = "----rapbattle" + UUID.randomUUID().toString().replace("-", "");
 			ByteArrayOutputStream body = new ByteArrayOutputStream(wav.length + 2048);
 			field(body, boundary, "model", cfg.sttModel);
-			if (cfg.sttLanguage != null && !cfg.sttLanguage.isBlank()) field(body, boundary, "language", cfg.sttLanguage);
+			String sttLang = resolveLanguage(cfg.sttLanguage, lang);
+			if (sttLang != null && !sttLang.isBlank()) field(body, boundary, "language", sttLang);
 			field(body, boundary, "response_format", "verbose_json");
 			field(body, boundary, "timestamp_granularities[]", "word");
 			field(body, boundary, "temperature", "0");
 			// Whisper uses the prompt as spelling hints; the rhyme words are the most likely words in the verse.
-			if (!hintWords.isEmpty()) field(body, boundary, "prompt", "Рэп-баттл. " + String.join(", ", hintWords));
+			String prefix = Lang.isRu(lang) ? "Рэп-баттл. " : "Rap battle. ";
+			if (!hintWords.isEmpty()) field(body, boundary, "prompt", prefix + String.join(", ", hintWords));
 			body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"verse.wav\"\r\n"
 				+ "Content-Type: audio/wav\r\n\r\n").getBytes(StandardCharsets.UTF_8));
 			body.write(wav);
@@ -83,6 +91,20 @@ public final class Transcriber {
 			RapBattle.LOG.error("STT request failed", e);
 			return null;
 		}
+	}
+
+	@Deprecated
+	public static Result transcribeTimed(byte[] wav, List<String> hintWords) {
+		return transcribeTimed(wav, hintWords, Lang.RU);
+	}
+
+	private static String resolveLanguage(String configured, String lang) {
+		if (lang == null || lang.isBlank()) return configured;
+		if (configured != null && !configured.isBlank()
+			&& !Lang.RU.equalsIgnoreCase(configured) && !Lang.EN.equalsIgnoreCase(configured)) {
+			return configured;
+		}
+		return Lang.sttCode(lang);
 	}
 
 	private static void field(ByteArrayOutputStream out, String boundary, String name, String value) {

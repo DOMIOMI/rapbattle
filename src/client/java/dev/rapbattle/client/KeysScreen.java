@@ -28,13 +28,15 @@ public class KeysScreen extends Screen {
 	private final Screen parent;
 	private TextFieldWidget openRouter, groq;
 	private boolean editable;
-	private String message = "";
+	private Text message = Text.empty();
 	private int messageColor = 0xFFB0B6CC;
 
 	private static Boolean remoteLlm, remoteStt;
 
+	private record Probe(Text text, boolean ok) {}
+
 	public KeysScreen(Screen parent) {
-		super(Text.literal("Рэп-баттлы: ключи API"));
+		super(Text.translatable("rapbattle.keys.title"));
 		this.parent = parent;
 	}
 
@@ -55,18 +57,18 @@ public class KeysScreen extends Screen {
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"keystatus\"}"));
 		}
 		int w = 300, x = width / 2 - w / 2;
-		openRouter = field(x, 44, w, "OpenRouter — нейросеть (куплеты и судья)");
-		groq = field(x, 82, w, "Groq — распознавание голоса");
+		openRouter = field(x, 44, w, "rapbattle.keys.openrouter_label");
+		groq = field(x, 82, w, "rapbattle.keys.groq_label");
 		int bw = 96, by = height - 26;
-		addDrawableChild(ButtonWidget.builder(Text.literal("Сохранить"), b -> save()).dimensions(width / 2 - bw * 3 / 2 - 4, by, bw, 20).build())
+		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.keys.save"), b -> save()).dimensions(width / 2 - bw * 3 / 2 - 4, by, bw, 20).build())
 			.active = editable;
-		addDrawableChild(ButtonWidget.builder(Text.literal("Проверить"), b -> check()).dimensions(width / 2 - bw / 2, by, bw, 20).build())
+		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.keys.check"), b -> check()).dimensions(width / 2 - bw / 2, by, bw, 20).build())
 			.active = editable;
-		addDrawableChild(ButtonWidget.builder(Text.literal("Назад"), b -> close()).dimensions(width / 2 + bw / 2 + 4, by, bw, 20).build());
+		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.keys.back"), b -> close()).dimensions(width / 2 + bw / 2 + 4, by, bw, 20).build());
 	}
 
-	private TextFieldWidget field(int x, int y, int w, String label) {
-		TextFieldWidget f = new TextFieldWidget(textRenderer, x, y, w, 18, Text.literal(label));
+	private TextFieldWidget field(int x, int y, int w, String labelKey) {
+		TextFieldWidget f = new TextFieldWidget(textRenderer, x, y, w, 18, Text.translatable(labelKey));
 		f.setMaxLength(300);
 		f.setEditable(editable);
 		// Typed keys show as dots: nobody looking over your shoulder (or at your stream) sees them.
@@ -80,9 +82,9 @@ public class KeysScreen extends Screen {
 			RapConfig.saveKeys(blankToNull(openRouter.getText()), blankToNull(groq.getText()));
 			openRouter.setText("");
 			groq.setText("");
-			say("Сохранено в config/rapbattle-server.json. Новые ключи работают со следующего баттла.", 0xFF7CF0A0);
+			say(Text.translatable("rapbattle.keys.saved"), 0xFF7CF0A0);
 		} catch (Exception e) {
-			say("Не удалось сохранить: " + e.getMessage(), 0xFFFF6060);
+			say(Text.translatable("rapbattle.keys.save_failed", e.getMessage()), 0xFFFF6060);
 		}
 	}
 
@@ -91,30 +93,31 @@ public class KeysScreen extends Screen {
 	/** Asks each service whether the saved key works (only the services themselves see the key). */
 	private void check() {
 		RapConfig c = RapConfig.get();
-		say("Проверяю…", 0xFFFFD84A);
+		say(Text.translatable("rapbattle.keys.checking"), 0xFFFFD84A);
 		CompletableFuture.supplyAsync(() -> {
-			StringBuilder out = new StringBuilder();
-			out.append("OpenRouter: ").append(c.openRouterKey().isEmpty() ? "нет ключа"
-				: ok("https://openrouter.ai/api/v1/key", c.openRouterKey()));
-			out.append(" · Groq: ").append(c.sttKey().isEmpty() ? "нет ключа"
-				: ok(c.sttBaseUrl.replaceAll("/+$", "") + "/models", c.sttKey()));
-			return out.toString();
-		}).thenAccept(r -> client.execute(() -> say(r, r.contains("ошибка") || r.contains("нет ключа") ? 0xFFFFB84A : 0xFF7CF0A0)));
+			Probe or = c.openRouterKey().isEmpty() ? new Probe(Text.translatable("rapbattle.keys.no_key"), false)
+				: ok("https://openrouter.ai/api/v1/key", c.openRouterKey());
+			Probe gr = c.sttKey().isEmpty() ? new Probe(Text.translatable("rapbattle.keys.no_key"), false)
+				: ok(c.sttBaseUrl.replaceAll("/+$", "") + "/models", c.sttKey());
+			return new Probe(Text.translatable("rapbattle.keys.check_result", or.text(), gr.text()), or.ok() && gr.ok());
+		}).thenAccept(r -> client.execute(() -> say(r.text(), r.ok() ? 0xFF7CF0A0 : 0xFFFFB84A)));
 	}
 
-	private static String ok(String url, String key) {
+	private static Probe ok(String url, String key) {
 		try {
 			HttpResponse<Void> resp = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build().send(
 				HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(10)).header("Authorization", "Bearer " + key).GET().build(),
 				HttpResponse.BodyHandlers.discarding());
 			int code = resp.statusCode();
-			return code / 100 == 2 ? "работает" : code == 401 || code == 403 ? "ошибка: ключ не принят" : "ошибка HTTP " + code;
+			if (code / 100 == 2) return new Probe(Text.translatable("rapbattle.keys.ok"), true);
+			if (code == 401 || code == 403) return new Probe(Text.translatable("rapbattle.keys.rejected"), false);
+			return new Probe(Text.translatable("rapbattle.keys.http_error", code), false);
 		} catch (Exception e) {
-			return "ошибка: нет связи";
+			return new Probe(Text.translatable("rapbattle.keys.no_connection"), false);
 		}
 	}
 
-	private void say(String text, int color) {
+	private void say(Text text, int color) {
 		message = text;
 		messageColor = color;
 	}
@@ -129,22 +132,21 @@ public class KeysScreen extends Screen {
 			status(ctx, x, 33, "OpenRouter", c.openRouterKey());
 			status(ctx, x, 71, "Groq", c.sttKey());
 			int ty = 110;
-			for (var line : textRenderer.wrapLines(Text.literal("Пустое поле — ключ не меняется. Где взять: openrouter.ai/keys, console.groq.com/keys. "
-				+ "Без ключей мод работает в запасном режиме: готовые куплеты и судья «на слух»."), 300)) {
+			for (var line : textRenderer.wrapLines(Text.translatable("rapbattle.keys.hint_local"), 300)) {
 				ctx.drawTextWithShadow(textRenderer, line, x, ty, 0xFF9AA0B8);
 				ty += 10;
 			}
 		} else {
 			int ty = 33;
-			for (var line : textRenderer.wrapLines(Text.literal("Ты на чужом сервере: ключи задаёт его владелец в config/rapbattle-server.json."), 300)) {
+			for (var line : textRenderer.wrapLines(Text.translatable("rapbattle.keys.hint_remote"), 300)) {
 				ctx.drawTextWithShadow(textRenderer, line, x, ty, 0xFFFFD84A);
 				ty += 10;
 			}
-			remote(ctx, x, 71, "Нейросеть", remoteLlm);
-			remote(ctx, x, 109, "Распознавание голоса", remoteStt);
+			remote(ctx, x, 71, Text.translatable("rapbattle.keys.remote_llm"), remoteLlm);
+			remote(ctx, x, 109, Text.translatable("rapbattle.keys.remote_stt"), remoteStt);
 		}
-		if (!message.isEmpty()) {
-			var lines = textRenderer.wrapLines(Text.literal(message), 320);
+		if (!message.getString().isEmpty()) {
+			var lines = textRenderer.wrapLines(message, 320);
 			int my = height - 38 - lines.size() * 10;
 			for (var line : lines) {
 				ctx.drawCenteredTextWithShadow(textRenderer, line, width / 2, my, messageColor);
@@ -155,13 +157,14 @@ public class KeysScreen extends Screen {
 
 	private void status(DrawContext ctx, int x, int y, String name, String key) {
 		boolean set = !key.isEmpty();
-		ctx.drawTextWithShadow(textRenderer, Text.literal(name + ": " + (set ? "введён ✔ (" + RapConfig.mask(key) + ")" : "не введён ✘")),
-			x, y, set ? 0xFF7CF0A0 : 0xFFFF8080);
+		Text line = set ? Text.translatable("rapbattle.keys.status_set", name, RapConfig.mask(key))
+			: Text.translatable("rapbattle.keys.status_unset", name);
+		ctx.drawTextWithShadow(textRenderer, line, x, y, set ? 0xFF7CF0A0 : 0xFFFF8080);
 	}
 
-	private void remote(DrawContext ctx, int x, int y, String name, Boolean set) {
-		String s = set == null ? "спрашиваю сервер…" : set ? "на сервере есть ✔" : "на сервере нет ✘";
-		ctx.drawTextWithShadow(textRenderer, Text.literal(name + ": " + s), x, y, set == null ? 0xFFB0B6CC : set ? 0xFF7CF0A0 : 0xFFFF8080);
+	private void remote(DrawContext ctx, int x, int y, Text name, Boolean set) {
+		String key = set == null ? "rapbattle.keys.remote_asking" : set ? "rapbattle.keys.remote_yes" : "rapbattle.keys.remote_no";
+		ctx.drawTextWithShadow(textRenderer, Text.translatable(key, name), x, y, set == null ? 0xFFB0B6CC : set ? 0xFF7CF0A0 : 0xFFFF8080);
 	}
 
 	@Override

@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 import dev.rapbattle.ai.Fallback;
@@ -42,6 +43,7 @@ public final class PvpBattle {
 	private static final int[] COLORS = {0x6EC6F0, 0xF07167};
 
 	public final int id;
+	public final String lang;
 	private final ServerWorld world;
 	private final UUID a, b;
 	private final Map<UUID, String> names = new HashMap<>();
@@ -85,7 +87,7 @@ public final class PvpBattle {
 		v.challenger = from.getName().getString();
 		v.allowed = true;
 		ServerPlayNetworking.send(to, new Payloads.StateS2C(v.toJson()));
-		from.sendMessage(Text.literal("Вызов отправлен: " + to.getName().getString() + " решает, выйти ли на баттл.").formatted(Formatting.GOLD), true);
+		from.sendMessage(Text.translatable("rapbattle.pvp.challenge_sent", to.getName().getString()).formatted(Formatting.GOLD), true);
 		return true;
 	}
 
@@ -105,7 +107,7 @@ public final class PvpBattle {
 		ServerPlayerEntity from = p.getEntityWorld().getServer().getPlayerManager().getPlayer(inv.from());
 		if (from == null || System.currentTimeMillis() > inv.until()) return true;
 		if (!accept) {
-			from.sendMessage(Text.literal(p.getName().getString() + " отказался от баттла. Зассал?").formatted(Formatting.GRAY), false);
+			from.sendMessage(Text.translatable("rapbattle.pvp.declined", p.getName().getString()).formatted(Formatting.GRAY), false);
 			return true;
 		}
 		if (busy(from) || busy(p)) return true;
@@ -131,7 +133,7 @@ public final class PvpBattle {
 				pb.tick(now);
 			} catch (RuntimeException e) {
 				RapBattle.LOG.error("PvP battle {} crashed", pb.id, e);
-				pb.end("Баттл сломался, смотри лог сервера");
+				pb.end(Text.translatable("rapbattle.battle.crashed"));
 			}
 		}
 		ALL.removeIf(pb -> pb.finished);
@@ -141,6 +143,7 @@ public final class PvpBattle {
 
 	private PvpBattle(int id, ServerPlayerEntity pa, ServerPlayerEntity pb) {
 		this.id = id;
+		this.lang = Lang.of(pa);
 		this.world = pa.getEntityWorld();
 		this.a = pa.getUuid();
 		this.b = pb.getUuid();
@@ -156,7 +159,7 @@ public final class PvpBattle {
 		beatZero = System.currentTimeMillis() + INTRO_MS + 600;
 		phaseStart = System.currentTimeMillis();
 		view = buildView();
-		broadcastChat(Text.literal("Рэп-баттл: " + names.get(a) + " против " + names.get(b) + "! Первым читает " + names.get(a) + ".")
+		broadcastChat(Text.translatable("rapbattle.pvp.started", names.get(a), names.get(b), names.get(a))
 			.formatted(Formatting.GOLD));
 		broadcast();
 	}
@@ -172,12 +175,12 @@ public final class PvpBattle {
 		v.round = 1;
 		v.challenger = names.get(a);
 		v.mobName = names.get(b);
-		v.rankArmor = "ИГРОК";
-		v.rankStreet = "один на один";
+		v.rankArmor = Lang.t(lang, "rapbattle.pvp.rank_armor");
+		v.rankStreet = Lang.t(lang, "rapbattle.pvp.rank_street");
 		v.rankColor = 0xF07167;
 		v.respectMax = 100;
 		int beat = 4; // countdown
-		List<List<String>> groups = RhymeBank.pickBlocks(4, rnd);
+		List<List<String>> groups = RhymeBank.pickBlocks(4, rnd, lang);
 		int g = 0;
 		for (UUID u : List.of(a, b)) {
 			List<String> words = new ArrayList<>();
@@ -235,7 +238,7 @@ public final class PvpBattle {
 		} else {
 			combo.put(u, 0);
 			hit(u, 2, true);
-			DamagePop.spawn(world, p, "-2 запнулся", 0xFF6060);
+			DamagePop.spawn(world, p, Lang.t(lang, "rapbattle.battle.stumbled_pop"), 0xFF6060);
 		}
 		broadcast();
 	}
@@ -259,7 +262,7 @@ public final class PvpBattle {
 		recordingStart.put(u, chunk.startMs());
 		List<String> hints = rhymes.getOrDefault(u, List.of());
 		transcripts.put(u, CompletableFuture.supplyAsync(() -> {
-			Transcriber.Result r = Transcriber.transcribeTimed(wav, hints);
+			Transcriber.Result r = Transcriber.transcribeTimed(wav, hints, lang);
 			if (r == null) {
 				sttMissing = true;
 				return "";
@@ -272,9 +275,9 @@ public final class PvpBattle {
 	public void leave(UUID u) {
 		if (finished) return;
 		String who = names.getOrDefault(u, "?");
-		broadcastChat(Text.literal(who + " слился с баттла. Победа за " + names.get(other(u)) + ".").formatted(Formatting.GRAY));
+		broadcastChat(Text.translatable("rapbattle.pvp.player_left", who, names.get(other(u))).formatted(Formatting.GRAY));
 		recordStats(other(u));
-		end(null);
+		end((Text) null);
 	}
 
 	private void tick(long now) {
@@ -345,21 +348,21 @@ public final class PvpBattle {
 			boolean noStt = sttMissing;
 			verdictAsked = now;
 			verdict = CompletableFuture.supplyAsync(() -> {
-				Llm.Verdict v = noStt ? null : Llm.judge("—", "игрок против игрока", "PvP",
-					"Это баттл ДВУХ ИГРОКОВ, моба нет: mobVerse поставь 0. Сравни игроков между собой, comment — кто кого разнёс и чем.",
-					0, 0, List.of(), verses);
-				if (v == null) v = Fallback.judge(0, 0, verses, rnd);
+				Llm.Verdict v = noStt ? null : Llm.judge("—", Lang.t(lang, "rapbattle.pvp.judge_species"), "PvP",
+					Lang.t(lang, "rapbattle.pvp.judge_expectation"),
+					0, 0, List.of(), verses, lang);
+				if (v == null) v = Fallback.judge(0, 0, verses, rnd, lang);
 				return v;
 			}, Battle.POOL);
 			BattleView.Result r = new BattleView.Result();
-			for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? "(тишина)" : pv.transcript()));
+			for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? Lang.t(lang, "rapbattle.battle.silence") : pv.transcript()));
 			view.result = r;
 			return;
 		}
 		if (t < MIN_JUDGING_MS) return;
 		if (!verdict.isDone() && now - verdictAsked < JUDGE_WAIT_MS) return;
 		Llm.Verdict v = verdict.getNow(null);
-		if (v == null) v = Fallback.judge(0, 0, List.of(), rnd);
+		if (v == null) v = Fallback.judge(0, 0, List.of(), rnd, lang);
 		BattleView.Result r = view.result;
 		r.teamBefore = respectA;
 		r.mobBefore = respectB;
@@ -374,13 +377,13 @@ public final class PvpBattle {
 				r.hits.add(new BattleView.Hit(names.get(u), (word.isEmpty() ? "" : "«" + word + "» · ") + l.note(), d, u.equals(a), l.punch()));
 				dealt.merge(u, d, Integer::sum);
 			}
-			int[] tm = Battle.beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs);
+			int[] tm = Battle.beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs, lang);
 			if (tm != null) {
 				int on = 0, near = 0;
 				for (int x : tm) if (x == 2) on++; else if (x == 1) near++;
 				int d = on * 3 + near;
 				if (d > 0) {
-					r.hits.add(new BattleView.Hit(names.get(u), "рифмы в бит " + on + "/" + tm.length, d, u.equals(a), false));
+					r.hits.add(new BattleView.Hit(names.get(u), Lang.t(lang, "rapbattle.battle.hit_rhymes_on_beat", on, tm.length), d, u.equals(a), false));
 					dealt.merge(u, d, Integer::sum);
 				}
 			}
@@ -406,26 +409,26 @@ public final class PvpBattle {
 	}
 
 	private void finish() {
-		ServerPlayerEntity pa = player(a);
 		UUID winner = view.result != null && names.get(b).equals(view.result.winner) ? b : a;
-		broadcastChat(Text.literal(names.get(winner) + " победил " + names.get(other(winner))
-			+ (view.result != null && view.result.knockout ? " нокаутом" : " по очкам (" + Math.max(respectA, respectB) + " : " + Math.min(respectA, respectB) + ")"))
-			.formatted(Formatting.GREEN));
+		Text msg = view.result != null && view.result.knockout
+			? Text.translatable("rapbattle.pvp.win_ko", names.get(winner), names.get(other(winner)))
+			: Text.translatable("rapbattle.pvp.win_pts", names.get(winner), names.get(other(winner)), Math.max(respectA, respectB), Math.min(respectA, respectB));
+		broadcastChat(msg.copy().formatted(Formatting.GREEN));
 		recordStats(winner);
-		end(null);
+		end((Text) null);
 	}
 
 	private void recordStats(UUID winner) {
 		Stats.of(world.getServer()).recordPvp(winner, other(winner), dealt.getOrDefault(winner, 0), dealt.getOrDefault(other(winner), 0));
 	}
 
-	private void end(String reason) {
+	private void end(Text reason) {
 		finished = true;
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
 			if (p == null) continue;
 			p.setGlowing(false);
-			if (reason != null) p.sendMessage(Text.literal(reason).formatted(Formatting.GRAY), false);
+			if (reason != null) p.sendMessage(reason.copy().formatted(Formatting.GRAY), false);
 		}
 		BattleView endView = new BattleView();
 		endView.type = "end";
@@ -454,8 +457,8 @@ public final class PvpBattle {
 		v.team = new ArrayList<>();
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
-			Outfit.Score s = p == null ? new Outfit.Score(0, "") : Outfit.of(p);
-			BattleView.Member mm = new BattleView.Member(names.get(u), s.label(), s.level(), p == null ? -1 : p.getId());
+			Outfit.Score s = p == null ? new Outfit.Score(0, "") : Outfit.of(p, lang);
+			BattleView.Member mm = new BattleView.Member(names.get(u), s.label(lang), s.level(), p == null ? -1 : p.getId());
 			// Their records for the intro cards and the scoreboard.
 			Stats.Player st = Stats.of(world.getServer()).player(u);
 			mm.wins = st.wins;
@@ -463,7 +466,7 @@ public final class PvpBattle {
 			mm.streak = st.streak;
 			mm.mvp = st.mvp;
 			mm.best = st.best;
-			mm.title = st.title();
+			mm.title = st.title(lang);
 			v.team.add(mm);
 		}
 		v.spectator = false;

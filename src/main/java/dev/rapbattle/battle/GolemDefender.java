@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -23,6 +24,10 @@ public final class GolemDefender {
 		"Ты обидел моих людей. Теперь отвечай за базар.",
 		"Деревня под моей защитой. Микрофон или кулак?",
 		"*БОНГ* Жители говорят, ты тут борзый.");
+	private static final List<String> LINES_EN = List.of(
+		"You messed with my people. Now answer for it.",
+		"This village is under my protection. Mic or fists?",
+		"*CLANG* Word around the village is you're talking tough.");
 
 	/** A player wronged a villager. The nearest free golem comes for them. */
 	public static void offended(ServerPlayerEntity player, VillagerEntity villager) {
@@ -55,11 +60,14 @@ public final class GolemDefender {
 			HUNTS.remove(h);
 			g.getNavigation().stop();
 			g.getLookControl().lookAt(p, 30, 30);
-			String line = LINES.get(new Random().nextInt(LINES.size()));
+			int idx = new Random().nextInt(LINES.size());
+			String line = Lang.pick(Lang.of(p), LINES, LINES_EN).get(idx);
 			Speech.bubble(g, line, 0xFFE0A0, 4000);
 			for (ServerPlayerEntity near : ((ServerWorld) g.getEntityWorld()).getPlayers()) {
 				if (near.squaredDistanceTo(g) < 32 * 32) {
-					near.sendMessage(Text.literal("<" + Opponent.nameOf(g, MobProfiles.of(g.getType()), new Random()) + "> " + line)
+					near.sendMessage(Text.translatable("rapbattle.golem.callout",
+						Opponent.nameOf(g, MobProfiles.of(g.getType()), new Random(), Lang.of(near)),
+						Text.translatable("rapbattle.golem.line." + idx))
 						.formatted(Formatting.GOLD), false);
 				}
 			}
@@ -72,17 +80,21 @@ public final class GolemDefender {
 		g.setTarget(p);
 		for (ServerPlayerEntity near : ((ServerWorld) g.getEntityWorld()).getPlayers()) {
 			if (near.squaredDistanceTo(g) < 48 * 48) {
-				near.sendMessage(Text.literal(p.getName().getString() + " зассал перед "
-					+ Opponent.nameOf(g, MobProfiles.of(g.getType()), new Random())).formatted(Formatting.GRAY), false);
+				near.sendMessage(Text.translatable("rapbattle.golem.chickened", p.getName().getString(),
+					Opponent.nameOf(g, MobProfiles.of(g.getType()), new Random(), Lang.of(near)))
+					.formatted(Formatting.GRAY), false);
 			}
 		}
 	}
 
 	/** Lost the battle to the players: the golem accepts it, stays alive, and the village respects them. */
-	public static void respect(IronGolemEntity g, ServerPlayerEntity winner) {
+	@Deprecated
+	public static void respect(IronGolemEntity g, ServerPlayerEntity winner) { respect(g, winner, Lang.RU); }
+
+	public static void respect(IronGolemEntity g, ServerPlayerEntity winner, String lang) {
 		g.setTarget(null);
 		g.stopAnger();
-		Speech.bubble(g, "*БОНГ* …Уважаю. Деревня твоя.", 0xA0FFA0, 4000);
+		Speech.bubble(g, Lang.pick(lang, "*БОНГ* …Уважаю. Деревня твоя.", "*CLANG* …Respect. The village is yours."), 0xA0FFA0, 4000);
 		if (winner != null) {
 			winner.giveItemStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_INGOT, 5));
 			winner.giveItemStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.POPPY, 1));

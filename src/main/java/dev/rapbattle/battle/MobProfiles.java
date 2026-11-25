@@ -1,5 +1,7 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
+import dev.rapbattle.RapBattle;
 import net.minecraft.entity.EntityType;
 import net.minecraft.registry.Registries;
 
@@ -16,9 +18,42 @@ public final class MobProfiles {
 	private MobProfiles() {}
 
 	public record Profile(String id, int baseRank, String species, String language, String adlib, String style,
-						  List<String> names, String kin, boolean pack) {}
+						  List<String> names, String kin, boolean pack) {
+		public String species(String lang) {
+			if (Lang.isRu(lang)) return species;
+			En en = EN.get(id);
+			return en != null ? en.species : species;
+		}
+
+		public String language(String lang) {
+			if (Lang.isRu(lang)) return language;
+			En en = EN.get(id);
+			return en != null ? en.language : "Mob";
+		}
+
+		public String adlib(String lang) {
+			if (Lang.isRu(lang)) return adlib;
+			En en = EN.get(id);
+			return en != null ? en.adlib : "*mob sound*";
+		}
+
+		public String style(String lang) {
+			if (Lang.isRu(lang)) return style;
+			En en = EN.get(id);
+			return en != null ? en.style : "An ordinary mob with no special quirks.";
+		}
+
+		public List<String> names(String lang) {
+			if (Lang.isRu(lang)) return names;
+			En en = EN.get(id);
+			return en != null ? en.names : names;
+		}
+	}
+
+	private record En(String species, String language, String adlib, String style, List<String> names) {}
 
 	private static final Map<String, Profile> MAP = new HashMap<>();
+	private static final Map<String, En> EN = new HashMap<>();
 
 	/** Species whose nearby kin join the mob's team (wolf packs, zombie hordes, raids...). */
 	private static final Set<String> PACKS = Set.of("wolf", "zombie", "husk", "drowned", "pillager", "vindicator", "bee",
@@ -27,6 +62,10 @@ public final class MobProfiles {
 
 	private static void p(String id, int rank, String species, String lang, String adlib, String kin, String style, String... names) {
 		MAP.put(id, new Profile(id, rank, species, lang, adlib, style, List.of(names), kin, PACKS.contains(id)));
+	}
+
+	private static void e(String id, String species, String lang, String adlib, String style, String... names) {
+		EN.put(id, new En(species, lang, adlib, style, List.of(names)));
 	}
 
 	static {
@@ -130,6 +169,119 @@ public final class MobProfiles {
 		p("elder_guardian", 6, "Древний страж", "стражьего древнего", "*гул*", "guardian", "Древний, давящий, накладывает усталость.", "Старейшина");
 		p("wither", 6, "Иссушитель", "иссушённого", "*хрррр*", "skeleton", "Три головы: злая, ноющая и философская.", "Три Головы");
 		p("ender_dragon", 6, "Эндер-дракон", "драконьего", "*РРРАААР*", "ender_dragon", "Пафосный, древний, правит Краем.", "Дракон Края", "Финальный Босс");
+	}
+
+	static {
+		// --- Leather (1): small fry
+		e("chicken", "Chicken", "Chickenese", "Bok-bok-BOK!", "Hysterical, rattles on, always about eggs and KFC.", "Lil Beak", "Egg Boy");
+		e("rabbit", "Rabbit", "Rabbit", "*squeak*", "Fast-talking but jumpy, all about carrots and burrows.", "Fast Ears", "Lil Hop");
+		e("cod", "Cod", "Fish", "*bloop*", "Slippery small fry, gasping on land and panicking.", "Lil Scales");
+		e("salmon", "Salmon", "Fish", "*bloop*", "Swims upstream and never shuts up about it.", "Pink Flow");
+		e("tropical_fish", "Tropical Fish", "Fish", "*bloop*", "Flashy, show-off, resort-life drip.", "Resort Tru");
+		e("bat", "Bat", "Bat", "*screee*", "Hangs upside down, sees the whole world inverted.", "Night Screech");
+		e("axolotl", "Axolotl", "Axolotl", "*chirp-bloop*", "Cute but sneaky, plays dead to trick foes.", "Pink Killer");
+		e("armadillo", "Armadillo", "Armadillo", "*clack*", "Shy, curls into a ball at the slightest noise.", "Shell Tru");
+		e("donkey", "Donkey", "Donkey", "Hee-haw!", "Stubborn, repeats the same point over and over.", "Lil Hardhead");
+		e("mule", "Mule", "Mule", "Hee-haw!", "Stubborn workhorse, always hauling heavy packs.", "Heavy Haul");
+		e("endermite", "Endermite", "Endermite", "*skrrt*", "Tiny, twitchy, loves to bite.", "Lil Biter");
+		e("silverfish", "Silverfish", "Silverfish", "*skrrt*", "Lives in stone, ambushes from out of nowhere.", "Stone Bug");
+		e("tadpole", "Tadpole", "Tadpole", "*blub*", "Tiny, but swears he'll grow up and come back for revenge.", "Lil Croak");
+		e("allay", "Allay", "Allay", "*la-la*", "Sweet, loves players and music.", "Lil Helper");
+		e("squid", "Squid", "Squid", "*splurt*", "Squirts ink whenever it gets nervous.", "Inky");
+
+		// --- Chain (2): street punks
+		e("sheep", "Sheep", "Sheep", "Baa-a-a!", "Small but mean. Proud of its wool, hates shears.", "Big Wool", "Lil Fleece", "MC Baa");
+		e("cow", "Cow", "Cow", "Mooo-o!", "Slow, deep-voiced, flexes its milk and being an OG since day one.", "Moo Flow", "Big Beef");
+		e("mooshroom", "Mooshroom", "Mushroom", "Mooo~", "Psychedelic trip-hop, speaks in mushroom riddles.", "Shroom Shaman");
+		e("pig", "Pig", "Pig", "Oink!", "Dirty, cocky, obsessed with carrots.", "Oink Tru", "Lil Bacon");
+		e("fox", "Fox", "Fox", "*yip-yip*", "Sly, steals anything that isn't nailed down.", "Lil Tail");
+		e("cat", "Cat", "Cat", "Purrr", "Arrogant, \"I'm above this\", acts unbothered.", "Meow Man", "Lil Claws");
+		e("ocelot", "Ocelot", "Cat", "Purrr", "Wild jungle cat, trusts nobody.", "Jungle Cat");
+		e("bee", "Bee", "Bee", "Bzzz", "Buzzes on one note, all about honey and the hive.", "Buzzy");
+		e("llama", "Llama", "Llama", "*ptooey*", "Snobby, spits in your face.", "Spit Tru");
+		e("trader_llama", "Trader Llama", "Llama", "*ptooey*", "Merchant's courier, spits and guards its boss.", "Courier Llama");
+		e("slime", "Slime", "Slime", "Splat", "Sticky, bouncy.", "Slime Gun", "Lil Jelly");
+		e("horse", "Horse", "Horse", "*neigh*", "Proud and fast, speeds up toward the end.", "Neigh Flow");
+		e("camel", "Camel", "Camel", "*grrrm*", "Slow desert philosopher with two humps.", "Two-Hump");
+		e("goat", "Goat", "Goat", "BAAAA!", "Mountain headbutter, screams for no reason.", "Ram Horn");
+		e("parrot", "Parrot", "Parrot", "*squawk*", "Repeats everyone else's lines instead of writing its own.", "Cap'n Copy");
+		e("snow_golem", "Snow Golem", "Snow", "*snow crunch*", "Ice-cold, melts in the heat.", "Frosty Tru");
+		e("copper_golem", "Copper Golem", "Copper", "*clink*", "Nitpicky perfectionist, sorts everything.", "Copper Penny");
+		e("sniffer", "Sniffer", "Sniffer", "*sniff*", "Ancient, sniffs out every move ahead of time.", "Ancient Nose");
+		e("dolphin", "Dolphin", "Dolphin", "*click-click*", "Upbeat, smart, clicks with sonar.", "Flipper");
+		e("frog", "Frog", "Frog", "*ribbit*", "Snatches words out of the air like flies.", "Ribbit Tru");
+		e("turtle", "Turtle", "Turtle", "*crunch*", "Slow, but never loses the beat.", "Shellback");
+		e("nautilus", "Nautilus", "Nautilus", "*blub*", "Twists its bars into a spiral.", "Spiral");
+		e("strider", "Strider", "Strider", "*shiver*", "Freezes outside of lava, always shivering.", "Shiver");
+		e("happy_ghast", "Happy Ghast", "Ghast", "*tee-hee*", "Kind and cheerful, doesn't like to fight.", "Good Ghast");
+		e("panda", "Panda", "Panda", "*achoo*", "Mood swings hard: lazy, angry, or playful.", "Bamboo Boy");
+		e("vex", "Vex", "Vex", "*shriek*", "Tiny spiteful spirit doing the Evoker's dirty work.", "Lil Vex");
+		e("glow_squid", "Glow Squid", "Glow Squid", "*splurt~*", "Glowing and friendly.", "Neon Squid");
+		e("pufferfish", "Pufferfish", "Pufferfish", "*pffft*", "Spiky, puffs up whenever it gets mad.", "Spiky");
+
+		// --- Iron (3): street level
+		e("zombie", "Zombie", "Zombie", "Braaains...", "Slow, dumb, always starving, drags out its vowels.", "Rotten Beat", "Dead Flow", "Brain Eater");
+		e("husk", "Husk", "Desert Zombie", "Khh...", "Dry desert zombie, doesn't burn in the sun.", "Sand Beat");
+		e("drowned", "Drowned", "Drowned", "Blub...", "Soaking wet, packs a trident, straight from the deep.", "Wet Flow");
+		e("zombie_villager", "Zombie Villager", "Zombie", "Hmmm... brains...", "Ex-hustler, now dealing in brains.", "Dead Hustler");
+		e("skeleton", "Skeleton", "Skeleton", "*clack-clack*", "Bone-dry, sarcastic, shoots punchlines like arrows.", "Big Bone", "Lil Skelly", "Dry Bones");
+		e("stray", "Stray", "Ice Skeleton", "*crunch*", "Icy skeleton with a freezing delivery.", "Ice Bone");
+		e("bogged", "Bogged", "Swamp Skeleton", "*squelch*", "Mossy swamp skeleton packing poison arrows.", "Moss Bone");
+		e("parched", "Parched", "Parched", "*crunch*", "Dried-out desert skeleton, always rapping about thirst.", "Desert Dry");
+		e("spider", "Spider", "Spider", "Hsss", "Weaves rhymes like a web.", "Eight Legs", "Lil Web");
+		e("villager", "Villager", "Villager", "Hmmm", "Hustler, measures everything in emeralds.", "Hmm Dealer", "Emerald Boy");
+		e("wandering_trader", "Wandering Trader", "Trader", "Hmmm?", "Traveling hustler, everything's for sale.", "Street Peddler");
+		e("wolf", "Wolf", "Wolf", "Awoo!", "Street-tough, always flexing its pack.", "Grey Flow", "Lil Fang");
+		e("piglin", "Piglin", "Piglin", "Snort-gold!", "Obsessed with gold.", "Gold Snout", "Bling Boy");
+		e("zombified_piglin", "Zombified Piglin", "Piglin", "*grrr*", "Rotting, but rides or dies for its crew.", "Rotten Gold");
+		e("polar_bear", "Polar Bear", "Bear", "*growl*", "Fierce, especially around its cubs.", "White Grizzly");
+		e("skeleton_horse", "Skeleton Horse", "Skeleton", "*clack*", "Shows up with lightning and riders.", "Bone Steed");
+		e("zombie_horse", "Zombie Horse", "Zombie", "*grr*", "Rotten, barely shambles along.", "Rotten Mare");
+		e("camel_husk", "Camel Husk", "Desert", "*khh*", "Undead camel, brings a sandstorm.", "Sand Hump");
+		e("zombie_nautilus", "Zombie Nautilus", "Drowned", "*blub*", "Rotting shell dragged up from the depths.", "Rotten Shell");
+		e("phantom", "Phantom", "Phantom", "*screech*", "Swoops down on the sleepless, disses you for insomnia.", "Insomnia");
+		e("magma_cube", "Magma Cube", "Magma", "*lava bloop*", "Scorching hot, splits into pieces.", "Lava Cube");
+
+		// --- Gold (4): authorities
+		e("creeper", "Creeper", "Creeper", "Tssss...", "Nervous, on edge, literally blows up when mad.", "Tsss Boom", "Green Static", "Lil TNT");
+		e("enderman", "Enderman", "Ender", "Vrrp", "Cold, mysterious, snaps if you make eye contact.", "MC Don't Look", "Dark Figure", "Block Thief");
+		e("witch", "Witch", "Witch", "Hee-hee-hee", "Brews potions, cackles, plays dirty.", "Witch Vibe", "Potion Gun");
+		e("blaze", "Blaze", "Blaze", "Fshhh", "Hot-headed, fiery, spits fast.", "Lil Flame");
+		e("ghast", "Ghast", "Ghast", "*sob*", "Sad emo rapper, cries right in the middle of its bars.", "Crybaby", "Emo Ghast");
+		e("pillager", "Pillager", "Illager", "Hrrgh!", "Street thug with a crossbow.", "Crossbow Bro");
+		e("vindicator", "Vindicator", "Illager", "Hrrgh!", "Axe-swinging psycho, goes by Johnny.", "Johnny");
+		e("guardian", "Guardian", "Guardian", "*bzzz*", "Stares you down with a laser, locks onto one topic.", "The Eye");
+		e("shulker", "Shulker", "Shulker", "*clack*", "Hides in its shell, refuses to listen to opponents.", "Box Boy");
+		e("breeze", "Breeze", "Wind", "Whoosh", "Fast choppy flow, hits like gusts of wind.", "Windblast");
+		e("creaking", "Creaking", "Creaking", "*creak*", "Only moves when you aren't looking.", "Creak");
+		e("cave_spider", "Cave Spider", "Spider", "Hsss", "Venomous, tiny, vicious.", "Venom Tru");
+		e("wither_skeleton", "Wither Skeleton", "Wither", "*clack*", "Grim Nether skeleton wielding a blade.", "Black Bone");
+
+		// --- Diamond (5): legends
+		e("iron_golem", "Iron Golem", "Iron", "*CLANG*", "Massive, stern village bouncer, lives by the code.", "Big Iron");
+		e("ravager", "Ravager", "Ravager", "*ROAR*", "Brute force, doesn't talk, just roars.", "Tank");
+		e("evoker", "Evoker", "Illager", "*spell whisper*", "Show-off sorcerer, summons vexes.", "Poser Mage");
+		e("illusioner", "Illusioner", "Illager", "*poof*", "Stage magician, throws fakes and decoys.", "Trickster");
+		e("piglin_brute", "Piglin Brute", "Piglin", "SNORT!", "Bastion enforcer, swings an axe.", "Gold Brute");
+		e("hoglin", "Hoglin", "Hoglin", "*snort*", "Nether boar, pure brute force.", "Big Boar");
+		e("zoglin", "Zoglin", "Hoglin", "*SNORT*", "Rotten boar, totally unhinged.", "Rotten Boar");
+		e("giant", "Giant", "Zombie", "*BRAAAINS*", "Colossal joke-cracking zombie.", "Colossus");
+
+		// --- Netherite (6): bosses
+		e("warden", "Warden", "Warden", "*thump-thump*", "Blind, hunts by sound, oppressive and ancient.", "Dead Silent", "Hush");
+		e("elder_guardian", "Elder Guardian", "Elder Guardian", "*hum*", "Ancient, suffocating, hits you with mining fatigue.", "The Elder");
+		e("wither", "Wither", "Wither", "*grrrr*", "Three heads: one furious, one whiny, one philosophical.", "Three Heads");
+		e("ender_dragon", "Ender Dragon", "Draconic", "*RRRAAAR*", "Grandiose, ancient, rules the End.", "End Dragon", "Final Boss");
+
+		for (Map.Entry<String, Profile> entry : MAP.entrySet()) {
+			En en = EN.get(entry.getKey());
+			if (en == null) {
+				RapBattle.LOG.error("MobProfiles: missing English entry for '{}'", entry.getKey());
+			} else if (en.names.size() != entry.getValue().names.size()) {
+				RapBattle.LOG.error("MobProfiles: name count mismatch for '{}' (ru={}, en={})",
+					entry.getKey(), entry.getValue().names.size(), en.names.size());
+			}
+		}
 	}
 
 	public static java.util.Collection<Profile> all() { return MAP.values(); }

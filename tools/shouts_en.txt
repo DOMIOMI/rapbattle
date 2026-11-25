@@ -1,0 +1,53 @@
+START | Let's go, spit fire!
+START | Drop it already!
+START | Show him who runs this!
+START | Come on, let's see what you got!
+START | Tear him apart!
+START | Grab the mic and go!
+PLAYER_HIT | Ohhh, let's go!
+PLAYER_HIT | That's my guy!
+PLAYER_HIT | Brutal! Keep it coming!
+PLAYER_HIT | Nice, nice!
+PLAYER_HIT | Bars!
+PLAYER_HIT | He's eating him alive!
+MOB_PUNCH | Ooh, that hurt!
+MOB_PUNCH | He just cooked you!
+MOB_PUNCH | Savage punchline!
+MOB_PUNCH | Hit him back!
+MOB_PUNCH | No way?!
+MOB_PUNCH | That was dirty!
+PLAYER_MISS | Bro, what was that?!
+PLAYER_MISS | Missed it!
+PLAYER_MISS | Weak!
+PLAYER_MISS | Say something, anything!
+PLAYER_MISS | Get him outta here!
+PLAYER_MISS | Where's the rhyme, bro?!
+WIN_PLAYERS | That's the one!
+WIN_PLAYERS | What a battle!
+WIN_PLAYERS | Respect!
+WIN_PLAYERS | Legend!
+WIN_PLAYERS | Destroyed him, destroyed him!
+WIN_PLAYERS | He did it!
+WIN_MOB | Go practice!
+WIN_MOB | Embarrassing!
+WIN_MOB | He buried you!
+WIN_MOB | Get off the stage!
+WIN_MOB | So where's your flow at?
+WIN_MOB | Even a chicken could do better!
+SOLO_BOO | Booooo!
+SOLO_BOO | Ewww!
+SOLO_BOO | Weak!
+SOLO_BOO | Missed, missed!
+SOLO_BOO | Boooo, shame!
+SOLO_BOO | Ewww, get off!
+SOLO_BOO | Borrring!
+SOLO_BOO | Not buying it!
+SOLO_CHEER | Yesss!
+SOLO_CHEER | Yeahhhh!
+SOLO_CHEER | Woooooo!
+SOLO_CHEER | Fire!
+SOLO_CHEER | That's it!
+SOLO_CHEER | Go, go, go!
+SOLO_CHEER | Ho-ho-ho!
+SOLO_CHEER | Beautiful!
+SOLO_CHEER | More!

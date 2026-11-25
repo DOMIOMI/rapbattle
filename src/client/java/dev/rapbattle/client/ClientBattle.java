@@ -5,6 +5,7 @@ import dev.rapbattle.net.BattleView;
 import dev.rapbattle.net.Payloads;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.resource.language.I18n;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.MobEntity;
@@ -65,23 +66,23 @@ public final class ClientBattle {
 
 	private static final Style[] STYLES = {
 		// Classic boom bap: kick on 1 and 3 (+ the "and" of 3), snare on 2 and 4, straight hats.
-		new Style("бум-бэп", new int[]{10, 0, 0, 0, 10, 7, 0, 0}, new int[]{0, 0, 8, 0, 0, 0, 8, 0}, new int[]{3, 2, 3, 2, 3, 2, 3, 2},
+		new Style("rapbattle.client.style.boombap", new int[]{10, 0, 0, 0, 10, 7, 0, 0}, new int[]{0, 0, 8, 0, 0, 0, 8, 0}, new int[]{3, 2, 3, 2, 3, 2, 3, 2},
 			new float[]{0.707f, 0.595f, 0.794f, 0.53f}, new int[]{0, 4}, new float[]{1f, 1.189f},
 			new float[]{0, 1.0f, 0, 1.189f, 0, 1.335f, 1.189f, 1.0f}, null, 1.8f),
 		// Trap: half-time snare on 3, sparse 808 kick, busy hats, long low bass.
-		new Style("трэп", new int[]{10, 0, 0, 7, 0, 0, 9, 0}, new int[]{0, 0, 0, 0, 9, 0, 0, 0}, new int[]{3, 3, 3, 3, 3, 3, 4, 4},
+		new Style("rapbattle.client.style.trap", new int[]{10, 0, 0, 7, 0, 0, 9, 0}, new int[]{0, 0, 0, 0, 9, 0, 0, 0}, new int[]{3, 3, 3, 3, 3, 3, 4, 4},
 			new float[]{0.5f, 0.5f, 0.595f, 0.445f}, new int[]{0, 3, 6}, new float[]{1f, 1f, 0.891f},
 			new float[]{1.498f, 0, 0, 1.335f, 0, 1.189f, 0, 0}, null, 2.0f),
 		// Drill: sliding syncopated kick, snare on 3, choppy hats, dark minor riff.
-		new Style("дрилл", new int[]{10, 0, 0, 8, 0, 0, 7, 6}, new int[]{0, 0, 0, 0, 9, 0, 0, 0}, new int[]{3, 0, 3, 3, 0, 3, 3, 0},
+		new Style("rapbattle.client.style.drill", new int[]{10, 0, 0, 8, 0, 0, 7, 6}, new int[]{0, 0, 0, 0, 9, 0, 0, 0}, new int[]{3, 0, 3, 3, 0, 3, 3, 0},
 			new float[]{0.53f, 0.5f, 0.472f, 0.5f}, new int[]{0, 3, 7}, new float[]{1f, 1.059f, 0.944f},
 			new float[]{1.0f, 1.059f, 0, 1.0f, 0.944f, 0, 1.335f, 0}, null, 1.9f),
 		// Old-school funk: kick on 1 and the "and" of 2, open groove, walking bass, bright lead.
-		new Style("олдскул", new int[]{10, 0, 0, 7, 0, 0, 8, 0}, new int[]{0, 0, 8, 0, 0, 0, 8, 2}, new int[]{0, 3, 0, 3, 0, 3, 0, 3},
+		new Style("rapbattle.client.style.oldschool", new int[]{10, 0, 0, 7, 0, 0, 8, 0}, new int[]{0, 0, 8, 0, 0, 0, 8, 2}, new int[]{0, 3, 0, 3, 0, 3, 0, 3},
 			new float[]{0.794f, 0.707f, 0.891f, 0.667f}, new int[]{0, 2, 4, 6}, new float[]{1f, 1.26f, 1.498f, 1.26f},
 			new float[]{1.335f, 0, 1.498f, 0, 1.682f, 0, 1.498f, 1.335f}, SoundEvents.BLOCK_NOTE_BLOCK_BIT, 1.7f),
 		// Phonk: cowbell melody, punchy kick on the beats, snare on 2 and 4.
-		new Style("фонк", new int[]{10, 0, 8, 0, 10, 0, 8, 0}, new int[]{0, 0, 9, 0, 0, 0, 9, 0}, new int[]{0, 2, 0, 2, 0, 2, 0, 2},
+		new Style("rapbattle.client.style.phonk", new int[]{10, 0, 8, 0, 10, 0, 8, 0}, new int[]{0, 0, 9, 0, 0, 0, 9, 0}, new int[]{0, 2, 0, 2, 0, 2, 0, 2},
 			new float[]{0.595f, 0.595f, 0.53f, 0.667f}, new int[]{0, 4}, new float[]{1f, 1f},
 			new float[]{1.0f, 1.0f, 1.189f, 1.0f, 1.335f, 1.189f, 1.0f, 0.891f}, SoundEvents.BLOCK_NOTE_BLOCK_COW_BELL, 1.6f),
 	};
@@ -95,7 +96,11 @@ public final class ClientBattle {
 
 	public static String styleName() {
 		var t = BeatPlayer.track();
-		return t != null ? t.name() : style().name();
+		if (t != null) {
+			String code = MinecraftClient.getInstance().getLanguageManager().getLanguage();
+			return t.name(dev.rapbattle.Lang.ofCode(code));
+		}
+		return I18n.translate(style().name());
 	}
 
 	/** The note-block instrument that leads this mob's beat (bone xylophone for skeletons, guitar for sheep...). */
@@ -355,7 +360,7 @@ public final class ClientBattle {
 				MIC.stop(); // nothing is uploaded: only the count leaves the computer
 				monitoring = false;
 				ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"noise\",\"n\":" + noiseCount + "}"));
-				if (noiseCount > 0) say("Варден тебя слышал (" + noiseCount + ")", Formatting.DARK_AQUA);
+				if (noiseCount > 0) say(Text.translatable("rapbattle.client.warden_heard", noiseCount), Formatting.DARK_AQUA);
 			}
 		}
 	}
@@ -383,7 +388,7 @@ public final class ClientBattle {
 		for (BattleView.Row r : own) words.add(r.word);
 		java.util.Collections.shuffle(words);
 		for (int i = 0; i < own.size(); i++) own.get(i).word = words.get(i);
-		say("Ты посмотрел ему в глаза. Рифмы перемешаны!", Formatting.DARK_PURPLE);
+		say(Text.translatable("rapbattle.client.enderman_gaze"), Formatting.DARK_PURPLE);
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.ENTITY_ENDERMAN_STARE, 1f, 0.8f));
 	}
 
@@ -418,9 +423,9 @@ public final class ClientBattle {
 
 	private static float rhymePeak;
 
-	private static void say(String text, Formatting color) {
+	private static void say(Text text, Formatting color) {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.player != null) mc.player.sendMessage(Text.literal(text).formatted(color), true);
+		if (mc.player != null) mc.player.sendMessage(text.copy().formatted(color), true);
 	}
 
 	// ------------------------------------------------------------------ mic
@@ -451,7 +456,7 @@ public final class ClientBattle {
 			recordingStartClock = clock();
 			if (err != null) {
 				MinecraftClient mc = MinecraftClient.getInstance();
-				if (mc.player != null) mc.player.sendMessage(Text.literal("[Рэп-баттл] " + err + ". Читай всё равно, судья засчитает тишину.").formatted(Formatting.RED), false);
+				if (mc.player != null) mc.player.sendMessage(Text.translatable("rapbattle.client.mic_error", err).formatted(Formatting.RED), false);
 			}
 		}
 		if (recordingFor == view.id && clock >= stop) stopAndUpload();

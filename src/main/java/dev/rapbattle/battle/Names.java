@@ -1,5 +1,7 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -7,7 +9,7 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * Rap names. Every mob gets its own nickname tied to its species: either a hand-made one ("Мясо в Шубе")
+ * Rap names. Every mob gets its own nickname tied to its species: either a hand-made one ("Мясо в Шубе" / "Mutton in Fur")
  * or a rap prefix + a species root ("Янг Кудряш", "OG Руно"). The name is saved in the mob ({@link MobRecord}),
  * so two sheep in one field are two different rappers, and each keeps its name forever.
  */
@@ -15,15 +17,23 @@ public final class Names {
 	private Names() {}
 
 	private static final String[] PREFIXES = {"Биг", "Лил", "Янг", "MC", "OG", "Кид", "Мистер", "Дон", "Кинг", "Бро", "DJ", "Папа", "Бэйби", "Мега", "Сэр"};
+	private static final String[] PREFIXES_EN = {"Big", "Lil", "Young", "MC", "OG", "Kid", "Mr.", "Don", "King", "Bro", "DJ", "Papa", "Baby", "Mega", "Sir"};
 
 	/** Species roots for "prefix + root" names. */
 	private static final Map<String, String[]> ROOTS = new HashMap<>();
 	/** Hand-made names with a joke inside. */
 	private static final Map<String, String[]> SPECIAL = new HashMap<>();
+	private static final Map<String, String[]> ROOTS_EN = new HashMap<>();
+	private static final Map<String, String[]> SPECIAL_EN = new HashMap<>();
 
 	private static void n(String id, String[] roots, String... special) {
 		ROOTS.put(id, roots);
 		SPECIAL.put(id, special);
+	}
+
+	private static void nEn(String id, String[] roots, String... special) {
+		ROOTS_EN.put(id, roots);
+		SPECIAL_EN.put(id, special);
 	}
 
 	private static String[] r(String... s) { return s; }
@@ -88,22 +98,89 @@ public final class Names {
 		n("warden", r("Тишина", "Глухой"), "Глухой", "Тишина", "Скалк Босс");
 		n("wither", r("Головы", "Иссушитель"), "Три Головы", "Трёхглавый Флоу");
 		n("ender_dragon", r("Дракон", "Край"), "Дракон Края", "Финальный Босс", "Яйцо Драконье");
+
+		nEn("sheep", r("Wool", "Fleece", "Curls", "Ram", "Baa", "Fluff", "Lamb"),
+			"Mutton in Fur", "Woolly Flow", "Golden Fleece", "Sheared Menace", "Baa-Bars", "Curly Nightmare", "Unspun Chaos");
+		nEn("cow", r("Beef", "Heifer", "Mooo", "Hoof", "Calf", "Udder"),
+			"Mooo Flow", "Dairy Don", "Medium Rare", "Bandit Cow", "Prime Rib", "Pasture Boss");
+		nEn("mooshroom", r("Shroom", "Toadstool", "Spore", "Shaman"),
+			"Shroom Shaman", "Triple Cap", "Spore Loser", "Fungal Trip");
+		nEn("pig", r("Bacon", "Oink", "Snout", "Ham", "Swine"),
+			"Oink Tru", "Sizzling Bacon", "Menace Snout", "Pork Chop Flow", "Dirty Oink");
+		nEn("chicken", r("Beak", "Nugget", "Chick", "Egg", "Wing"),
+			"Egg Boy", "Nugget Gangsta", "Rotisserie", "Cluck Norris", "Hot Wing", "Broiler");
+		nEn("rabbit", r("Ears", "Hop", "Carrot", "Bun"),
+			"Quick Ears", "Hip-Hop Bun", "Carrot Flow", "Bunny Mafia");
+		nEn("zombie", r("Brains", "Rot", "Corpse", "Zed", "Deadman", "Decay"),
+			"Rotten Beat", "Dead Flow", "Walking L", "Brain Hunter", "Braaains Tru", "Grave Venom", "Forever Hungry");
+		nEn("husk", r("Sand", "Jerky", "Mummy", "Dune"), "Sand Beat", "Bone Dry", "Desert Hunger");
+		nEn("drowned", r("Kelp", "Blub", "Sunk", "Trident"), "Soggy Flow", "Hood Poseidon", "Deep-Sea Hunger", "Blub-Blub Gangsta");
+		nEn("zombie_villager", r("Hustler", "Undead", "Hrmm"), "Dead Hustler", "Hrmm Undead", "Emerald Corpse");
+		nEn("skeleton", r("Bone", "Skelly", "Rattle", "Ribs", "Skull", "Spine"),
+			"Big Bone", "Bony Archer", "Bare Bones", "Arrow to the Knee", "Spare Rib", "Bone Sniper", "Skelly Bank");
+		nEn("stray", r("Ice", "Frost", "Icicle"), "Ice Bone", "Frostbite Flow", "Cold Sniper");
+		nEn("bogged", r("Muck", "Swamp", "Moss"), "Bog Bone", "Swamp Gang", "Venom Bow");
+		nEn("parched", r("Drought", "Dust", "Thirst"), "Desert Dry", "No Water", "Sand Skull");
+		nEn("wither_skeleton", r("Charbone", "Coal", "Ash"), "Black Bone", "Coal Flow", "Nether Butcher");
+		nEn("spider", r("Web", "Legs", "Eight", "Tarantula"), "Eight Legs", "Web Tru", "Eight-Legged Flow", "Block-Wide Web");
+		nEn("cave_spider", r("Venom", "Bite", "Sting"), "Venom Tru", "Cave Bite", "Lil Toxic");
+		nEn("creeper", r("TNT", "Noise", "Boom", "Fuse", "Tssss"),
+			"Tsss Boom", "Green Menace", "Walking TNT", "Free Hugs", "Short Fuse", "Final Hug", "Blast Radius");
+		nEn("enderman", r("Shade", "Eye", "Block", "Warp"),
+			"MC Don't Look", "Tall Shadow", "Block Thief", "Long Warp", "Void Stare", "Blink Tru");
+		nEn("witch", r("Brew", "Cauldron", "Hag", "Hex"), "Witch Vibe", "Potion Gang", "Cauldron Chaos", "Cackle Queen");
+		nEn("villager", r("Hrm", "Emerald", "Hustler", "Dealer", "Nose"),
+			"Hrm Dealer", "Emerald Boy", "Big-Nose Plug", "No Refunds", "Hrmm Hustler", "Trade Monopoly");
+		nEn("wandering_trader", r("Peddler", "Drifter", "Llamaman"), "Wandering Plug", "Scam Artist", "Llama Logistics");
+		nEn("iron_golem", r("Iron", "Golem", "Fist", "Poppy"), "Big Iron", "Iron Fist", "Poppy Plug", "Village Bouncer");
+		nEn("wolf", r("Fang", "Pack", "Howl", "Grey"), "Grey Flow", "Lil Fang", "Wolf Pack", "Awoo Tru", "Lone Howl");
+		nEn("fox", r("Tail", "Red", "Sly"), "Lil Tail", "Red Thief", "Sly Hustler");
+		nEn("cat", r("Claws", "Meow", "Whiskers", "Purr"), "Meow Man", "Lil Claws", "Catnip Flow", "Purr Mafia");
+		nEn("bee", r("Sting", "Honey", "Buzz", "Hive"), "Buzzy", "Honey Flow", "Sting Tru", "Queen Bee");
+		nEn("piglin", r("Gold", "Snout", "Bling", "Ingot"), "Gold Snout", "24K Bling", "Golden Tusk", "Barter Boss");
+		nEn("piglin_brute", r("Brute", "Axe", "Bastion"), "Gold Brute", "Bastion Axe", "Vault Guard");
+		nEn("zombified_piglin", r("Rotten Gold", "Stench"), "Rotten Gold", "Dead Bling", "Ride or Die");
+		nEn("blaze", r("Fire", "Flame", "Heat"), "Lil Flame", "Spittin' Fire", "Blaze Rod Tru");
+		nEn("ghast", r("Crybaby", "Tear", "Emo"), "Crybaby", "Emo Ghast", "Tearjerker", "Sad Fireball");
+		nEn("slime", r("Ooze", "Jelly", "Splat"), "Slime Gang", "Lil Jelly", "Green Splat");
+		nEn("magma_cube", r("Lava", "Magma", "Cube"), "Lava Cube", "Magma Tru", "Hot Block");
+		nEn("pillager", r("Crossbow", "Raid", "Thug"), "Crossbow Bro", "Hrrgh Tru", "Raid Thug");
+		nEn("vindicator", r("Johnny", "Axe"), "Johnny", "Axe Johnny", "Here's Johnny");
+		nEn("evoker", r("Mage", "Vex", "Totem"), "Wololo Mage", "Totem Flow", "Vex Master");
+		nEn("ravager", r("Tank", "Roar"), "Tank", "Block Roar", "Wrecking Ball");
+		nEn("hoglin", r("Boar", "Tusk"), "Wild Boar", "Tusk Flow");
+		nEn("goat", r("Ram", "Horn", "GOAT"), "Peak Rammer", "Horned Flow", "Literal GOAT");
+		nEn("llama", r("Spit", "Llama"), "Spit Tru", "Llama Drama", "Llama Ding-Dong");
+		nEn("horse", r("Neigh", "Steed", "Gallop"), "Neigh Flow", "Gallop Tru", "Dark Horse");
+		nEn("panda", r("Bamboo", "Panda", "Sneeze"), "Bamboo Boy", "Kung-Fu Flow", "Lazy Bamboo");
+		nEn("polar_bear", r("Grizz", "Ice", "Bear"), "Arctic Beast", "Polar Flow");
+		nEn("phantom", r("Insomnia", "Nightmare"), "Insomnia", "Night Terror", "3-Day No-Sleep");
+		nEn("warden", r("Silence", "Blind"), "Blind Fury", "Dead Silence", "Sculk Boss");
+		nEn("wither", r("Three-Head", "Wither"), "Three Heads", "Triple-Head Flow");
+		nEn("ender_dragon", r("Dragon", "End"), "End Dragon", "Final Boss", "Dragon Egg");
 	}
 
 	/** A fresh nickname for this species. Never equal to any of {@code taken}. */
-	public static String fresh(MobProfiles.Profile p, Random rnd, List<String> taken) {
-		String[] special = SPECIAL.get(p.id());
-		String[] roots = ROOTS.get(p.id());
+	public static String fresh(MobProfiles.Profile p, Random rnd, List<String> taken, String lang) {
+		boolean ru = Lang.isRu(lang);
+		String[] prefixes = ru ? PREFIXES : PREFIXES_EN;
+		String[] special = (ru ? SPECIAL : SPECIAL_EN).get(p.id());
+		String[] roots = (ru ? ROOTS : ROOTS_EN).get(p.id());
 		List<String> pool = new ArrayList<>();
 		if (special != null) pool.addAll(List.of(special));
-		pool.addAll(p.names());
-		if (roots == null) roots = new String[]{p.species()};
+		pool.addAll(p.names(lang));
+		if (roots == null) roots = new String[]{p.species(lang)};
 		for (int attempt = 0; attempt < 40; attempt++) {
 			String name;
 			if (!pool.isEmpty() && rnd.nextInt(100) < 45) name = pool.get(rnd.nextInt(pool.size()));
-			else name = PREFIXES[rnd.nextInt(PREFIXES.length)] + " " + roots[rnd.nextInt(roots.length)];
+			else name = prefixes[rnd.nextInt(prefixes.length)] + " " + roots[rnd.nextInt(roots.length)];
 			if (!taken.contains(name)) return name;
 		}
-		return PREFIXES[rnd.nextInt(PREFIXES.length)] + " " + roots[rnd.nextInt(roots.length)] + " " + (2 + rnd.nextInt(98));
+		return prefixes[rnd.nextInt(prefixes.length)] + " " + roots[rnd.nextInt(roots.length)] + " " + (2 + rnd.nextInt(98));
+	}
+
+	@Deprecated
+	public static String fresh(MobProfiles.Profile p, Random rnd, List<String> taken) {
+		return fresh(p, rnd, taken, Lang.RU);
 	}
 }

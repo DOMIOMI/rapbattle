@@ -7,6 +7,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.PlayerSkinDrawer;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.client.resource.language.I18n;
 import net.minecraft.entity.EntityType;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.SpawnEggItem;
@@ -106,9 +107,9 @@ public final class BattleHud {
 		StringBuilder team = new StringBuilder();
 		for (BattleView.Member m : v.team) team.append(team.length() == 0 ? "" : " + ").append(m.name);
 		String vs = "  VS  ";
-		String mob = v.mobTeam.size() > 1 ? v.mobName + " и кореша" : v.mobName;
+		String mob = v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.and_crew", v.mobName) : v.mobName;
 		String rank = "  ·  " + v.rankArmor;
-		String rounds = v.rounds > 1 ? "  ·  раунд " + v.round + "/" + v.rounds + "  " + v.roundWinsPlayers + ":" + v.roundWinsMob : "";
+		String rounds = v.rounds > 1 ? I18n.translate("rapbattle.hud.header_rounds", v.round, v.rounds, v.roundWinsPlayers, v.roundWinsMob) : "";
 		int total = tr.getWidth(team + vs + mob + rank + rounds);
 		int x = w / 2 - total / 2;
 		ctx.fill(x - 4, y0 + 2, x + total + 4, y0 + 13, 0xC0101018);
@@ -162,7 +163,7 @@ public final class BattleHud {
 			ctx.drawStrokedRectangle(x - 1, cy - head / 2 - 1, head + 2, head + 2, 0xFF4AA8FF);
 			drawHead(ctx, m.name, x, cy - head / 2, head);
 			ctx.drawCenteredTextWithShadow(tr, m.name, x + head / 2, cy + head / 2 + 4, CYAN);
-			ctx.drawCenteredTextWithShadow(tr, "прикид: " + m.outfit, x + head / 2, cy + head / 2 + 15, DIM);
+			ctx.drawCenteredTextWithShadow(tr, I18n.translate("rapbattle.hud.outfit", m.outfit), x + head / 2, cy + head / 2 + 15, DIM);
 			ctx.drawCenteredTextWithShadow(tr, statLine(m), x + head / 2, cy + head / 2 + 26, TEXT);
 			if (!m.title.isEmpty()) ctx.drawCenteredTextWithShadow(tr, "«" + m.title + "»", x + head / 2, cy + head / 2 + 37, 0xFFD08CF0);
 		}
@@ -170,7 +171,7 @@ public final class BattleHud {
 		// Mob on the right: icon, name, rank plate, mood, tags, record, team.
 		int mx = mid + mid / 2;
 		drawMobIcon(ctx, v.mobType, mx, cy - 10, 2.5f);
-		ctx.drawCenteredTextWithShadow(tr, v.mobTeam.size() > 1 ? v.mobName + " и кореша" : v.mobName, mx, cy + 14, ORANGE);
+		ctx.drawCenteredTextWithShadow(tr, v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.and_crew", v.mobName) : v.mobName, mx, cy + 14, ORANGE);
 		rankPlate(ctx, tr, v, mx, cy + 25);
 		String mood = v.mobMood.toUpperCase(Locale.ROOT);
 		int mw = tr.getWidth(mood);
@@ -182,24 +183,26 @@ public final class BattleHud {
 			ty += 11;
 		}
 		if (v.mobWins + v.mobLosses > 0) {
-			String streak = v.mobStreak > 1 ? " · серия побед " + v.mobStreak : v.mobStreak < -1 ? " · серия поражений " + (-v.mobStreak) : "";
-			ctx.drawCenteredTextWithShadow(tr, "Побед " + v.mobWins + " · Поражений " + v.mobLosses + streak, mx, ty, TEXT);
+			String rec = v.mobStreak > 1 ? I18n.translate("rapbattle.hud.mob_record_win_streak", v.mobWins, v.mobLosses, v.mobStreak)
+				: v.mobStreak < -1 ? I18n.translate("rapbattle.hud.mob_record_lose_streak", v.mobWins, v.mobLosses, -v.mobStreak)
+				: I18n.translate("rapbattle.hud.mob_record", v.mobWins, v.mobLosses);
+			ctx.drawCenteredTextWithShadow(tr, rec, mx, ty, TEXT);
 			ty += 11;
 		}
 		if (v.speciesMobWins + v.speciesPlayerWins > 0) {
-			ctx.drawCenteredTextWithShadow(tr, v.mobSpecies + " в этом мире: " + v.speciesMobWins + "–" + v.speciesPlayerWins + " против игроков", mx, ty, DIM);
+			ctx.drawCenteredTextWithShadow(tr, I18n.translate("rapbattle.hud.species_record", v.mobSpecies, v.speciesMobWins, v.speciesPlayerWins), mx, ty, DIM);
 			ty += 11;
 		}
 		if (!v.trick.isEmpty()) {
-			ctx.drawCenteredTextWithShadow(tr, fit(tr, "Фишка: " + v.trick, mid - 16), mx, ty, 0xFF9FE0FF);
+			ctx.drawCenteredTextWithShadow(tr, fit(tr, I18n.translate("rapbattle.hud.trick", v.trick), mid - 16), mx, ty, 0xFF9FE0FF);
 			ty += 11;
 		}
 		if (v.mobTeam.size() > 1) ctx.drawCenteredTextWithShadow(tr, fit(tr, String.join(", ", v.mobTeam), mid - 20), mx, ty, DIM);
 
 		scaledText(ctx, tr, "VS", mid, cy - 16, 3.5f, YELLOW, true);
 		if (v.boss) {
-			scaledText(ctx, tr, "БОСС", mid, cy + 18, 1.6f, 0xFFB48CFF, true);
-			String warn = "Проиграешь — сдохнешь. Вся команда.";
+			scaledText(ctx, tr, I18n.translate("rapbattle.hud.boss"), mid, cy + 18, 1.6f, 0xFFB48CFF, true);
+			String warn = I18n.translate("rapbattle.hud.boss_warn");
 			int ww = tr.getWidth(warn) + 10;
 			ctx.fill(mid - ww / 2, h - 52, mid + ww / 2, h - 40, 0xE0300010);
 			ctx.drawCenteredTextWithShadow(tr, warn, mid, h - 50, RED);
@@ -207,15 +210,17 @@ public final class BattleHud {
 
 		long secs = (v.lobbyMsLeft + 999) / 1000;
 		String bottom = ClientBattle.isChallenger()
-			? "Кореша рядом вписываются на [Y] · старт через " + secs + " с · [Y] — погнали сейчас"
-			: "Старт через " + secs + " с";
+			? I18n.translate("rapbattle.hud.lobby_challenger", secs)
+			: I18n.translate("rapbattle.hud.lobby_wait", secs);
 		ctx.drawCenteredTextWithShadow(tr, bottom, mid, h - 30, DIM);
 	}
 
 	private static String statLine(BattleView.Member m) {
-		if (m.wins + m.losses == 0) return "ПЕРВЫЙ БАТТЛ";
-		String streak = m.streak > 1 ? " · серия " + m.streak : "";
-		return "W " + m.wins + " · L " + m.losses + streak + (m.mvp > 0 ? " · MVP ×" + m.mvp : "");
+		if (m.wins + m.losses == 0) return I18n.translate("rapbattle.hud.first_battle");
+		if (m.streak > 1 && m.mvp > 0) return I18n.translate("rapbattle.hud.stats_streak_mvp", m.wins, m.losses, m.streak, m.mvp);
+		if (m.streak > 1) return I18n.translate("rapbattle.hud.stats_streak", m.wins, m.losses, m.streak);
+		if (m.mvp > 0) return I18n.translate("rapbattle.hud.stats_mvp", m.wins, m.losses, m.mvp);
+		return I18n.translate("rapbattle.hud.stats", m.wins, m.losses);
 	}
 
 	/** Lower-third fighter card during the intro, in the colour of the rank / outfit. */
@@ -223,7 +228,8 @@ public final class BattleHud {
 		// Letterbox bars for the film look.
 		ctx.fill(0, 0, w, 24, 0xFF000000);
 		ctx.fill(0, h - 24, w, h, 0xFF000000);
-		ctx.drawText(tr, "пробел — пропустить", w - tr.getWidth("пробел — пропустить") - 6, h - 16, DIM, false);
+		String skip = I18n.translate("rapbattle.hud.skip_intro");
+		ctx.drawText(tr, skip, w - tr.getWidth(skip) - 6, h - 16, DIM, false);
 		String card = Intro.card();
 		if (card == null) return;
 		int cw = 230, x = 16, y = h - 24 - 58;
@@ -237,21 +243,25 @@ public final class BattleHud {
 			int col = red ? 0xFFF07167 : 0xFF6EC6F0;
 			box(ctx, x, y, cw, 50, 0xF0101018, col);
 			ctx.fill(x, y, x + 4, y + 50, col);
-			ctx.drawText(tr, red ? "КРАСНЫЙ УГОЛ" : "СИНИЙ УГОЛ", x + 10, y + 4, red ? RED : CYAN, false);
+			ctx.drawText(tr, I18n.translate(red ? "rapbattle.hud.red_corner" : "rapbattle.hud.blue_corner"), x + 10, y + 4, red ? RED : CYAN, false);
 			drawHead(ctx, m.name, x + cw - 40, y + 8, 32);
 			scaledText(ctx, tr, m.name, x + 10, y + 14, 1.4f, red ? ORANGE : CYAN, false);
-			ctx.drawText(tr, "прикид: " + m.outfit + (m.title.isEmpty() ? "" : " · «" + m.title + "»"), x + 10, y + 29, DIM, false);
-			ctx.drawText(tr, statLine(m) + (m.best > 0 ? " · лучший баттл " + m.best : ""), x + 10, y + 39, TEXT, false);
+			String fitLine = m.title.isEmpty() ? I18n.translate("rapbattle.hud.outfit", m.outfit)
+				: I18n.translate("rapbattle.hud.outfit_title", m.outfit, m.title);
+			ctx.drawText(tr, fitLine, x + 10, y + 29, DIM, false);
+			String stLine = m.best > 0 ? I18n.translate("rapbattle.hud.stats_best", statLine(m), m.best) : statLine(m);
+			ctx.drawText(tr, stLine, x + 10, y + 39, TEXT, false);
 			return;
 		}
 		if (card.equals("mob")) {
 			box(ctx, x, y, cw, 50, 0xF0101018, opaque(v.rankColor));
 			ctx.fill(x, y, x + 4, y + 50, opaque(v.rankColor));
-			ctx.drawText(tr, "КРАСНЫЙ УГОЛ", x + 10, y + 4, RED, false);
+			ctx.drawText(tr, I18n.translate("rapbattle.hud.red_corner"), x + 10, y + 4, RED, false);
 			scaledText(ctx, tr, v.mobName, x + 10, y + 14, 1.4f, ORANGE, false);
 			ctx.drawText(tr, v.rankArmor + " · " + v.rankStreet + " · «" + v.mobMood + "»", x + 10, y + 29, opaque(v.rankColor), false);
-			String rec = v.mobWins + v.mobLosses == 0 ? "ПЕРВЫЙ БАТТЛ" : "Побед " + v.mobWins + " · Поражений " + v.mobLosses
-				+ (v.mobStreak > 1 ? " · серия " + v.mobStreak : "");
+			String rec = v.mobWins + v.mobLosses == 0 ? I18n.translate("rapbattle.hud.first_battle")
+				: v.mobStreak > 1 ? I18n.translate("rapbattle.hud.card_mob_record_streak", v.mobWins, v.mobLosses, v.mobStreak)
+				: I18n.translate("rapbattle.hud.mob_record", v.mobWins, v.mobLosses);
 			ctx.drawText(tr, rec, x + 10, y + 39, TEXT, false);
 		} else {
 			int n = Math.max(1, v.team.size());
@@ -261,21 +271,25 @@ public final class BattleHud {
 			int col = m.outfitLevel <= 0 ? 0xFF888888 : 0xFF6EC6F0;
 			box(ctx, x, y, cw, 50, 0xF0101018, col);
 			ctx.fill(x, y, x + 4, y + 50, col);
-			ctx.drawText(tr, "СИНИЙ УГОЛ", x + 10, y + 4, CYAN, false);
+			ctx.drawText(tr, I18n.translate("rapbattle.hud.blue_corner"), x + 10, y + 4, CYAN, false);
 			drawHead(ctx, m.name, x + cw - 40, y + 8, 32);
 			scaledText(ctx, tr, m.name, x + 10, y + 14, 1.4f, CYAN, false);
-			ctx.drawText(tr, "прикид: " + m.outfit + (m.title.isEmpty() ? "" : " · «" + m.title + "»"), x + 10, y + 29, DIM, false);
-			ctx.drawText(tr, statLine(m) + (m.best > 0 ? " · лучший баттл " + m.best : ""), x + 10, y + 39, TEXT, false);
+			String fitLine = m.title.isEmpty() ? I18n.translate("rapbattle.hud.outfit", m.outfit)
+				: I18n.translate("rapbattle.hud.outfit_title", m.outfit, m.title);
+			ctx.drawText(tr, fitLine, x + 10, y + 29, DIM, false);
+			String stLine = m.best > 0 ? I18n.translate("rapbattle.hud.stats_best", statLine(m), m.best) : statLine(m);
+			ctx.drawText(tr, stLine, x + 10, y + 39, TEXT, false);
 		}
 	}
 
 	private static void drawPrep(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
 		header(ctx, tr, v, w);
-		if (v.rounds > 1) scaledText(ctx, tr, "РАУНД " + v.round, w / 2, h / 2 - 40, 3.0f, YELLOW, true);
-		int dots = (int) (System.currentTimeMillis() / 400 % 4);
-		String who = v.pvp ? "Один на один: " + v.challenger + " против " + v.mobName + ". Сейчас начнётся"
-			: v.mobTeam.size() > 1 ? v.mobName + " и кореша пишут куплет" : v.mobName + " пишет куплет";
-		ctx.drawCenteredTextWithShadow(tr, who + ".".repeat(dots), w / 2, h / 2 - 6, DIM);
+		if (v.rounds > 1) scaledText(ctx, tr, I18n.translate("rapbattle.hud.round_upper", v.round), w / 2, h / 2 - 40, 3.0f, YELLOW, true);
+		String dots = ".".repeat((int) (System.currentTimeMillis() / 400 % 4));
+		String who = v.pvp ? I18n.translate("rapbattle.hud.prep_pvp", v.challenger, v.mobName, dots)
+			: v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.prep_crew", v.mobName, dots)
+			: I18n.translate("rapbattle.hud.prep_mob", v.mobName, dots);
+		ctx.drawCenteredTextWithShadow(tr, who, w / 2, h / 2 - 6, DIM);
 	}
 
 	// ------------------------------------------------------------------ timeline
@@ -304,28 +318,32 @@ public final class BattleHud {
 			}
 		}
 
+		boolean mobTab = false;
 		if (beat < 4) {
 			title = String.valueOf(4 - beat);
 			titleColor = YELLOW;
-			tab = "перевод с " + v.mobLanguage;
+			tab = I18n.translate("rapbattle.hud.translation_from", v.mobLanguage);
+			mobTab = true;
 		} else if (beat < v.mobEndBeat) {
 			String reader = live != null && live.reader != null ? live.reader : v.mobName;
-			title = "ХОД: " + reader.toUpperCase(Locale.ROOT);
+			title = I18n.translate("rapbattle.hud.turn", reader.toUpperCase(Locale.ROOT));
 			titleColor = ORANGE;
-			tab = "перевод с " + v.mobLanguage;
+			tab = I18n.translate("rapbattle.hud.translation_from", v.mobLanguage);
+			mobTab = true;
 		} else if (live != null && !live.mob) {
 			boolean mine = me.equals(live.reader);
-			title = mine ? "ТВОЙ ХОД" : "ХОД: " + live.reader.toUpperCase(Locale.ROOT);
+			title = mine ? I18n.translate("rapbattle.hud.your_turn") : I18n.translate("rapbattle.hud.turn", live.reader.toUpperCase(Locale.ROOT));
 			titleColor = mine ? GREEN : CYAN;
-			tab = mine ? "СТРОКА " + live.line + "/" + live.lines : "читает " + live.reader;
+			tab = mine ? I18n.translate("rapbattle.hud.line_progress", live.line, live.lines) : I18n.translate("rapbattle.hud.reading", live.reader);
 		} else if (seg != null) {
 			boolean mine = me.equals(seg.reader);
-			title = v.team.size() > 1 && seg.startBeat != firstOwnRow(v, seg.reader) ? "ГОТОВЬТЕСЬ" : (mine ? "ТВОЙ ХОД" : "ХОД: " + seg.reader.toUpperCase(Locale.ROOT));
+			title = v.team.size() > 1 && seg.startBeat != firstOwnRow(v, seg.reader) ? I18n.translate("rapbattle.hud.get_ready_team")
+				: (mine ? I18n.translate("rapbattle.hud.your_turn") : I18n.translate("rapbattle.hud.turn", seg.reader.toUpperCase(Locale.ROOT)));
 			titleColor = mine ? GREEN : CYAN;
 			int left = Math.max(1, (seg.startBeat - beat));
-			tab = mine ? "ГОТОВЬСЯ: " + left : "готовится " + seg.reader;
+			tab = mine ? I18n.translate("rapbattle.hud.get_ready_count", left) : I18n.translate("rapbattle.hud.getting_ready", seg.reader);
 		} else {
-			title = "СУДЬЯ ДУМАЕТ...";
+			title = I18n.translate("rapbattle.hud.judge_thinking_upper");
 			titleColor = YELLOW;
 			tab = null;
 		}
@@ -340,7 +358,7 @@ public final class BattleHud {
 
 		scaledText(ctx, tr, title, w / 2, 18 + top(v), beat < 4 ? 3.0f : 1.6f, titleColor, true);
 		if (live != null && live.mob) drawBubble(ctx, tr, live, w, h);
-		drawTable(ctx, tr, v, w, h, cur, active, beat, tab);
+		drawTable(ctx, tr, v, w, h, cur, active, beat, tab, mobTab);
 	}
 
 	private static int firstOwnRow(BattleView v, String reader) {
@@ -359,7 +377,7 @@ public final class BattleHud {
 		for (int i = 0; i < lines.size(); i++) ctx.drawText(tr, lines.get(i), x + 4, y + 13 + i * 9, 0xFF202020, false);
 	}
 
-	private static void drawTable(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h, int cur, boolean active, int beat, String tab) {
+	private static void drawTable(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h, int cur, boolean active, int beat, String tab, boolean mobTab) {
 		int tableW = COL_W * 3 + WORD_W + 3 * 2 + 4;
 		int tableH = VISIBLE_ROWS * (ROW_H + 1) + 4;
 		int x0 = w / 2 - tableW / 2;
@@ -375,7 +393,6 @@ public final class BattleHud {
 
 		if (tab != null) {
 			int tw = tr.getWidth(tab) + 6;
-			boolean mobTab = tab.startsWith("перевод");
 			ctx.fill(x0, y0 - 10, x0 + tw, y0, mobTab ? 0xFF7A3E1C : 0xFF1F3A2A);
 			ctx.drawText(tr, tab, x0 + 3, y0 - 9, mobTab ? ORANGE : GREEN, false);
 		}
@@ -416,16 +433,18 @@ public final class BattleHud {
 			}
 			String shown = r.word;
 			int cellColor = opaque(r.color);
+			boolean stolen = false;
 			if (r.effect != null && !r.mob) {
 				switch (r.effect) {
 					case "hidden" -> shown = "???";
 					case "stolen" -> {
-						shown = "украдено";
+						shown = I18n.translate("rapbattle.hud.word_stolen");
 						cellColor = 0xFF3A1A1A;
+						stolen = true;
 					}
 					case "burn" -> {
 						if (live && kInBar >= 2) {
-							shown = "сгорела";
+							shown = I18n.translate("rapbattle.hud.word_burned");
 							cellColor = 0xFFE86A17;
 						}
 					}
@@ -442,7 +461,7 @@ public final class BattleHud {
 			if (live && kInBar == 3) ctx.drawStrokedRectangle(x - 1, y - 1, WORD_W + 2, ROW_H + 2, YELLOW);
 			else if (live) ctx.drawStrokedRectangle(x - 1, y - 1, WORD_W + 2, ROW_H + 2, 0xFFFFFFFF);
 			String word = fit(tr, shown, WORD_W - 4);
-			ctx.drawText(tr, word, x + WORD_W / 2 - tr.getWidth(word) / 2, y + 2, "украдено".equals(shown) ? RED : DARK_TEXT, false);
+			ctx.drawText(tr, word, x + WORD_W / 2 - tr.getWidth(word) / 2, y + 2, stolen ? RED : DARK_TEXT, false);
 			// Ink and blindness: only the live row stays readable.
 			if (vi > 0 && ("ink".equals(fx) || "blind".equals(fx))) ctx.fill(x0 + 1, y - 1, x0 + tableW - 1, y + ROW_H + 1, 0xF0050508);
 		}
@@ -469,7 +488,8 @@ public final class BattleHud {
 	private static void drawJudging(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
 		header(ctx, tr, v, w);
 		int dots = (int) (System.currentTimeMillis() / 400 % 4);
-		scaledText(ctx, tr, "СУДЬЯ ДУМАЕТ" + ".".repeat(dots), w / 2 - (int) (tr.getWidth("СУДЬЯ ДУМАЕТ...") * 2.2f / 2), 20 + top(v), 2.2f, YELLOW, false);
+		String base = I18n.translate("rapbattle.hud.judge_thinking_base");
+		scaledText(ctx, tr, base + ".".repeat(dots), w / 2 - (int) (tr.getWidth(base + "...") * 2.2f / 2), 20 + top(v), 2.2f, YELLOW, false);
 	}
 
 	private static void drawResult(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
@@ -480,26 +500,30 @@ public final class BattleHud {
 		String title;
 		int color;
 		if (roundOnly) {
-			title = "РАУНД " + v.round + ": " + (roundWon ? "ВАШ" : "МОБА");
+			title = I18n.translate(roundWon ? "rapbattle.hud.round_won" : "rapbattle.hud.round_lost", v.round);
 			color = roundWon ? GREEN : RED;
 		} else {
-			title = r.playersWin ? "РАЗЪЕБАЛ!" : (v.team.size() > 1 ? "ВАС РАЗЪЕБАЛИ" : "ТЕБЯ РАЗЪЕБАЛИ");
+			title = I18n.translate(r.playersWin ? "rapbattle.hud.final_win" : (v.team.size() > 1 ? "rapbattle.hud.final_lose_team" : "rapbattle.hud.final_lose_solo"));
 			color = r.playersWin ? YELLOW : RED;
 		}
 		scaledText(ctx, tr, title, w / 2, 14 + top(v), roundOnly ? 2.6f : 3.5f, color, true);
-		String sub = v.rounds > 1 ? "счёт по раундам " + v.roundWinsPlayers + ":" + v.roundWinsMob : (r.knockout ? "нокаут" : "по очкам " + r.respectTeam + " : " + r.respectMob);
+		String sub = v.rounds > 1 ? I18n.translate("rapbattle.hud.sub_rounds", v.roundWinsPlayers, v.roundWinsMob)
+			: (r.knockout ? I18n.translate("rapbattle.hud.sub_knockout") : I18n.translate("rapbattle.hud.sub_points", r.respectTeam, r.respectMob));
 		scaledText(ctx, tr, sub, w / 2, 48 + top(v), 1.4f, TEXT, true);
 
 		int pw = Math.min(300, w - 20), px = w / 2 - pw / 2;
 		List<OrderedText> lines = tr.wrapLines(Text.literal("«" + r.comment + "»"), pw - 16);
 		boolean many = r.players.size() > 1;
 		int listH = many ? 4 + r.players.size() * 10 : 0;
-		String notes = (r.outfitBonus > 0 ? "прикид: +" + r.outfitBonus + " Респекта  " : "") + (r.overdressed ? "перебор с прикидом: награда урезана" : "");
+		String notes = r.outfitBonus > 0 && r.overdressed ? I18n.translate("rapbattle.hud.note_both", r.outfitBonus)
+			: r.outfitBonus > 0 ? I18n.translate("rapbattle.hud.note_outfit_bonus", r.outfitBonus)
+			: r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
 		int ph = 44 + listH + lines.size() * 10 + 6 + (notes.isEmpty() ? 0 : 10);
 		int py = h - 66 - ph;
 		box(ctx, px, py, pw, ph, 0xF0101018, GOLD);
-		ctx.fill(px, py - 9, px + tr.getWidth("СУДЬЯ") + 6, py, GOLD);
-		ctx.drawText(tr, "СУДЬЯ", px + 3, py - 8, DARK_TEXT, false);
+		String judgeLabel = I18n.translate("rapbattle.hud.judge_label");
+		ctx.fill(px, py - 9, px + tr.getWidth(judgeLabel) + 6, py, GOLD);
+		ctx.drawText(tr, judgeLabel, px + 3, py - 8, DARK_TEXT, false);
 
 		int half = (pw - 24) / 2;
 		int bx1 = px + 8, bx2 = px + 16 + half, by = py + 6;
@@ -515,7 +539,7 @@ public final class BattleHud {
 		if (many) {
 			for (BattleView.PlayerScore ps : r.players) {
 				boolean mvp = ps.name.equals(r.mvp);
-				String line = (mvp ? "♛ MVP  " : "") + ps.name + ": урон " + ps.score;
+				String line = I18n.translate(mvp ? "rapbattle.hud.player_score_mvp" : "rapbattle.hud.player_score", ps.name, ps.score);
 				ctx.drawCenteredTextWithShadow(tr, line, w / 2, y, mvp ? GOLD : TEXT);
 				y += 10;
 			}
@@ -529,7 +553,7 @@ public final class BattleHud {
 
 		String me = ClientBattle.me();
 		for (BattleView.PlayerScore ps : r.players) {
-			if (ps.name.equals(me)) ctx.drawCenteredTextWithShadow(tr, fit(tr, "ты: " + ps.transcript, w - 40), w / 2, py + ph + 4, DIM);
+			if (ps.name.equals(me)) ctx.drawCenteredTextWithShadow(tr, fit(tr, I18n.translate("rapbattle.hud.you_said", ps.transcript), w - 40), w / 2, py + ph + 4, DIM);
 		}
 		header(ctx, tr, v, w);
 	}
@@ -541,20 +565,22 @@ public final class BattleHud {
 		String line;
 		int color = DIM;
 		switch (v.phase) {
-			case "LOBBY" -> line = "Сейчас начнётся баттл";
-			case "PREP" -> line = v.mobName + " готовится";
+			case "LOBBY" -> line = I18n.translate("rapbattle.hud.spec_lobby");
+			case "PREP" -> line = I18n.translate("rapbattle.hud.spec_prep", v.mobName);
 			case "TIMELINE" -> {
 				BattleView.Row r = ClientBattle.liveRow();
-				line = r == null ? "" : "ход: " + r.reader;
+				line = r == null ? "" : I18n.translate("rapbattle.hud.spec_turn", r.reader);
 				color = r != null && r.mob ? ORANGE : CYAN;
 			}
-			case "JUDGING" -> line = "судья думает...";
+			case "JUDGING" -> line = I18n.translate("rapbattle.hud.spec_judging");
 			case "ROUND_RESULT", "RESULT" -> {
 				BattleView.Result r = v.result;
 				if (r == null) return;
 				boolean win = r.playersWin;
-				line = (r.finalResult ? (win ? "Игроки разъебали моба" : "Моб разъебал игроков") : "Раунд " + v.round + (win ? ": игроки" : ": моб"))
-					+ "  " + r.respectTeam + " : " + r.respectMob + (r.mvp.isEmpty() ? "" : "  · MVP " + r.mvp);
+				line = r.finalResult
+					? I18n.translate(win ? "rapbattle.hud.spec_final_win" : "rapbattle.hud.spec_final_lose", r.respectTeam, r.respectMob)
+					: I18n.translate(win ? "rapbattle.hud.spec_round_win" : "rapbattle.hud.spec_round_lose", v.round, r.respectTeam, r.respectMob);
+				if (!r.mvp.isEmpty()) line = I18n.translate("rapbattle.hud.spec_mvp_suffix", line, r.mvp);
 				color = win ? GREEN : RED;
 			}
 			default -> line = "";
@@ -575,17 +601,17 @@ public final class BattleHud {
 		int l1c;
 		if (!c.challengeFrom.isEmpty()) {
 			name = c.challengeFrom + ": " + c.mobName;
-			l1 = "[R] отвечать за базар";
+			l1 = I18n.translate("rapbattle.hud.choice_answer");
 			l1c = YELLOW;
-			l2 = "не ответишь — драка, и все узнают, что ты зассал";
+			l2 = I18n.translate("rapbattle.hud.choice_answer_sub");
 		} else if (c.allowed) {
-			l1 = c.boss ? "[R] рэп-баттл — проиграешь, сдохнешь" : "[R] рэп-баттл";
+			l1 = I18n.translate(c.boss ? "rapbattle.hud.choice_rap_boss" : "rapbattle.hud.choice_rap");
 			l1c = c.boss ? 0xFFB48CFF : GREEN;
-			l2 = "удар ещё раз — набить ебало";
+			l2 = I18n.translate("rapbattle.hud.choice_fight");
 		} else {
-			l1 = "ОТКАЗ: «" + c.refusal + "»";
+			l1 = I18n.translate("rapbattle.hud.choice_refused", c.refusal);
 			l1c = RED;
-			l2 = "нужен прикид от " + c.requiredOutfit + ", у тебя " + c.yourOutfit + " · удар ещё раз — набить ебало";
+			l2 = I18n.translate("rapbattle.hud.choice_refused_sub", c.requiredOutfit, c.yourOutfit);
 		}
 		int bw = Math.max(Math.max(tr.getWidth(name), tr.getWidth(l1)), tr.getWidth(l2)) + 16;
 		int bh = 50;
@@ -597,10 +623,11 @@ public final class BattleHud {
 	}
 
 	private static void drawInvite(DrawContext ctx, TextRenderer tr, BattleView inv, int w) {
-		String s1 = inv.pvp ? inv.challenger + " вызывает тебя на рэп-баттл один на один!"
-			: inv.challenger + " хочет читать с тобой против " + inv.mobName + " (" + inv.rankArmor + ")";
-		String s2 = inv.pvp ? "[Y] принять вызов  /  [N] отказаться" : inv.allowed ? (inv.boss ? "БОСС: проиграете — сдохнете. [Y] вписаться / [N] отклонить" : "[Y] вписаться  /  [N] отклонить")
-			: "Переоденься: нужен прикид от " + inv.requiredOutfit + ", у тебя " + inv.yourOutfit + "  ·  [N] отклонить";
+		String s1 = inv.pvp ? I18n.translate("rapbattle.hud.invite_pvp", inv.challenger)
+			: I18n.translate("rapbattle.hud.invite_mob", inv.challenger, inv.mobName, inv.rankArmor);
+		String s2 = inv.pvp ? I18n.translate("rapbattle.hud.invite_pvp_keys")
+			: inv.allowed ? I18n.translate(inv.boss ? "rapbattle.hud.invite_boss_keys" : "rapbattle.hud.invite_keys")
+			: I18n.translate("rapbattle.hud.invite_outfit", inv.requiredOutfit, inv.yourOutfit);
 		int bw = Math.max(tr.getWidth(s1), tr.getWidth(s2)) + 12;
 		int x = w / 2 - bw / 2, y = 30;
 		box(ctx, x, y, bw, 26, 0xE0101018, inv.allowed ? YELLOW : RED);

@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.boss.WitherEntity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
@@ -21,21 +22,27 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 
 	private static final List<String> MOODS = List.of(
 		"Мелочь в ярости", "Серьёзный", "Шпана", "На понтах", "Голодный", "Обиженный", "Шляпа", "Опасный");
+	private static final List<String> MOODS_EN = List.of(
+		"Raging Runt", "Dead Serious", "Street Punk", "Flexing", "Starving", "Salty", "Total Joke", "Dangerous");
 
 	public static boolean isBoss(MobEntity mob) {
 		return mob instanceof EnderDragonEntity || mob instanceof WitherEntity || mob instanceof WardenEntity
 			|| mob instanceof ElderGuardianEntity;
 	}
 
-	public static Opponent of(MobEntity mob, Random rnd) { return of(mob, rnd, null); }
+	public static Opponent of(MobEntity mob, Random rnd, String lang) { return of(mob, rnd, null, lang); }
+
+	@Deprecated
+	public static Opponent of(MobEntity mob, Random rnd) { return of(mob, rnd, null, Lang.RU); }
 
 	/** @param challenger who calls the mob out; some mobs react to what that player wears or holds */
-	public static Opponent of(MobEntity mob, Random rnd, net.minecraft.entity.player.PlayerEntity challenger) {
+	public static Opponent of(MobEntity mob, Random rnd, net.minecraft.entity.player.PlayerEntity challenger, String lang) {
+		boolean ru = Lang.isRu(lang);
 		MobProfiles.Profile p = MobProfiles.of(mob.getType());
 		List<String> tags = new ArrayList<>();
-		String name = nameOf(mob, p, rnd);
+		String name = nameOf(mob, p, rnd, lang);
 		if (isBoss(mob)) {
-			return new Opponent(mob, p, Rank.NETHERITE, name, "Босс", tags);
+			return new Opponent(mob, p, Rank.NETHERITE, name, ru ? "Босс" : "Boss", tags);
 		}
 
 		int r = p.baseRank();
@@ -47,53 +54,55 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 		}
 		if (mob.isBaby()) {
 			r--;
-			name = "Лил " + name.replaceFirst("^(Лил|Биг|Янг|Кид|Бэйби|MC|МС|OG) ", "");
-			tags.add("ДЕТЁНЫШ");
+			name = (ru ? "Лил " : "Lil ") + name.replaceFirst("^(Лил|Биг|Янг|Кид|Бэйби|Lil|Big|Young|Kid|Baby|MC|МС|OG) ", "");
+			tags.add(ru ? "ДЕТЁНЫШ" : "BABY");
 		}
 		// A player's name tag makes the mob famous (our own champion crown doesn't count).
 		if (mob.hasCustomName() && !mob.getCustomName().getString().contains("♛")) {
 			r++;
-			tags.add("ИЗВЕСТНЫЙ");
+			tags.add(ru ? "ИЗВЕСТНЫЙ" : "FAMOUS");
 		}
 		MobRecord rec = MobRecord.of(mob);
 		if (rec.wins() > 0) {
 			int bonus = Math.min(2, rec.wins());
 			r += bonus;
-			tags.add(rec.wins() > 1 ? "ЧЕМПИОН ×" + rec.wins() : "ЧЕМПИОН");
+			tags.add(rec.wins() > 1
+				? (ru ? "ЧЕМПИОН ×" + rec.wins() : "CHAMPION ×" + rec.wins())
+				: (ru ? "ЧЕМПИОН" : "CHAMPION"));
 		}
 		World w = mob.getEntityWorld();
 		Difficulty d = w.getDifficulty();
 		if (d == Difficulty.PEACEFUL) r--;
 		if (d == Difficulty.HARD) {
 			r++;
-			tags.add("ХАРД");
+			tags.add(ru ? "ХАРД" : "HARD");
 		}
 		if (mob.getType().isIn(net.minecraft.registry.tag.EntityTypeTags.UNDEAD)) {
 			if (isNight(w)) {
 				r++;
-				tags.add("НОЧЬ");
+				tags.add(ru ? "НОЧЬ" : "NIGHT");
 			} else if (w.isSkyVisible(mob.getBlockPos()) && !p.id().equals("husk") && !p.id().equals("parched")) {
 				r--;
-				tags.add("НА СОЛНЦЕ");
+				tags.add(ru ? "НА СОЛНЦЕ" : "IN THE SUN");
 			}
 		}
 		if (homeDimension(p.id(), w)) {
 			r++;
-			tags.add("ДОМА");
+			tags.add(ru ? "ДОМА" : "HOME TURF");
 		}
 		if (mob instanceof RaiderEntity raider && raider.isCaptain()) {
 			r++;
-			tags.add("КАПИТАН");
+			tags.add(ru ? "КАПИТАН" : "CAPTAIN");
 		}
 		// Villagers by profession: the librarian is a word nerd, the nitwit talks nonsense.
 		if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) {
 			var prof = v.getVillagerData().profession();
 			if (prof.matchesKey(net.minecraft.village.VillagerProfession.LIBRARIAN)) {
 				r++;
-				tags.add("БИБЛИОТЕКАРЬ");
+				tags.add(ru ? "БИБЛИОТЕКАРЬ" : "LIBRARIAN");
 			} else if (prof.matchesKey(net.minecraft.village.VillagerProfession.NITWIT)) {
 				r = 1;
-				tags.add("ДУРАЧОК");
+				tags.add(ru ? "ДУРАЧОК" : "NITWIT");
 			}
 		}
 		if (challenger != null) {
@@ -105,16 +114,16 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 				}
 				if (gold) {
 					r--;
-					tags.add("СВОЙ ПАЦАН");
+					tags.add(ru ? "СВОЙ ПАЦАН" : "ONE OF US");
 				} else {
 					r++;
-					tags.add("НИЩЕБРОД");
+					tags.add(ru ? "НИЩЕБРОД" : "BROKE");
 				}
 			}
 			if ((id.equals("cat") || id.equals("ocelot"))
 				&& (challenger.getMainHandStack().isOf(net.minecraft.item.Items.COD) || challenger.getMainHandStack().isOf(net.minecraft.item.Items.SALMON))) {
 				r--;
-				tags.add("ПРИКОРМЛЕН");
+				tags.add(ru ? "ПРИКОРМЛЕН" : "BRIBED");
 			}
 		}
 		// A mob wearing armour is at least as tough as its armour.
@@ -124,32 +133,44 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 		}
 		if (armour > r) {
 			r = armour;
-			tags.add("В БРОНЕ");
+			tags.add(ru ? "В БРОНЕ" : "ARMORED");
 		}
 		Rank rank = Rank.ofLevel(Math.max(1, Math.min(5, r)));
-		return new Opponent(mob, p, rank, name, MOODS.get(rnd.nextInt(MOODS.size())), tags);
+		List<String> moods = ru ? MOODS : MOODS_EN;
+		return new Opponent(mob, p, rank, name, moods.get(rnd.nextInt(moods.size())), tags);
+	}
+
+	@Deprecated
+	public static Opponent of(MobEntity mob, Random rnd, net.minecraft.entity.player.PlayerEntity challenger) {
+		return of(mob, rnd, challenger, Lang.RU);
 	}
 
 	/**
 	 * The mob's rap name: a player's name tag if it has one, else the nickname saved in the mob,
 	 * else a fresh species nickname (saved right away, so it never changes and neighbours differ).
 	 */
-	public static String nameOf(MobEntity mob, MobProfiles.Profile p, Random rnd) {
+	public static String nameOf(MobEntity mob, MobProfiles.Profile p, Random rnd, String lang) {
 		if (mob.hasCustomName()) {
 			String tag = mob.getCustomName().getString().replaceAll("\\s*♛.*$", "").trim();
 			if (!tag.isEmpty()) return tag;
 		}
 		MobRecord rec = MobRecord.of(mob);
-		if (!rec.name().isEmpty()) return rec.name();
+		String saved = rec.name(lang);
+		if (!saved.isEmpty()) return saved;
 		List<String> taken = new ArrayList<>();
 		for (MobEntity other : mob.getEntityWorld().getEntitiesByClass(MobEntity.class, mob.getBoundingBox().expand(64),
 			m -> m != mob && m.getType() == mob.getType())) {
-			String n = MobRecord.of(other).name();
+			String n = MobRecord.of(other).name(lang);
 			if (!n.isEmpty()) taken.add(n);
 		}
-		String name = Names.fresh(p, rnd, taken);
-		MobRecord.setName(mob, name);
+		String name = Names.fresh(p, rnd, taken, lang);
+		MobRecord.setName(mob, name, lang);
 		return name;
+	}
+
+	@Deprecated
+	public static String nameOf(MobEntity mob, MobProfiles.Profile p, Random rnd) {
+		return nameOf(mob, p, rnd, Lang.RU);
 	}
 
 	/** Night by the clock (World#isNight lags behind /time set on the server). */

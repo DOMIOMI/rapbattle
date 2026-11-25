@@ -3,6 +3,7 @@ package dev.rapbattle.client;
 import dev.rapbattle.net.BattleView;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.resource.language.I18n;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 
@@ -39,7 +40,9 @@ public final class BroadcastHud {
 		else for (BattleView.Member m : v.team) team.append(team.length() == 0 ? "" : " + ").append(m.name);
 		String t = BattleHud.fit(tr, team.toString(), side - 12);
 		ctx.drawText(tr, t, x0 + side - 6 - tr.getWidth(t), y + 4, 0xFFFFFFFF, true);
-		String sub = v.team.isEmpty() ? "" : v.team.get(0).outfit + (v.team.get(0).streak > 1 ? " · серия " + v.team.get(0).streak : "");
+		String sub = v.team.isEmpty() ? ""
+			: v.team.get(0).streak > 1 ? I18n.translate("rapbattle.broadcast.outfit_streak", v.team.get(0).outfit, v.team.get(0).streak)
+			: v.team.get(0).outfit;
 		ctx.drawText(tr, BattleHud.fit(tr, sub, side - 12), x0 + side - 6 - tr.getWidth(BattleHud.fit(tr, sub, side - 12)), y + 15, 0xFFCFE0FF, false);
 		// Team bar grows from the centre to the left, like a fighting game.
 		respectBar(ctx, tr, x0 + 6, y + 27, side - 12, shown[0], max, true, 0);
@@ -50,7 +53,7 @@ public final class BroadcastHud {
 		boolean verdict = res != null && ("ROUND_RESULT".equals(v.phase) || "RESULT".equals(v.phase)) && revealed(v) >= res.hits.size();
 		if (verdict) {
 			// After the breakdown: the verdict takes the centre of the scoreboard.
-			String top = res.finalResult ? "ФИНАЛ" : "РАУНД " + v.round;
+			String top = res.finalResult ? I18n.translate("rapbattle.broadcast.final") : I18n.translate("rapbattle.hud.round_upper", v.round);
 			String big = verdictWord(v, res);
 			ctx.drawCenteredTextWithShadow(tr, top, cx0 + mid / 2, y + 3, DIM);
 			ctx.drawCenteredTextWithShadow(tr, BattleHud.fit(tr, big, mid - 4), cx0 + mid / 2, y + 14, iWon(v, res) || v.spectator && v.pvp ? YELLOW : RED);
@@ -62,32 +65,23 @@ public final class BroadcastHud {
 			int fill = (int) (mw * (0.5f + Math.max(-100, Math.min(100, v.hype)) / 200f));
 			ctx.fill(mx, my, mx + fill, my + 5, 0xFF4AA8FF);
 		}
-		ctx.drawCenteredTextWithShadow(tr, "РЕСПЕКТ", cx0 + mid / 2, y + 27, 0xFF8A8FA8);
+		ctx.drawCenteredTextWithShadow(tr, I18n.translate("rapbattle.broadcast.respect"), cx0 + mid / 2, y + 27, 0xFF8A8FA8);
 		// Mob
 		int rx0 = cx0 + mid;
 		ctx.fill(rx0, y, rx0 + side, y + h, CRIMSON);
-		String mob = v.mobTeam.size() > 1 ? v.mobName + " и кореша" : v.mobName;
+		String mob = v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.and_crew", v.mobName) : v.mobName;
 		ctx.drawText(tr, BattleHud.fit(tr, mob, side - 12), rx0 + 6, y + 4, 0xFFFFFFFF, true);
 		ctx.drawText(tr, BattleHud.fit(tr, v.rankArmor + " · " + v.rankStreet, side - 12), rx0 + 6, y + 15, BattleHud.opaque(v.rankColor), false);
 		respectBar(ctx, tr, rx0 + 6, y + 27, side - 12, shown[1], max, false, 1);
 		// Combo under the centre while it burns.
 		if ("TIMELINE".equals(v.phase) && v.combo >= 3) {
-			String c = "КОМБО x" + (v.combo >= 6 ? "2" : "1.5") + " · " + v.combo;
+			String c = I18n.translate("rapbattle.broadcast.combo", v.combo >= 6 ? "2" : "1.5", v.combo);
 			BattleHud.scaledText(ctx, tr, c, w / 2, y + h + 3, 1.2f, YELLOW, true);
 		}
 		return y + h;
 	}
 
-	private static final String[] WIN_WORDS = {"РАЗЪЕБАЛ", "УНИЧТОЖИЛ", "РАЗНЁС", "ВЫНЕС", "ПОХОРОНИЛ", "ЗАКОПАЛ",
-		"РАСТОПТАЛ", "СЛОМАЛ", "ПОРВАЛ", "СТЁР В ПЫЛЬ", "УРОНИЛ", "ЗАДАВИЛ"};
-	private static final String[] TEAM_WIN_WORDS = {"РАЗЪЕБАЛИ", "УНИЧТОЖИЛИ", "РАЗНЕСЛИ", "ВЫНЕСЛИ", "ПОХОРОНИЛИ",
-		"ЗАКОПАЛИ", "РАСТОПТАЛИ", "ПОРВАЛИ"};
-	private static final String[] LOSE_WORDS = {"ТЕБЯ РАЗЪЕБАЛИ", "ТЕБЯ ВЫНЕСЛИ", "ТЕБЯ ЗАКОПАЛИ", "ТЕБЯ ПОРВАЛИ",
-		"ТЕБЯ РАЗНЕСЛИ", "ТЫ ВСЁ", "ТЕБЯ СТЁРЛИ", "ПОЗОР"};
-	private static final String[] TEAM_LOSE_WORDS = {"ВАС РАЗЪЕБАЛИ", "ВАС ВЫНЕСЛИ", "ВАС ЗАКОПАЛИ", "ВАС ПОРВАЛИ",
-		"ВАС РАЗНЕСЛИ", "ВЫ ВСЁ", "ПОЗОР"};
-	private static final String[] ROUND_WIN = {"ВАШ", "ЗА ВАМИ", "ВЗЯЛИ", "ЕСТЬ!"};
-	private static final String[] ROUND_LOSE = {"МОБА", "ЗА МОБОМ", "МИМО", "СЛИЛИ"};
+	private static final int WIN_COUNT = 12, TEAM_WIN_COUNT = 8, LOSE_COUNT = 8, TEAM_LOSE_COUNT = 7, ROUND_WIN_COUNT = 4, ROUND_LOSE_COUNT = 4;
 
 	/** Did I win: my team against the mob, or me against the other player. */
 	static boolean iWon(BattleView v, BattleView.Result res) {
@@ -97,12 +91,22 @@ public final class BroadcastHud {
 	/** A different word every battle, but steady while the screen is up. */
 	static String verdictWord(BattleView v, BattleView.Result res) {
 		int seed = Math.abs((v.id * 31 + v.round) * 17 + res.comment.hashCode());
-		if (v.pvp && v.spectator) return "ПОБЕДА: " + res.winner.toUpperCase(java.util.Locale.ROOT);
+		if (v.pvp && v.spectator) return I18n.translate("rapbattle.broadcast.pvp_winner", res.winner.toUpperCase(Locale.ROOT));
 		boolean team = v.team.size() > 1 && !v.pvp;
 		boolean won = iWon(v, res);
-		String[] pool = !res.finalResult ? (won ? ROUND_WIN : ROUND_LOSE)
-			: won ? (team ? TEAM_WIN_WORDS : WIN_WORDS) : (team ? TEAM_LOSE_WORDS : LOSE_WORDS);
-		return pool[seed % pool.length];
+		String prefix;
+		int count;
+		if (!res.finalResult) {
+			prefix = won ? "rapbattle.broadcast.round_win." : "rapbattle.broadcast.round_lose.";
+			count = won ? ROUND_WIN_COUNT : ROUND_LOSE_COUNT;
+		} else if (won) {
+			prefix = team ? "rapbattle.broadcast.team_win." : "rapbattle.broadcast.win.";
+			count = team ? TEAM_WIN_COUNT : WIN_COUNT;
+		} else {
+			prefix = team ? "rapbattle.broadcast.team_lose." : "rapbattle.broadcast.lose.";
+			count = team ? TEAM_LOSE_COUNT : LOSE_COUNT;
+		}
+		return I18n.translate(prefix + (seed % count));
 	}
 
 	/** Last shown value per bar, and the latest drop to flash next to it. */
@@ -202,7 +206,7 @@ public final class BroadcastHud {
 		// Countdown: a big number in the middle, nothing else.
 		if (beat < 4) {
 			BattleHud.scaledText(ctx, tr, String.valueOf(4 - beat), w / 2, h / 2 - 40, 5f, YELLOW, true);
-			BattleHud.scaledText(ctx, tr, "бит: " + ClientBattle.styleName(), w / 2, h / 2 + 8, 1.3f, DIM, true);
+			BattleHud.scaledText(ctx, tr, I18n.translate("rapbattle.broadcast.beat", ClientBattle.styleName()), w / 2, h / 2 + 8, 1.3f, DIM, true);
 			return;
 		}
 
@@ -211,20 +215,23 @@ public final class BroadcastHud {
 		BattleView.Row first, second;
 		boolean leadIn = false;
 		if (live != null && live.mob) {
-			tag = "ХОД: " + (live.reader == null ? v.mobName : live.reader).toUpperCase(Locale.ROOT) + " · перевод с " + v.mobLanguage;
+			tag = I18n.translate("rapbattle.broadcast.tag_mob", (live.reader == null ? v.mobName : live.reader).toUpperCase(Locale.ROOT), v.mobLanguage);
 			tagColor = ORANGE;
 			first = live;
 			second = cur + 1 < v.rows.size() && v.rows.get(cur + 1).mob ? v.rows.get(cur + 1) : null;
 		} else if (live != null) {
 			boolean mine = me.equals(live.reader);
-			tag = (mine ? "ТВОЙ ХОД" : "ЧИТАЕТ " + live.reader.toUpperCase(Locale.ROOT)) + " · СТРОКА " + live.line + "/" + live.lines;
+			tag = mine ? I18n.translate("rapbattle.broadcast.tag_you", live.line, live.lines)
+				: I18n.translate("rapbattle.broadcast.tag_player", live.reader.toUpperCase(Locale.ROOT), live.line, live.lines);
 			tagColor = mine ? GREEN : CYAN;
 			first = live;
 			second = cur + 1 < v.rows.size() ? v.rows.get(cur + 1) : null;
 		} else if (seg != null) {
 			boolean mine = me.equals(seg.reader);
 			leadIn = true;
-			tag = (mine ? "ГОТОВЬСЯ" : "ГОТОВИТСЯ " + seg.reader.toUpperCase(Locale.ROOT)) + " · " + Math.max(1, seg.startBeat - beat);
+			int left = Math.max(1, seg.startBeat - beat);
+			tag = mine ? I18n.translate("rapbattle.broadcast.tag_ready_you", left)
+				: I18n.translate("rapbattle.broadcast.tag_ready_player", seg.reader.toUpperCase(Locale.ROOT), left);
 			tagColor = mine ? GREEN : CYAN;
 			first = rowAtBeat(v, seg.startBeat);
 			int fi = first == null ? -1 : v.rows.indexOf(first);
@@ -330,12 +337,15 @@ public final class BroadcastHud {
 			x += col + GAP;
 		}
 		int word = cw[3];
-		String shown = shownWord(r, live ? k : -1);
-		int cell = "украдено".equals(shown) ? 0xFF3A1A1A : "сгорела".equals(shown) ? 0xFFE86A17 : BattleHud.opaque(r.color);
+		int activeK = live ? k : -1;
+		String shown = shownWord(r, activeK);
+		boolean stolen = !r.mob && "stolen".equals(r.effect);
+		boolean burned = !r.mob && "burn".equals(r.effect) && activeK >= 2;
+		int cell = stolen ? 0xFF3A1A1A : burned ? 0xFFE86A17 : BattleHud.opaque(r.color);
 		ctx.fill(x, y, x + word, y + ROW, cell);
 		if (live) ctx.drawStrokedRectangle(x - 1, y - 1, word + 2, ROW + 2, k == 3 ? YELLOW : 0xFFFFFFFF);
 		String wt = BattleHud.fit(tr, shown, word - 6);
-		ctx.drawText(tr, wt, x + word / 2 - tr.getWidth(wt) / 2, y + 3, "украдено".equals(shown) ? RED : DARK, false);
+		ctx.drawText(tr, wt, x + word / 2 - tr.getWidth(wt) / 2, y + 3, stolen ? RED : DARK, false);
 	}
 
 	private static BattleView.Row rowAtBeat(BattleView v, int beat) {
@@ -348,8 +358,8 @@ public final class BroadcastHud {
 		if (r.effect == null || r.mob) return r.word;
 		return switch (r.effect) {
 			case "hidden" -> "???";
-			case "stolen" -> "украдено";
-			case "burn" -> k >= 2 ? "сгорела" : r.word;
+			case "stolen" -> I18n.translate("rapbattle.hud.word_stolen");
+			case "burn" -> k >= 2 ? I18n.translate("rapbattle.hud.word_burned") : r.word;
 			case "illusion" -> k >= 0 && k < 3 ? fake(r) : r.word;
 			default -> r.word;
 		};
@@ -365,13 +375,14 @@ public final class BroadcastHud {
 
 	static void judging(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
 		scoreboard(ctx, tr, v, w, true);
-		int dots = (int) (System.currentTimeMillis() / 400 % 4);
+		String dots = ".".repeat((int) (System.currentTimeMillis() / 400 % 4));
 		int lx = 0, lw = 300, ly = -30;
 		beginPanel(ctx, w, h, lw);
-		ctx.fill(lx, ly - 12, lx + tr.getWidth("РЕШЕНИЕ СУДЬИ") + 12, ly, GOLD);
-		ctx.drawText(tr, "РЕШЕНИЕ СУДЬИ", lx + 6, ly - 10, DARK, false);
+		String verdictLabel = I18n.translate("rapbattle.broadcast.judge_verdict");
+		ctx.fill(lx, ly - 12, lx + tr.getWidth(verdictLabel) + 12, ly, GOLD);
+		ctx.drawText(tr, verdictLabel, lx + 6, ly - 10, DARK, false);
 		ctx.fill(lx, ly, lx + lw, ly + 30, PANEL);
-		BattleHud.scaledText(ctx, tr, "Судья думает" + ".".repeat(dots), lx + 8, ly + 8, 1.4f, YELLOW, false);
+		BattleHud.scaledText(ctx, tr, I18n.translate("rapbattle.broadcast.judge_thinking", dots), lx + 8, ly + 8, 1.4f, YELLOW, false);
 		ctx.getMatrices().popMatrix();
 	}
 
@@ -386,7 +397,8 @@ public final class BroadcastHud {
 
 		// How it was won, in a strip under the scoreboard, once the breakdown has run.
 		if (allIn && !roundOnly) {
-			String how = r.knockout ? "НОКАУТ" : "ПО ОЧКАМ  " + r.respectTeam + " : " + r.respectMob;
+			String how = r.knockout ? I18n.translate("rapbattle.broadcast.knockout")
+				: I18n.translate("rapbattle.broadcast.by_points", r.respectTeam, r.respectMob);
 			int tw = tr.getWidth(how) + 12;
 			ctx.fill(w / 2 - tw / 2, under, w / 2 + tw / 2, under + 12, 0xF0101018);
 			ctx.drawCenteredTextWithShadow(tr, how, w / 2, under + 2, r.knockout ? ORANGE : (won ? YELLOW : RED));
@@ -400,11 +412,11 @@ public final class BroadcastHud {
 		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 11) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
 		ctx.fill(cx, cy, cx + cw, cy + 14 + rows * 11 + statsH, PANEL);
 		ctx.fill(cx, cy, cx + 3, cy + 14 + rows * 11 + statsH, GOLD);
-		ctx.drawText(tr, "РАЗБОР", cx + 8, cy + 3, GOLD, false);
+		ctx.drawText(tr, I18n.translate("rapbattle.broadcast.breakdown"), cx + 8, cy + 3, GOLD, false);
 		int ry = cy + 14;
 		for (int i = from; i < n; i++) {
 			BattleView.Hit hit = r.hits.get(i);
-			String target = !v.pvp ? (hit.toMob ? "мобу" : "вам")
+			String target = !v.pvp ? I18n.translate(hit.toMob ? "rapbattle.broadcast.target_mob" : "rapbattle.broadcast.target_team")
 				: hit.toMob ? v.mobName : (v.team.isEmpty() ? "" : v.team.get(0).name);
 			String dmg = hit.damage == 0 ? "0" : target + " -" + hit.damage;
 			int dw = tr.getWidth(dmg);
@@ -418,16 +430,17 @@ public final class BroadcastHud {
 		if (allIn) {
 			ry += 3;
 			ctx.fill(cx + 8, ry - 2, cx + cw - 6, ry - 1, 0xFF2A2F44);
-			ctx.drawText(tr, BattleHud.fit(tr, "урон " + r.dealt + " · в бит " + r.accuracy + "% · комбо " + r.bestCombo, cw - 14), cx + 8, ry + 1, CYAN, false);
+			ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.stats_summary", r.dealt, r.accuracy, r.bestCombo), cw - 14), cx + 8, ry + 1, CYAN, false);
 			ry += 11;
 			if (!r.bestLine.isEmpty()) {
-				ctx.drawText(tr, BattleHud.fit(tr, "лучшая: " + r.bestLine, cw - 14), cx + 8, ry + 1, DIM, false);
+				ctx.drawText(tr, BattleHud.fit(tr, I18n.translate("rapbattle.broadcast.best_line", r.bestLine), cw - 14), cx + 8, ry + 1, DIM, false);
 				ry += 11;
 			}
 			if (r.players.size() > 1) {
 				for (BattleView.PlayerScore ps : r.players) {
 					boolean mvp = ps.name.equals(r.mvp);
-					ctx.drawText(tr, BattleHud.fit(tr, (mvp ? "♛ " : "") + ps.name + "  урон за раунд " + ps.score, cw - 14), cx + 8, ry + 1, mvp ? GOLD : TEXT, false);
+					String dmgLine = I18n.translate(mvp ? "rapbattle.broadcast.round_damage_mvp" : "rapbattle.broadcast.round_damage", ps.name, ps.score);
+					ctx.drawText(tr, BattleHud.fit(tr, dmgLine, cw - 14), cx + 8, ry + 1, mvp ? GOLD : TEXT, false);
 					ry += 10;
 				}
 			}
@@ -437,13 +450,14 @@ public final class BroadcastHud {
 		int lw = Math.min(380, w - 12), lx = 0;
 		beginPanel(ctx, w, h, lw);
 		List<OrderedText> lines = tr.wrapLines(Text.literal("«" + r.comment + "»"), lw - 16);
-		String notes = r.overdressed ? "перебор с прикидом: награда урезана" : "";
+		String notes = r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
 		String mine = "";
-		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) mine = "ты: " + ps.transcript;
+		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) mine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
 		int ph = 8 + lines.size() * 10 + (notes.isEmpty() ? 0 : 11) + (mine.isEmpty() ? 0 : 11) + 4;
 		int ly = -ph;
-		ctx.fill(lx, ly - 12, lx + tr.getWidth("РЕШЕНИЕ СУДЬИ") + 12, ly, GOLD);
-		ctx.drawText(tr, "РЕШЕНИЕ СУДЬИ", lx + 6, ly - 10, DARK, false);
+		String verdictLabel = I18n.translate("rapbattle.broadcast.judge_verdict");
+		ctx.fill(lx, ly - 12, lx + tr.getWidth(verdictLabel) + 12, ly, GOLD);
+		ctx.drawText(tr, verdictLabel, lx + 6, ly - 10, DARK, false);
 		ctx.fill(lx, ly, lx + lw, ly + ph, PANEL);
 		int ty = ly + 6;
 		for (OrderedText line : lines) {
@@ -465,22 +479,32 @@ public final class BroadcastHud {
 		String line;
 		int color = DIM;
 		switch (v.phase) {
-			case "LOBBY" -> line = "сейчас начнётся баттл";
-			case "PREP" -> line = v.mobName + " готовится";
+			case "LOBBY" -> line = I18n.translate("rapbattle.broadcast.spec_lobby");
+			case "PREP" -> line = I18n.translate("rapbattle.broadcast.spec_prep", v.mobName);
 			case "TIMELINE" -> {
 				BattleView.Row r = ClientBattle.liveRow();
-				line = r == null ? "" : "читает: " + r.reader;
+				line = r == null ? "" : I18n.translate("rapbattle.broadcast.spec_reading", r.reader);
 				color = r != null && r.mob ? ORANGE : CYAN;
 			}
-			case "JUDGING" -> line = "судья думает...";
+			case "JUDGING" -> line = I18n.translate("rapbattle.broadcast.spec_judging");
 			case "ROUND_RESULT", "RESULT" -> {
 				BattleView.Result r = v.result;
 				if (r == null) return;
 				boolean win = r.playersWin;
-				line = (v.pvp ? "победил " + r.winner : win ? "игроки взяли" : "моб взял")
-					+ (r.finalResult ? (v.pvp ? "" : " баттл") + (r.knockout ? " нокаутом" : "") : " раунд " + v.round)
-					+ "  " + r.respectTeam + " : " + r.respectMob
-					+ (r.mvp.isEmpty() ? "" : " · MVP " + r.mvp);
+				if (v.pvp) {
+					line = r.finalResult
+						? I18n.translate(r.knockout ? "rapbattle.broadcast.spec_pvp_final_ko" : "rapbattle.broadcast.spec_pvp_final", r.winner, r.respectTeam, r.respectMob)
+						: I18n.translate("rapbattle.broadcast.spec_pvp_round", r.winner, v.round, r.respectTeam, r.respectMob);
+				} else if (win) {
+					line = r.finalResult
+						? I18n.translate(r.knockout ? "rapbattle.broadcast.spec_players_final_ko" : "rapbattle.broadcast.spec_players_final", r.respectTeam, r.respectMob)
+						: I18n.translate("rapbattle.broadcast.spec_players_round", v.round, r.respectTeam, r.respectMob);
+				} else {
+					line = r.finalResult
+						? I18n.translate(r.knockout ? "rapbattle.broadcast.spec_mob_final_ko" : "rapbattle.broadcast.spec_mob_final", r.respectTeam, r.respectMob)
+						: I18n.translate("rapbattle.broadcast.spec_mob_round", v.round, r.respectTeam, r.respectMob);
+				}
+				if (!r.mvp.isEmpty()) line = I18n.translate("rapbattle.broadcast.spec_mvp_suffix", line, r.mvp);
 				color = win ? GREEN : RED;
 			}
 			default -> line = "";
