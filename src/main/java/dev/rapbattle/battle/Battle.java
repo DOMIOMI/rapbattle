@@ -116,6 +116,7 @@ public class Battle {
 	/** Crowd: rhyme slots players hit loudly / missed in silence this round. */
 	int barsHit, barsMissed;
 	private final Map<String, List<Boolean>> playerBarLoud = new HashMap<>();
+	private final Set<UUID> gazedPlayers = new HashSet<>();
 	private List<Llm.PlayerVerse> pendingVerses = List.of();
 	/** Respect: the battle's health bars. Not reset between rounds. */
 	int respectTeam, respectMob, respectMax;
@@ -269,8 +270,10 @@ public class Battle {
 		double mark = 3.0 + mob.getWidth() / 2;
 		if (Math.abs(dist - mark) < 0.4) return;
 		Vec3d target = p.add(dir.normalize().multiply(mark));
+		boolean needWater = Crowd.isAquaticOnly(mob);
 		for (double y : new double[]{0, 1, -1}) {
 			Vec3d at = new Vec3d(target.x, Math.floor(m.y) + y, target.z);
+			if (needWater && !world.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(at)).isIn(net.minecraft.registry.tag.FluidTags.WATER)) continue;
 			var box = mob.getBoundingBox().offset(at.subtract(m));
 			if (world.isSpaceEmpty(mob, box) && !world.isSpaceEmpty(mob, box.offset(0, -0.2, 0))) {
 				mob.refreshPositionAndAngles(at.x, at.y, at.z, mob.getYaw(), mob.getPitch());
@@ -305,8 +308,10 @@ public class Battle {
 			Vec3d look = p.subtract(target);
 			float yaw = (float) (Math.toDegrees(Math.atan2(look.z, look.x)) - 90);
 			Vec3d cur = new Vec3d(e.getX(), e.getY(), e.getZ());
+			boolean needWater = Crowd.isAquaticOnly(e);
 			for (double y : new double[]{0, 1, -1}) {
 				Vec3d at = new Vec3d(target.x, Math.floor(m.y) + y, target.z);
+				if (needWater && !world.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(at)).isIn(net.minecraft.registry.tag.FluidTags.WATER)) continue;
 				var box = e.getBoundingBox().offset(at.subtract(cur));
 				if (world.isSpaceEmpty(e, box) && !world.isSpaceEmpty(e, box.offset(0, -0.2, 0))) {
 					e.refreshPositionAndAngles(at.x, at.y, at.z, yaw, 0);
@@ -428,6 +433,33 @@ public class Battle {
 	/** Warden: noise from a player's mic while he was reading. */
 	public void onNoise(ServerPlayerEntity p, int count) {
 		if (hasPlayer(p.getUuid()) && opp.profile().id().equals("warden")) noise += Math.max(0, Math.min(10, count));
+	}
+
+	/** Enderman: looking him in the eyes during his verse shuffles this player's upcoming rhymes on the server. */
+	public void onGaze(ServerPlayerEntity p) {
+		UUID u = p.getUuid();
+		if (phase != Phase.TIMELINE || view == null || !hasPlayer(u) || !opp.profile().id().equals("enderman")) return;
+		if (!gazedPlayers.add(u)) return;
+		String name = names.get(u);
+		int curBeat = (int) Math.floorDiv(System.currentTimeMillis() - beatZero, Math.max(1, beatMs));
+		List<BattleView.Row> upcoming = new ArrayList<>();
+		for (BattleView.Row r : view.rows) {
+			if (!r.mob && name.equals(r.reader) && r.startBeat > curBeat) upcoming.add(r);
+		}
+		if (upcoming.size() < 2) return;
+		List<String> pool = new ArrayList<>();
+		for (BattleView.Row r : upcoming) pool.add(r.word);
+		Collections.shuffle(pool, rnd);
+		boolean changed = false;
+		for (int i = 0; i < upcoming.size(); i++) if (!pool.get(i).equals(upcoming.get(i).word)) changed = true;
+		if (!changed) Collections.rotate(pool, 1);
+		for (int i = 0; i < upcoming.size(); i++) upcoming.get(i).word = pool.get(i);
+		List<String> updatedAll = new ArrayList<>();
+		for (BattleView.Row r : view.rows) {
+			if (!r.mob && name.equals(r.reader)) updatedAll.add(r.word);
+		}
+		rhymeWords.put(u, updatedAll);
+		broadcastState();
 	}
 
 	/** Rhymes on the beat: 2 each (1 for "almost"), and a run of them multiplies: x1.5 from 3 in a row, x2 from 6. */
@@ -688,6 +720,7 @@ public class Battle {
 			return;
 		}
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
+		for (MobEntity m : mobTeam) if (m.isOnFire()) m.extinguish();
 		keepThePeace();
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
@@ -821,6 +854,7 @@ public class Battle {
 		barsHit = 0;
 		barsMissed = 0;
 		playerBarLoud.clear();
+		gazedPlayers.clear();
 		pendingVerses = List.of();
 		transcripts.clear();
 		audio.clear();
@@ -1384,6 +1418,8 @@ public class Battle {
 						DamagePop.spawn(world, m, "-" + Math.max(1, Math.round(dmg / 2)) + " ❤", 0xFF5050);
 					}
 				}
+				Vec3d awayFrom = killer != null ? new Vec3d(killer.getX(), killer.getY(), killer.getZ()) : pos;
+				Crowd.retreat(mobTeam, awayFrom, 15_000L);
 				broadcastChat(Text.translatable("rapbattle.battle.mob_escaped", opp.name(),
 					Text.translatable("rapbattle.battle.escaped." + rnd.nextInt(ESCAPED_LINES))).formatted(Formatting.GRAY));
 				ExperienceOrbEntity.spawn(world, pos, Math.max(1, xp / 2));

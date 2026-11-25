@@ -381,13 +381,7 @@ public final class ClientBattle {
 		var look = mc.player.getRotationVec(1f);
 		if (look.dotProduct(to) < Math.cos(Math.toRadians(8))) return;
 		gazedKey = key;
-		String me = me();
-		java.util.List<BattleView.Row> own = new java.util.ArrayList<>();
-		for (BattleView.Row r : view.rows) if (!r.mob && me.equals(r.reader)) own.add(r);
-		java.util.List<String> words = new java.util.ArrayList<>();
-		for (BattleView.Row r : own) words.add(r.word);
-		java.util.Collections.shuffle(words);
-		for (int i = 0; i < own.size(); i++) own.get(i).word = words.get(i);
+		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"gaze\"}"));
 		say(Text.translatable("rapbattle.client.enderman_gaze"), Formatting.DARK_PURPLE);
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.ENTITY_ENDERMAN_STARE, 1f, 0.8f));
 	}
@@ -502,9 +496,15 @@ public final class ClientBattle {
 	}
 
 	public static void pressDecline() {
-		if (invite == null) return;
-		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"invite\",\"id\":" + invite.id + ",\"accept\":false}"));
-		invite = null;
+		if (invite != null) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"invite\",\"id\":" + invite.id + ",\"accept\":false}"));
+			invite = null;
+			return;
+		}
+		if (choice != null) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"cancel\"}"));
+			choice = null;
+		}
 	}
 
 	/** R: rap battle, when the choice prompt is open and the mob accepts. */
