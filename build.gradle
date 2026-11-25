@@ -32,6 +32,13 @@ dependencies {
 	include "com.zigythebird.playeranim:PlayerAnimationLibFabric:1.1.12+mc.1.21.11"
 	// Optional: the settings button in Mod Menu.
 	modCompileOnly "com.terraformersmc:modmenu:17.0.1"
+
+	testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+	useJUnitPlatform()
 }
 
 repositories {
