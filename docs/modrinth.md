@@ -23,6 +23,7 @@
 
 > **Честно предупреждаю:** мод целиком написан ИИ (Claude), я это не скрываю. Я придумывал, тестировал и говорил,
 > что поправить, а код писала нейросеть. Биты, голоса толпы и выкрики тоже сделаны нейросетями (ElevenLabs).
+> Этот текст тоже написал Claude.
 
 ## Что умеет
 - **Баттл с любым мобом.** Ранги от Кожаного до Незеритового, боссы в три раунда, банды, клички, моб
@@ -62,5 +63,5 @@
 
 **English, briefly:** rap battles against mobs and friends. You rap into your microphone over a real beat, an LLM
 writes the mob's verse and judges every line, the crowd cheers or boos. Russian-language only for now.
-Fully AI-written (Claude), beats and crowd voices made with ElevenLabs. MIT: use it in modpacks, fork it, change it.
+Fully AI-written (Claude), this description included; beats and crowd voices made with ElevenLabs. MIT: use it in modpacks, fork it, change it.
 A just-for-fun project made for friends. Found a bug? Open an issue on GitHub: https://github.com/DOMIOMI/rapbattle/issues
