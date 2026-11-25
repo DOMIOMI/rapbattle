@@ -227,7 +227,7 @@ public final class BattleHud {
 	/** Intro: letterbox bars and the fighter card of whoever the camera is showing (see {@link FighterCard}). */
 	private static void drawCards(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
 		float t = Intro.elapsedMs();
-		int bar = Math.round(24 * FighterCard.easeOutCubic(FighterCard.clamp01(t / 350f)));
+		int bar = Math.round(24 * Ui.easeOutCubic((t / 350f)));
 		ctx.fill(0, 0, w, bar, 0xFF000000);
 		ctx.fill(0, h - bar, w, h, 0xFF000000);
 		String skip = I18n.translate("rapbattle.hud.skip_intro");
@@ -613,44 +613,91 @@ public final class BattleHud {
 
 	// ------------------------------------------------------------------ choice and invite
 
+	private static Object choiceShown, inviteShown;
+	private static long choiceAt, inviteAt;
+
+	/** "Rap or fight" card when you hit a mob: slides up, the mob's rank with pips, the two options, a draining timer. */
 	private static void drawChoice(DrawContext ctx, TextRenderer tr, BattleView c, int w, int h) {
-		int cx = w / 2, y = h / 2 + 14;
+		long now = System.currentTimeMillis();
+		if (choiceShown != c) {
+			choiceShown = c;
+			choiceAt = now;
+		}
+		long since = now - choiceAt;
 		String name = c.mobName + " (" + c.mobSpecies + ")";
 		String l1, l2;
-		int l1c;
+		int l1c, accent;
 		if (!c.challengeFrom.isEmpty()) {
 			name = c.challengeFrom + ": " + c.mobName;
 			l1 = I18n.translate("rapbattle.hud.choice_answer");
 			l1c = YELLOW;
 			l2 = I18n.translate("rapbattle.hud.choice_answer_sub");
+			accent = Ui.GOLD;
 		} else if (c.allowed) {
 			l1 = I18n.translate(c.boss ? "rapbattle.hud.choice_rap_boss" : "rapbattle.hud.choice_rap");
 			l1c = c.boss ? 0xFFB48CFF : GREEN;
 			l2 = I18n.translate("rapbattle.hud.choice_fight");
+			accent = c.boss ? Ui.BOSS : Ui.RED;
 		} else {
 			l1 = I18n.translate("rapbattle.hud.choice_refused", c.refusal);
 			l1c = RED;
 			l2 = I18n.translate("rapbattle.hud.choice_refused_sub", c.requiredOutfit, c.yourOutfit);
+			accent = 0xFF6A6A78;
 		}
-		int bw = Math.max(Math.max(tr.getWidth(name), tr.getWidth(l1)), tr.getWidth(l2)) + 16;
-		int bh = 50;
-		box(ctx, cx - bw / 2, y, bw, bh, 0xE8101018, opaque(c.rankColor));
-		ctx.drawCenteredTextWithShadow(tr, name, cx, y + 4, ORANGE);
-		rankPlate(ctx, tr, c, cx, y + 14);
-		ctx.drawCenteredTextWithShadow(tr, l1, cx, y + 29, l1c);
-		ctx.drawCenteredTextWithShadow(tr, l2, cx, y + 39, DIM);
+		Text nameT = Ui.bold(name);
+		String rank = c.rankArmor + " · " + c.rankStreet;
+		int bw = Math.min(w - 16, Math.max(Math.max(tr.getWidth(nameT) + 30, tr.getWidth(Ui.bold(l1)) + 26), Math.max(tr.getWidth(l2) + 26, 200)));
+		int bh = 58;
+		float in = Ui.easeOutBack(since / 320f);
+		float a = Ui.clamp01(since / 150f);
+		int cx = w / 2, x = cx - bw / 2;
+		int y = Math.round(h / 2f + 22 + (1 - in) * 30);
+		Ui.tab(ctx, tr, I18n.translate("rapbattle.hud.choice_title"), x, y, accent, Ui.WHITE, a);
+		Ui.panel(ctx, x, y, bw, bh, accent, a);
+		Ui.dropText(ctx, tr, Ui.bold(BattleHud.fit(tr, name, bw - 16)), x + 8, y + 5, 1f, Ui.WHITE, accent, a, false);
+		// Rank in its colour with six pips.
+		int rc = opaque(c.rankColor);
+		Ui.text(ctx, tr, rank, x + 8, y + 17, 1f, rc, a, false);
+		int px = x + 12 + tr.getWidth(rank);
+		for (int i = 0; i < 6; i++) {
+			int pxi = px + i * 9;
+			if (pxi + 7 > x + bw - 6) break;
+			ctx.fill(pxi, y + 19, pxi + 7, y + 22, Ui.alphaOf(i < c.rankLevel ? rc : 0x30FFFFFF, a));
+		}
+		ctx.fill(x + 8, y + 29, x + bw - 8, y + 30, Ui.alphaOf(accent, 0.6f * a));
+		Ui.text(ctx, tr, Ui.bold(BattleHud.fit(tr, l1, bw - 16)), x + 8, y + 34, 1f, l1c, a, true);
+		Ui.text(ctx, tr, BattleHud.fit(tr, l2, bw - 16), x + 8, y + 45, 1f, DIM, a, false);
+		// Time to decide, draining along the bottom edge.
+		float left = 1 - Ui.clamp01(since / (float) Math.max(1, c.choiceMs));
+		ctx.fill(x, y + bh - 2, x + Math.round(bw * left), y + bh, Ui.alphaOf(Ui.mix(accent, Ui.WHITE, 0.4f), a));
+		Ui.shine(ctx, x, y, bw, bh, (since - 250) / 450f, 0x22FFFFFF);
 	}
 
+	/** Invite to a battle (Y/N): drops in from the top, the keys in a second line, the frame pulses. */
 	private static void drawInvite(DrawContext ctx, TextRenderer tr, BattleView inv, int w) {
+		long now = System.currentTimeMillis();
+		if (inviteShown != inv) {
+			inviteShown = inv;
+			inviteAt = now;
+		}
+		long since = now - inviteAt;
 		String s1 = inv.pvp ? I18n.translate("rapbattle.hud.invite_pvp", inv.challenger)
 			: I18n.translate("rapbattle.hud.invite_mob", inv.challenger, inv.mobName, inv.rankArmor);
 		String s2 = inv.pvp ? I18n.translate("rapbattle.hud.invite_pvp_keys")
 			: inv.allowed ? I18n.translate(inv.boss ? "rapbattle.hud.invite_boss_keys" : "rapbattle.hud.invite_keys")
 			: I18n.translate("rapbattle.hud.invite_outfit", inv.requiredOutfit, inv.yourOutfit);
-		int bw = Math.max(tr.getWidth(s1), tr.getWidth(s2)) + 12;
-		int x = w / 2 - bw / 2, y = 30;
-		box(ctx, x, y, bw, 26, 0xE0101018, inv.allowed ? YELLOW : RED);
-		ctx.drawCenteredTextWithShadow(tr, s1, w / 2, y + 4, YELLOW);
-		ctx.drawCenteredTextWithShadow(tr, s2, w / 2, y + 15, inv.allowed ? TEXT : RED);
+		int accent = !inv.allowed ? Ui.RED : inv.boss ? Ui.BOSS : Ui.GOLD;
+		int bw = Math.min(w - 16, Math.max(tr.getWidth(Ui.bold(s1)), tr.getWidth(s2)) + 20);
+		int bh = 28;
+		float in = Ui.easeOutBack(since / 320f);
+		float a = Ui.clamp01(since / 150f);
+		int x = w / 2 - bw / 2, y = Math.round(44 - (1 - in) * 40);
+		Ui.tab(ctx, tr, I18n.translate("rapbattle.hud.invite_title"), x, y, accent, Ui.DARK, a);
+		Ui.panel(ctx, x, y, bw, bh, accent, a);
+		float pulse = 0.4f + 0.4f * (float) Math.abs(Math.sin(now / 300.0));
+		ctx.drawStrokedRectangle(x - 1, y - 1, bw + 2, bh + 2, Ui.alphaOf(accent, pulse * a));
+		Ui.text(ctx, tr, Ui.bold(BattleHud.fit(tr, s1, bw - 16)), x + 8, y + 5, 1f, Ui.WHITE, a, true);
+		Ui.text(ctx, tr, BattleHud.fit(tr, s2, bw - 16), x + 8, y + 16, 1f, inv.allowed ? Ui.mix(accent, Ui.WHITE, 0.5f) : RED, a, false);
+		Ui.shine(ctx, x, y, bw, bh, (since - 250) / 450f, 0x22FFFFFF);
 	}
 }

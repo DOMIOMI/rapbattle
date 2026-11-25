@@ -9,6 +9,13 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
+import static dev.rapbattle.client.Ui.alphaOf;
+import static dev.rapbattle.client.Ui.clamp01;
+import static dev.rapbattle.client.Ui.easeInCubic;
+import static dev.rapbattle.client.Ui.easeOutBack;
+import static dev.rapbattle.client.Ui.easeOutCubic;
+import static dev.rapbattle.client.Ui.mix;
+
 /**
  * The fighter card of the intro, fighting-game style: a light streak flies across the screen, the card lands
  * from its side with an overshoot and a flash, the portrait (the live 3D model) opens up, then the name, rank,
@@ -287,31 +294,4 @@ final class FighterCard {
 
 	/** Applies the card's global fade. */
 	private static int a(int argb) { return alphaOf(argb, fade); }
-
-	static int alphaOf(int argb, float f) {
-		int al = Math.round(((argb >>> 24) & 0xFF) * clamp01(f));
-		return (al << 24) | (argb & 0xFFFFFF);
-	}
-
-	static int mix(int c1, int c2, float t) {
-		t = clamp01(t);
-		int r = Math.round(((c1 >> 16) & 0xFF) * (1 - t) + ((c2 >> 16) & 0xFF) * t);
-		int g = Math.round(((c1 >> 8) & 0xFF) * (1 - t) + ((c2 >> 8) & 0xFF) * t);
-		int b = Math.round((c1 & 0xFF) * (1 - t) + (c2 & 0xFF) * t);
-		return 0xFF000000 | (r << 16) | (g << 8) | b;
-	}
-
-	static float clamp01(float f) { return f < 0 ? 0 : f > 1 ? 1 : f; }
-
-	static float easeOutCubic(float t) {
-		float u = 1 - t;
-		return 1 - u * u * u;
-	}
-
-	static float easeInCubic(float t) { return t * t * t; }
-
-	static float easeOutBack(float t) {
-		float c1 = 1.70158f, c3 = c1 + 1, u = t - 1;
-		return 1 + c3 * u * u * u + c1 * u * u;
-	}
 }
