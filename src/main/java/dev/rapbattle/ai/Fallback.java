@@ -188,9 +188,14 @@ public final class Fallback {
 		"The mob out-rapped you, outplayed you, and respawned you.",
 		"Next time practice on pigs. They are not as harsh when they judge.");
 
-	/** Extracts 2 anchor words from a mob verse for the rebuttal target bar. */
+	/** Extracts anchor words from a mob verse for the rebuttal target bar. */
 	public static List<String> extractTargets(List<Llm.MobLine> lines, String lang) {
+		return extractTargets(lines, lang, 2);
+	}
+
+	public static List<String> extractTargets(List<Llm.MobLine> lines, String lang, int maxTargets) {
 		boolean ru = Lang.isRu(lang);
+		int limit = Math.max(1, maxTargets);
 		List<String> out = new ArrayList<>();
 		java.util.Set<String> stop = ru
 			? Set.of("это", "как", "что", "для", "про", "тебя", "меня", "тебе", "мне", "тут", "здесь", "даже", "просто", "если", "только")
@@ -200,7 +205,7 @@ public final class Fallback {
 				String w = raw.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}]", "");
 				if (w.length() >= (ru ? 4 : 4) && !stop.contains(w) && !out.contains(w)) {
 					out.add(w);
-					if (out.size() >= 2) return out;
+					if (out.size() >= limit) return out;
 				}
 			}
 		}

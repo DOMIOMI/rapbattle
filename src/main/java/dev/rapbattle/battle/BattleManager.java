@@ -594,6 +594,17 @@ public final class BattleManager {
 						kv.keysStt = !RapConfig.get().sttKey().isEmpty();
 						ServerPlayNetworking.send(p, new Payloads.StateS2C(kv.toJson()));
 					}
+					case "style_status" -> sendStyleStatus(p);
+					case "set_style" -> {
+						Stats stats = Stats.of(p.getEntityWorld().getServer());
+						Stats.Player st = stats.player(p.getUuid());
+						McStyle ms = McStyle.of(o.has("style") ? o.get("style").getAsString() : "");
+						if (ms.isUnlocked(st.respect)) {
+							st.style = ms.id;
+							stats.markDirty();
+						}
+						sendStyleStatus(p);
+					}
 					case "silent" -> {
 						Battle b = byPlayer(p.getUuid());
 						if (b != null) b.onSilentBar(p);
@@ -630,6 +641,15 @@ public final class BattleManager {
 			PvpBattle pvp = PvpBattle.byId(payload.battleId());
 			if (pvp != null) pvp.onAudio(ctx.player(), payload);
 		});
+	}
+
+	private static void sendStyleStatus(ServerPlayerEntity p) {
+		Stats.Player st = Stats.of(p.getEntityWorld().getServer()).player(p.getUuid());
+		BattleView sv = new BattleView();
+		sv.type = "style_status";
+		sv.playerRespect = st.respect;
+		sv.playerStyle = st.mcStyle().id;
+		ServerPlayNetworking.send(p, new Payloads.StateS2C(sv.toJson()));
 	}
 
 	private static void closeChoice(ServerPlayerEntity p) {

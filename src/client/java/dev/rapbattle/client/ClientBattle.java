@@ -147,6 +147,7 @@ public final class ClientBattle {
 				ui(SoundEvents.BLOCK_NOTE_BLOCK_PLING, 1.2f, 0.8f);
 			}
 			case "keys" -> KeysScreen.serverStatus(v.keysLlm, v.keysStt);
+			case "style_status" -> StyleScreen.serverStatus(v.playerRespect, v.playerStyle);
 			case "invite_close" -> {
 				if (invite != null && invite.id == v.id) invite = null;
 			}

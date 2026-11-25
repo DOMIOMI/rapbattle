@@ -80,6 +80,9 @@ public class BattleView {
 	public String beatTrack;
 	/** Type "keys": are the server's keys set (never the keys themselves). */
 	public boolean keysLlm, keysStt;
+	/** Type "style": player's cumulative Respect and active MC style id. */
+	public int playerRespect;
+	public String playerStyle = "";
 	/** Player against player: team[0] is the challenger (left, blue), mobName is the other player (right, red). */
 	public boolean pvp;
 	/** Stage centre and crowd ring radius (0 = no stage yet): for the haze and the spotlights. */
@@ -116,6 +119,7 @@ public class BattleView {
 		public int entityId;
 		public int wins, losses, streak, mvp, best;
 		public String title = "";
+		public String style = "";
 
 		public Member() {}
 

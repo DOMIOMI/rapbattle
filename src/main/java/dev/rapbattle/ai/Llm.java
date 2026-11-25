@@ -90,6 +90,13 @@ public final class Llm {
 	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
 									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
 									   String chosenTopic, String lang) {
+		return roundContent(mobs, rankLabel, mood, language, lineCount, opponents, rhymeGroups, difficulty, round, previous, rivalry, chosenTopic, 2, lang);
+	}
+
+	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
+									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
+									   String chosenTopic, int maxTargets, String lang) {
+		int targetLimit = Math.max(2, maxTargets);
 		boolean ru = Lang.isRu(lang);
 		String system;
 		String diff;
@@ -121,7 +128,8 @@ public final class Llm {
 				Слова в группе бери в разных формах, не только начальной: падежи, множественное число, глаголы
 				(например: «кирками, руками, врагами, веками» или «сгорел, умел, задел, пропел»).
 				Каждый раз новый куплет: не повторяй типовые фразы, придумывай свежие образы.
-				Также укажи targets: ровно 2 коротких опорных слова (существительных или ярких образа) прямо из твоего куплета мобов, которые игрок может обыграть в ответ.
+				Также укажи targets: ровно """ + targetLimit + """
+				 коротких опорных слова (существительных или ярких образа) прямо из твоего куплета мобов, которые игрок может обыграть в ответ.
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "простые, короткие, бытовые (кот/рот/живот/компот)";
@@ -169,7 +177,8 @@ public final class Llm {
 				Use varied word forms in each group, not just base nouns: plurals, past tense, -ing verbs
 				(for example: "mining, shining, whining, dining" or "burned, turned, learned, earned").
 				Fresh verse every time: do not recycle generic lines, invent new imagery.
-				Also return targets: exactly 2 short anchor words (nouns/images) from the mob's verse that the player can flip in a rebuttal.
+				Also return targets: exactly """ + targetLimit + """
+				 short anchor words (nouns/images) from the mob's verse that the player can flip in a rebuttal.
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "simple, short, everyday words (cat/hat/bat/flat)";
@@ -230,7 +239,7 @@ public final class Llm {
 			if (o.has("targets")) {
 				for (var tw : o.getAsJsonArray("targets")) {
 					String w = tw.getAsString().trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}-]", "");
-					if (!w.isEmpty() && !targets.contains(w) && targets.size() < 2) targets.add(w);
+					if (!w.isEmpty() && !targets.contains(w) && targets.size() < targetLimit) targets.add(w);
 				}
 			}
 			if (lines.size() < lineCount) return null;

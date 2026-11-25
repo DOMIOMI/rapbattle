@@ -55,15 +55,27 @@ public final class Scoring {
 
 	/** Flow multiplier F for a line given its beat state (0/1/2) and the resulting consecutive on-beat streak. */
 	public static double flowMultiplier(int beatState, int streakAfter) {
+		return flowMultiplier(beatState, streakAfter, 3, 1.25);
+	}
+
+	public static double flowMultiplier(int beatState, int streakAfter, int streakStart, double baseOnBeat) {
 		if (beatState == 2) {
-			return streakAfter >= 6 ? 1.50 : streakAfter >= 3 ? 1.35 : 1.25;
+			return streakAfter >= 6 ? 1.50 : streakAfter >= streakStart ? 1.35 : baseOnBeat;
 		}
 		return beatState == 1 ? 1.00 : 0.75;
 	}
 
 	/** Input for evaluating one player line in timeline order. */
-	public record LineInput(String player, String targetWord, int score, boolean punch, boolean rebuttal,
-							String note, int beatState, boolean silent, int punchBonus, double extraFlowScale) {
+	public record LineInput(String player, String targetWord, int score, int meaning, boolean punch, boolean rebuttal,
+							String note, int beatState, boolean silent, int punchBonus, double extraFlowScale,
+							int flowStreakStart, double baseOnBeatFlow, int lowMeaningPenalty, int rebuttalHeal,
+							boolean silenceForgiven) {
+		public LineInput(String player, String targetWord, int score, boolean punch, boolean rebuttal,
+						 String note, int beatState, boolean silent, int punchBonus, double extraFlowScale) {
+			this(player, targetWord, score, 2, punch, rebuttal, note, beatState, silent,
+				punchBonus, extraFlowScale, 3, 1.25, 0, 0, false);
+		}
+
 		public LineInput(String player, String targetWord, int score, boolean punch, boolean rebuttal,
 						 String note, int beatState, boolean silent) {
 			this(player, targetWord, score, punch, rebuttal, note, beatState, silent, 2, 1.0);
@@ -90,6 +102,7 @@ public final class Scoring {
 		int mobVerseFinalDamage,
 		int silenceDamage,
 		int extraMobDamage,
+		int teamHeal,
 		int totalToMob,
 		int totalToTeam,
 		int respectMobAfter,
@@ -115,8 +128,12 @@ public final class Scoring {
 	}
 
 	public static Bonuses computeBonuses(int hype, boolean hasStyle, int allyCount) {
+		return computeBonuses(hype, hasStyle, allyCount, 0);
+	}
+
+	public static Bonuses computeBonuses(int hype, boolean hasStyle, int allyCount, int extraStyleBonus) {
 		int hb = hypeBonus(hype);
-		int sb = hasStyle ? 2 : 0;
+		int sb = (hasStyle ? 2 : 0) + Math.max(0, extraStyleBonus);
 		int ab = Math.max(0, Math.min(2, allyCount));
 		return new Bonuses(hb, sb, ab, Math.min(10, hb + sb + ab));
 	}
@@ -151,11 +168,14 @@ public final class Scoring {
 		List<EvaluatedLine> evaluated = new ArrayList<>(teamLines.size());
 		int streak = 0, bestCombo = 0;
 		int onBeat = 0, nearBeat = 0, silentBars = 0, rebuttals = 0, strongOnBeat = 0;
-		int textTotal = 0, beatDeltaTotal = 0, rebuttalDmgTotal = 0, linesDamageTotal = 0;
+		int textTotal = 0, beatDeltaTotal = 0, rebuttalDmgTotal = 0, linesDamageTotal = 0, teamHeal = 0;
 
 		for (LineInput in : teamLines) {
-			if (in.silent()) silentBars++;
-			if (in.silent() || in.score() <= 0) {
+			if (in.silent() && !in.silenceForgiven()) silentBars++;
+			int effectiveScore = in.score() > 0 && in.meaning() <= 1
+				? Math.max(0, in.score() - in.lowMeaningPenalty())
+				: in.score();
+			if (in.silent() || effectiveScore <= 0) {
 				streak = 0;
 				evaluated.add(new EvaluatedLine(in, 0, 0, 0, 0, 0.0, 0));
 				continue;
@@ -168,8 +188,9 @@ public final class Scoring {
 				streak = 0;
 				if (in.beatState() == 1) nearBeat++;
 			}
-			double f = flowMultiplier(in.beatState(), streak) * (in.beatState() == 2 ? in.extraFlowScale() : 1.0);
-			int baseRaw = in.score() + (in.punch() ? in.punchBonus() : 0);
+			double f = flowMultiplier(in.beatState(), streak, in.flowStreakStart(), in.baseOnBeatFlow())
+				* (in.beatState() == 2 ? in.extraFlowScale() : 1.0);
+			int baseRaw = effectiveScore + (in.punch() ? in.punchBonus() : 0);
 			int fullRaw = baseRaw + (in.rebuttal() ? 2 : 0);
 
 			int textBase = (int) Math.round(k * baseRaw * mRank);
@@ -178,7 +199,10 @@ public final class Scoring {
 			int flowDelta = withFlow - textBase;
 			int rebDmg = dmg - withFlow;
 
-			if (in.rebuttal()) rebuttals++;
+			if (in.rebuttal()) {
+				rebuttals++;
+				teamHeal += Math.max(0, in.rebuttalHeal());
+			}
 			if (in.score() >= 8 && in.beatState() == 2) strongOnBeat++;
 
 			textTotal += textBase;
@@ -199,7 +223,7 @@ public final class Scoring {
 		int totalToTeam = mobLive + mobVerseFinal + silenceDmg + Math.max(0, extraMobDamage);
 
 		int respectMobAfter = Math.max(0, RESPECT_MAX - totalToMob);
-		int respectTeamAfter = Math.max(0, RESPECT_MAX - totalToTeam);
+		int respectTeamAfter = Math.min(RESPECT_MAX, Math.max(0, RESPECT_MAX - totalToTeam + teamHeal));
 		boolean ko = respectMobAfter <= 0 || respectTeamAfter <= 0;
 		boolean playersWinRound = totalToMob > totalToTeam || (respectMobAfter <= 0 && respectTeamAfter > 0);
 
@@ -215,6 +239,7 @@ public final class Scoring {
 			mobVerseFinal,
 			silenceDmg,
 			Math.max(0, extraMobDamage),
+			teamHeal,
 			totalToMob,
 			totalToTeam,
 			respectMobAfter,

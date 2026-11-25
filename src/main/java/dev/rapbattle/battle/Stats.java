@@ -35,6 +35,7 @@ public class Stats extends PersistentState {
 
 	public static final class Player {
 		public int wins, losses, streak, bestStreak, mvp, best, chickened, respect;
+		public String style = McStyle.PUNCHER.id;
 		public Map<String, Integer> speciesWins = new HashMap<>();
 		public List<String> titles = new ArrayList<>();
 
@@ -47,15 +48,23 @@ public class Stats extends PersistentState {
 			Codec.INT.optionalFieldOf("bestDamage", 0).forGetter(p -> p.best),
 			Codec.INT.optionalFieldOf("respect", 0).forGetter(p -> p.respect),
 			Codec.INT.optionalFieldOf("chickened", 0).forGetter(p -> p.chickened),
+			Codec.STRING.optionalFieldOf("style", McStyle.PUNCHER.id).forGetter(p -> p.style),
 			Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("species", Map.of()).forGetter(p -> p.speciesWins),
 			Codec.STRING.listOf().optionalFieldOf("titles", List.of()).forGetter(p -> p.titles)
-		).apply(i, (w, l, s, bs, m, b, r, c, sp, t) -> {
+		).apply(i, (w, l, s, bs, m, b, r, c, st, sp, t) -> {
 			Player p = new Player();
 			p.wins = w; p.losses = l; p.streak = s; p.bestStreak = bs; p.mvp = m; p.best = b; p.respect = r; p.chickened = c;
+			McStyle ms = McStyle.of(st);
+			p.style = ms.isUnlocked(r) ? ms.id : McStyle.PUNCHER.id;
 			p.speciesWins = new HashMap<>(sp);
 			p.titles = new ArrayList<>(t);
 			return p;
 		}));
+
+		public McStyle mcStyle() {
+			McStyle ms = McStyle.of(style);
+			return ms.isUnlocked(respect) ? ms : McStyle.PUNCHER;
+		}
 
 		public String title() { return titles.isEmpty() ? "" : titles.get(titles.size() - 1); }
 

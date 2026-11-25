@@ -283,7 +283,10 @@ public final class BattleHud {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		int tier = Math.max(0, Math.min(6, m.outfitLevel));
 		int tierColor = tier <= 0 ? 0xFF9A9A9A : opaque(Rank.ofLevel(tier).color);
-		String sub = m.title.isEmpty() ? I18n.translate("rapbattle.hud.card.player") : I18n.translate("rapbattle.hud.card.title_quoted", m.title);
+		String sub = m.title.isEmpty()
+			? (m.style.isEmpty() ? I18n.translate("rapbattle.hud.card.player") : I18n.translate("rapbattle.hud.card.player_style", m.style))
+			: (m.style.isEmpty() ? I18n.translate("rapbattle.hud.card.title_quoted", m.title)
+				: I18n.translate("rapbattle.hud.card.title_quoted", m.title) + " · " + m.style);
 		String extraLabel, extra;
 		int extraColor;
 		if (m.streak > 1) {
