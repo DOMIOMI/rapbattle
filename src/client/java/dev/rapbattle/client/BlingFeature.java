@@ -85,15 +85,15 @@ public class BlingFeature extends FeatureRenderer<LivingEntityRenderState, Entit
 		boolean reading = BattleDance.mode(entityId) == BattleDance.Mode.READ;
 		if (reading) {
 			if (found[3] != null && Bling.isBiped(type)) {
-				// The mic in the fist while reading: shifted slightly away from the face for nosed mobs (villagers/illagers/witch).
+				// The mic in the fist while reading: compact grip inside the fist, <= 2px head beside the chin (to the side of the nose for nosed mobs).
 				Part arm = found[3];
 				ModelPart.Cuboid a = arm.c();
 				boolean nosed = Bling.nosed(entityId);
-				float ax = (a.minX + a.maxX) / 2 + (nosed ? -0.9f : 0f);
-				float ay = a.maxY - 1.2f + (nosed ? 0.6f : 0f);
-				float az = (a.minZ + a.maxZ) / 2 - (nosed ? 0.6f : 0f);
-				draw(m, arm, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), ax, ay, az - 2.6f, 1.3f, 1.3f, 4.2f);
-				draw(m, arm, q, light, Blocks.GRAY_CONCRETE.getDefaultState(), ax, ay, az - 5.4f, 2.1f, 2.1f, 2.1f);
+				float ax = (a.minX + a.maxX) / 2 + (nosed ? -0.85f : -0.35f);
+				float ay = a.maxY - 1.2f + (nosed ? 0.5f : 0f);
+				float az = (a.minZ + a.maxZ) / 2;
+				draw(m, arm, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), ax, ay, az - 1.2f, 1.0f, 1.0f, 3.4f);
+				draw(m, arm, q, light, Blocks.GRAY_CONCRETE.getDefaultState(), ax, ay, az - 3.4f, 1.7f, 1.7f, 1.7f);
 			} else if (!Bling.isBiped(type)) {
 				// Small & quadruped mobs: microphone stand in front of the muzzle, scaled to their height.
 				float mouthY = c.minY + h * 0.72f;
