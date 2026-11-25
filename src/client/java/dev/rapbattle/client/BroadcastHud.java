@@ -567,7 +567,7 @@ public final class BroadcastHud {
 		int summaryH = 26 + (r.bonusTotal > 0 ? 11 : 0);
 		boolean hasMobInfo = r.mobLiveDamage + r.mobVerseDamage + r.silenceDamage + r.wardenNoiseDamage > 0;
 		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 12) + (hasMobInfo ? 11 : 0) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
-		int rowH = r.hits.size() > 8 ? 8 : r.hits.size() > 5 ? 9 : 11;
+		int rowH = r.hits.size() > 8 ? 9 : 11;
 		int bottomLimit = sideBySide ? h - 8 : Math.min(h - 8, judgeTop - 4);
 		int availH = Math.max(36, bottomLimit - cy - summaryH - statsH);
 		int maxRows = Math.max(4, Math.min(14, availH / rowH));
@@ -635,7 +635,7 @@ public final class BroadcastHud {
 			long since = now - (revealAt + FIRST_HIT_MS + Math.min(i, n - 1) * HIT_MS);
 			float a = easeOutCubic(since / 220f);
 			int off = Math.round((1 - a) * -16);
-			if ((i & 1) == 0) ctx.fill(cx + 4, ry - 1, cx + cw - 2, ry + rowH - 1, 0x0CFFFFFF);
+			if ((i & 1) == 0) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, 0x0CFFFFFF);
 			String target = !v.pvp ? I18n.translate(hit.toMob ? "rapbattle.broadcast.target_mob" : "rapbattle.broadcast.target_team")
 				: hit.toMob ? v.mobName : (v.team.isEmpty() ? "" : v.team.get(0).name);
 			String dmg = hit.damage == 0 ? "0" : target + " -" + hit.damage;
@@ -644,13 +644,13 @@ public final class BroadcastHud {
 			String text = BattleHud.fit(tr, who + hit.note, cw - 26 - dw);
 			int col = !hit.toMob ? 0xFFFF8A8A : hit.damage == 0 ? DIM : hit.punch ? ORANGE : TEXT;
 			int dcol = hit.toMob ? (hit.damage == 0 ? DIM : YELLOW) : RED;
-			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry - 1, cx + 6, ry + rowH - 1, alphaOf(ORANGE, a));
+			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry, cx + 6, ry + 8, alphaOf(ORANGE, a));
 			text(ctx, tr, text, cx + 9 + off, ry, 1f, col, a, false);
 			int px = cx + cw - 8 - dw;
-			ctx.fill(px - 3, ry - 1, cx + cw - 4, ry + rowH - 1, alphaOf(mix(dcol, BG, 0.8f), a));
+			ctx.fill(px - 3, ry, cx + cw - 4, ry + 8, alphaOf(mix(dcol, BG, 0.8f), a));
 			text(ctx, tr, dmg, px, ry, 1f, dcol, a, false);
 			// A fresh line flashes once.
-			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry - 1, cx + cw - 2, ry + rowH - 1, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
+			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
 			ry += rowH;
 		}
 		if (allIn) {
