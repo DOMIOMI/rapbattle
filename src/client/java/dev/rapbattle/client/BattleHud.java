@@ -1,5 +1,6 @@
 package dev.rapbattle.client;
 
+import dev.rapbattle.battle.Rank;
 import dev.rapbattle.net.BattleView;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -131,7 +132,7 @@ public final class BattleHud {
 		else ctx.fill(x, y, x + size, y + size, 0xFF6B4E3D);
 	}
 
-	private static void drawMobIcon(DrawContext ctx, String mobType, int cx, int cy, float scale) {
+	static void drawMobIcon(DrawContext ctx, String mobType, int cx, int cy, float scale) {
 		EntityType<?> type = Registries.ENTITY_TYPE.get(Identifier.tryParse(mobType));
 		SpawnEggItem egg = SpawnEggItem.forEntity(type);
 		if (egg == null) return;
@@ -223,63 +224,81 @@ public final class BattleHud {
 		return I18n.translate("rapbattle.hud.stats", m.wins, m.losses);
 	}
 
-	/** Lower-third fighter card during the intro, in the colour of the rank / outfit. */
+	/** Intro: letterbox bars and the fighter card of whoever the camera is showing (see {@link FighterCard}). */
 	private static void drawCards(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
-		// Letterbox bars for the film look.
-		ctx.fill(0, 0, w, 24, 0xFF000000);
-		ctx.fill(0, h - 24, w, h, 0xFF000000);
+		float t = Intro.elapsedMs();
+		int bar = Math.round(24 * FighterCard.easeOutCubic(FighterCard.clamp01(t / 350f)));
+		ctx.fill(0, 0, w, bar, 0xFF000000);
+		ctx.fill(0, h - bar, w, h, 0xFF000000);
 		String skip = I18n.translate("rapbattle.hud.skip_intro");
 		ctx.drawText(tr, skip, w - tr.getWidth(skip) - 6, h - 16, DIM, false);
 		String card = Intro.card();
-		if (card == null) return;
-		int cw = 230, x = 16, y = h - 24 - 58;
+		if (card == null || v.team.isEmpty()) return;
+		boolean mobCard = card.equals("mob");
+		float from = mobCard ? Intro.MOB_FROM : Intro.TEAM_FROM, to = mobCard ? Intro.MOB_TO : Intro.TEAM_TO;
+		FighterCard.Fighter f;
 		if (v.pvp) {
 			// Player battle: the other player in the red corner, you in the blue one.
 			int me = MinecraftClient.getInstance().player == null ? -1 : MinecraftClient.getInstance().player.getId();
 			BattleView.Member m = null;
-			for (BattleView.Member mm : v.team) if (card.equals("mob") == (mm.entityId != me)) m = mm;
+			for (BattleView.Member mm : v.team) if (mobCard == (mm.entityId != me)) m = mm;
 			if (m == null) return;
-			boolean red = card.equals("mob");
-			int col = red ? 0xFFF07167 : 0xFF6EC6F0;
-			box(ctx, x, y, cw, 50, 0xF0101018, col);
-			ctx.fill(x, y, x + 4, y + 50, col);
-			ctx.drawText(tr, I18n.translate(red ? "rapbattle.hud.red_corner" : "rapbattle.hud.blue_corner"), x + 10, y + 4, red ? RED : CYAN, false);
-			drawHead(ctx, m.name, x + cw - 40, y + 8, 32);
-			scaledText(ctx, tr, m.name, x + 10, y + 14, 1.4f, red ? ORANGE : CYAN, false);
-			String fitLine = m.title.isEmpty() ? I18n.translate("rapbattle.hud.outfit", m.outfit)
-				: I18n.translate("rapbattle.hud.outfit_title", m.outfit, m.title);
-			ctx.drawText(tr, fitLine, x + 10, y + 29, DIM, false);
-			String stLine = m.best > 0 ? I18n.translate("rapbattle.hud.stats_best", statLine(m), m.best) : statLine(m);
-			ctx.drawText(tr, stLine, x + 10, y + 39, TEXT, false);
-			return;
-		}
-		if (card.equals("mob")) {
-			box(ctx, x, y, cw, 50, 0xF0101018, opaque(v.rankColor));
-			ctx.fill(x, y, x + 4, y + 50, opaque(v.rankColor));
-			ctx.drawText(tr, I18n.translate("rapbattle.hud.red_corner"), x + 10, y + 4, RED, false);
-			scaledText(ctx, tr, v.mobName, x + 10, y + 14, 1.4f, ORANGE, false);
-			ctx.drawText(tr, v.rankArmor + " · " + v.rankStreet + " · «" + v.mobMood + "»", x + 10, y + 29, opaque(v.rankColor), false);
-			String rec = v.mobWins + v.mobLosses == 0 ? I18n.translate("rapbattle.hud.first_battle")
-				: v.mobStreak > 1 ? I18n.translate("rapbattle.hud.card_mob_record_streak", v.mobWins, v.mobLosses, v.mobStreak)
-				: I18n.translate("rapbattle.hud.mob_record", v.mobWins, v.mobLosses);
-			ctx.drawText(tr, rec, x + 10, y + 39, TEXT, false);
+			f = playerCard(m, mobCard);
+		} else if (mobCard) {
+			f = mobCard(v);
 		} else {
-			int n = Math.max(1, v.team.size());
-			float p = Intro.progress();
-			int idx = Math.min(n - 1, (int) ((p - 0.6f) / 0.32f * n));
-			BattleView.Member m = v.team.get(Math.max(0, idx));
-			int col = m.outfitLevel <= 0 ? 0xFF888888 : 0xFF6EC6F0;
-			box(ctx, x, y, cw, 50, 0xF0101018, col);
-			ctx.fill(x, y, x + 4, y + 50, col);
-			ctx.drawText(tr, I18n.translate("rapbattle.hud.blue_corner"), x + 10, y + 4, CYAN, false);
-			drawHead(ctx, m.name, x + cw - 40, y + 8, 32);
-			scaledText(ctx, tr, m.name, x + 10, y + 14, 1.4f, CYAN, false);
-			String fitLine = m.title.isEmpty() ? I18n.translate("rapbattle.hud.outfit", m.outfit)
-				: I18n.translate("rapbattle.hud.outfit_title", m.outfit, m.title);
-			ctx.drawText(tr, fitLine, x + 10, y + 29, DIM, false);
-			String stLine = m.best > 0 ? I18n.translate("rapbattle.hud.stats_best", statLine(m), m.best) : statLine(m);
-			ctx.drawText(tr, stLine, x + 10, y + 39, TEXT, false);
+			// Several players share the team window, one card each.
+			int n = v.team.size();
+			float span = (to - from) / n;
+			int idx = Math.max(0, Math.min(n - 1, (int) ((Intro.progress() - from) / span)));
+			from += idx * span;
+			to = from + span;
+			f = playerCard(v.team.get(idx), false);
 		}
+		float now = Intro.elapsedMs();
+		FighterCard.draw(ctx, tr, f, now - Intro.msOf(from), Intro.msOf(to) - now, Intro.msOf(to - from), w, h);
+	}
+
+	private static FighterCard.Fighter mobCard(BattleView v) {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		String sub = v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.and_crew", v.mobSpecies) : v.mobSpecies;
+		String streakLabel = I18n.translate("rapbattle.hud.card.streak");
+		String extra = v.mobStreak > 1 ? "×" + v.mobStreak : v.mobStreak < -1 ? "−" + (-v.mobStreak) : "—";
+		int extraColor = v.mobStreak > 1 ? ORANGE : DIM;
+		return new FighterCard.Fighter(true, v.mobName, sub,
+			I18n.translate("rapbattle.hud.card.rank"), v.rankArmor + " · " + v.rankStreet, opaque(v.rankColor), v.rankLevel,
+			I18n.translate("rapbattle.hud.card.mood"), v.mobMood, 0xFFFF8A7A,
+			v.mobWins, v.mobLosses, streakLabel, extra, extraColor,
+			v.mobWins + v.mobLosses == 0, v.boss,
+			mc.world == null ? null : mc.world.getEntityById(v.mobEntityId), null, v.mobType);
+	}
+
+	private static FighterCard.Fighter playerCard(BattleView.Member m, boolean red) {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		int tier = Math.max(0, Math.min(6, m.outfitLevel));
+		int tierColor = tier <= 0 ? 0xFF9A9A9A : opaque(Rank.ofLevel(tier).color);
+		String sub = m.title.isEmpty() ? I18n.translate("rapbattle.hud.card.player") : I18n.translate("rapbattle.hud.card.title_quoted", m.title);
+		String extraLabel, extra;
+		int extraColor;
+		if (m.streak > 1) {
+			extraLabel = I18n.translate("rapbattle.hud.card.streak");
+			extra = "×" + m.streak;
+			extraColor = ORANGE;
+		} else if (m.mvp > 0) {
+			extraLabel = "MVP";
+			extra = "×" + m.mvp;
+			extraColor = GOLD;
+		} else {
+			extraLabel = I18n.translate("rapbattle.hud.card.streak");
+			extra = "—";
+			extraColor = DIM;
+		}
+		return new FighterCard.Fighter(red, m.name, sub,
+			I18n.translate("rapbattle.hud.card.fit"), m.outfit, tierColor, tier,
+			I18n.translate("rapbattle.hud.card.best"), m.best > 0 ? String.valueOf(m.best) : "—", GOLD,
+			m.wins, m.losses, extraLabel, extra, extraColor,
+			m.wins + m.losses == 0, false,
+			mc.world == null ? null : mc.world.getEntityById(m.entityId), m.name, null);
 	}
 
 	private static void drawPrep(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {

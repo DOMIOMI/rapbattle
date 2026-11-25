@@ -97,12 +97,23 @@ public final class Intro {
 		return -1;
 	}
 
+	/** Card windows in intro progress: the red corner while the camera is on the mob, then the team. */
+	static final float MOB_FROM = 0.24f, MOB_TO = 0.56f, TEAM_FROM = 0.6f, TEAM_TO = 0.92f;
+
 	/** Which fighter card to show now: "mob", "team", or null. */
 	public static String card() {
 		float p = progress();
 		if (p < 0) return null;
-		if (p > 0.24f && p < 0.56f) return "mob";
-		if (p >= 0.6f && p < 0.92f) return "team";
+		if (p > MOB_FROM && p < MOB_TO) return "mob";
+		if (p >= TEAM_FROM && p < TEAM_TO) return "team";
 		return null;
 	}
+
+	/** Milliseconds since the intro started (for the card animations), or -1. */
+	static float elapsedMs() {
+		float p = progress();
+		return p < 0 ? -1 : p * DURATION;
+	}
+
+	static float msOf(float progress) { return progress * DURATION; }
 }
