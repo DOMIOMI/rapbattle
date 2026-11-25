@@ -67,27 +67,12 @@ final class Ui {
 	}
 
 	/**
-	 * Bold styling for ASCII; keeps Cyrillic and special glyphs (e.g. ф, ш, ★) at regular weight so
-	 * Minecraft's 1px bold smear never turns dense vertical strokes into solid blocks.
+	 * Fighting-game bold for all characters (ASCII, Cyrillic ф/ш/щ/ж/ё, ★): rendered as a crisp double pass
+	 * in {@link #text} instead of Minecraft's Formatting.BOLD, which smears dense Cyrillic strokes into blocks.
 	 */
 	static Text bold(String s) {
 		if (s == null || s.isEmpty()) return Text.empty();
-		boolean hasNonAscii = false;
-		for (int i = 0; i < s.length(); i++) {
-			if (s.charAt(i) > 0x7F) { hasNonAscii = true; break; }
-		}
-		if (!hasNonAscii) return Text.literal(s).formatted(Formatting.BOLD);
-		net.minecraft.text.MutableText out = Text.empty();
-		int i = 0;
-		while (i < s.length()) {
-			boolean ascii = s.charAt(i) <= 0x7F;
-			int j = i + 1;
-			while (j < s.length() && (s.charAt(j) <= 0x7F) == ascii) j++;
-			String part = s.substring(i, j);
-			out.append(ascii ? Text.literal(part).formatted(Formatting.BOLD) : Text.literal(part));
-			i = j;
-		}
-		return out;
+		return Text.literal(s).styled(st -> st.withInsertion("rapbattle:bold"));
 	}
 
 	static void text(DrawContext ctx, TextRenderer tr, String s, float x, float y, float scale, int color, float alpha, boolean shadow) {
@@ -97,10 +82,15 @@ final class Ui {
 	static void text(DrawContext ctx, TextRenderer tr, Text s, float x, float y, float scale, int color, float alpha, boolean shadow) {
 		int c = alphaOf(color, alpha);
 		if ((c >>> 24) < 10) return;
+		boolean fauxBold = "rapbattle:bold".equals(s.getStyle().getInsertion());
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().translate(x, y);
 		ctx.getMatrices().scale(scale, scale);
 		ctx.drawText(tr, s, 0, 0, c, shadow);
+		if (fauxBold) {
+			ctx.getMatrices().translate(0.65f, 0f);
+			ctx.drawText(tr, s, 0, 0, c, false);
+		}
 		ctx.getMatrices().popMatrix();
 	}
 
