@@ -45,9 +45,13 @@ what happened, the mod version and, if you have it, the `logs/latest.log` file. 
 - **Russian and English**: the language follows each player's Minecraft language (Russian for Russian, English for everything else). In a battle between players with different languages, the challenger's language is used.
 
 ## Installation
-1. Minecraft **1.21.11**, Fabric Loader **0.18.6+**, **Fabric API**.
-2. Put `rapbattle-<version>.jar` into the `mods` folder. Everything else (animations, sounds) is already inside.
-3. Optional: **Mod Menu**, so the settings open from the mod list. Without it: the `/rapbattle` command.
+1. Install Minecraft **1.21.11** with [Fabric Loader](https://fabricmc.net/use/installer/) **0.18.6+**.
+2. Download [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.11) for 1.21.11 into the `mods` folder.
+3. Download the mod: **[rapbattle-0.1.0.jar](https://github.com/DOMIOMI/rapbattle/releases/download/v0.1.0/rapbattle-0.1.0.jar)**
+   (all versions on the [Releases](https://github.com/DOMIOMI/rapbattle/releases) page) into `mods` too.
+   Everything else (animations, sounds) is already inside.
+4. Optional: [Mod Menu](https://modrinth.com/mod/modmenu/versions?g=1.21.11), so the settings open from the mod
+   list. Without it: the `/rapbattle` command.
 
 In multiplayer the mod is needed both on the server and by every player. Keys are needed **only on the server**
 (in singleplayer the server is your own computer).
