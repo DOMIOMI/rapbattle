@@ -774,5 +774,293 @@
         "stream": false
       }
     ]
+  },
+  "shout_en.start.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/start_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.start.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/start_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.start.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/start_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.start.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/start_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.start.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/start_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.start.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/start_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_hit.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_hit_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_hit.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_hit_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_hit.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_hit_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_hit.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_hit_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_hit.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_hit_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_hit.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_hit_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.mob_punch.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/mob_punch_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.mob_punch.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/mob_punch_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.mob_punch.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/mob_punch_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.mob_punch.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/mob_punch_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.mob_punch.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/mob_punch_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.mob_punch.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/mob_punch_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_miss.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_miss_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_miss.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_miss_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_miss.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_miss_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_miss.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_miss_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_miss.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_miss_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.player_miss.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/player_miss_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_players.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_players_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_players.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_players_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_players.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_players_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_players.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_players_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_players.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_players_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_players.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_players_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_mob.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_mob_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_mob.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_mob_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_mob.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_mob_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_mob.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_mob_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_mob.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_mob_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout_en.win_mob.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout_en/win_mob_6",
+        "attenuation_distance": 32
+      }
+    ]
   }
 }

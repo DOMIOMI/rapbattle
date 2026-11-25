@@ -176,7 +176,7 @@ public final class Crowd {
 	 * The fan is picked from the side the phrase suits (cheering from your fans, mocking from the mob's).
 	 */
 	private void shout(Moment moment) {
-		java.util.List<String> lines = Shouts.LINES.get(moment);
+		java.util.List<String> lines = (dev.rapbattle.Lang.isRu(battle.lang) ? Shouts.LINES : ShoutsEn.LINES).get(moment);
 		if (lines == null || members.isEmpty()) return;
 		long now = System.currentTimeMillis();
 		boolean big = moment == Moment.START || moment == Moment.WIN_PLAYERS || moment == Moment.WIN_MOB;
@@ -195,7 +195,7 @@ public final class Crowd {
 		int i = rnd.nextInt(lines.size());
 		lastShout = now;
 		Speech.bubble(fan, lines.get(i), want == Side.MOB ? 0xFFB080 : 0xB0FFB0, 2200);
-		var s = CrowdSounds.shout(moment, i);
+		var s = CrowdSounds.shout(moment, i, battle.lang);
 		if (s != null) battle.world.playSound(null, fan.getX(), fan.getY() + fan.getHeight(), fan.getZ(), s,
 			net.minecraft.sound.SoundCategory.NEUTRAL, 1.4f, 0.97f + rnd.nextFloat() * 0.06f);
 	}

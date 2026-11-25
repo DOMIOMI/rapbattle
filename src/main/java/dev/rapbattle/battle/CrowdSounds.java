@@ -22,6 +22,7 @@ public final class CrowdSounds {
 	public static SoundEvent CHEER, OOH, BOO, WHISTLE, LAUGH, GASP, APPLAUSE, HYPE;
 	/** Voiced fan shouts, same order as {@link Shouts#LINES}. */
 	private static final java.util.Map<Crowd.Moment, java.util.List<SoundEvent>> SHOUTS = new java.util.EnumMap<>(Crowd.Moment.class);
+	private static final java.util.Map<Crowd.Moment, java.util.List<SoundEvent>> SHOUTS_EN = new java.util.EnumMap<>(Crowd.Moment.class);
 	private static final Random RND = new Random();
 
 	public static void register() {
@@ -42,6 +43,11 @@ public final class CrowdSounds {
 			for (int i = 1; i <= lines.size(); i++) list.add(reg("shout." + moment.name().toLowerCase(java.util.Locale.ROOT) + "." + i));
 			SHOUTS.put(moment, list);
 		});
+		ShoutsEn.LINES.forEach((moment, lines) -> {
+			java.util.List<SoundEvent> list = new java.util.ArrayList<>();
+			for (int i = 1; i <= lines.size(); i++) list.add(reg("shout_en." + moment.name().toLowerCase(java.util.Locale.ROOT) + "." + i));
+			SHOUTS_EN.put(moment, list);
+		});
 	}
 
 	/** Six fans' own voices: boos and cheers per voice (each event holds several takes). */
@@ -54,9 +60,9 @@ public final class CrowdSounds {
 		return (cheer ? SOLO_CHEER : SOLO_BOO)[Math.floorMod(voice, VOICES)];
 	}
 
-	/** The voiced shout number {@code i} for this moment, or null. */
-	public static SoundEvent shout(Crowd.Moment moment, int i) {
-		java.util.List<SoundEvent> l = SHOUTS.get(moment);
+	/** The voiced shout number {@code i} for this moment in the battle's language, or null. */
+	public static SoundEvent shout(Crowd.Moment moment, int i, String lang) {
+		java.util.List<SoundEvent> l = (dev.rapbattle.Lang.isRu(lang) ? SHOUTS : SHOUTS_EN).get(moment);
 		return l == null || i < 0 || i >= l.size() ? null : l.get(i);
 	}
 
