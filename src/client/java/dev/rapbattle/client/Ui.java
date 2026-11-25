@@ -82,7 +82,7 @@ final class Ui {
 	static void text(DrawContext ctx, TextRenderer tr, Text s, float x, float y, float scale, int color, float alpha, boolean shadow) {
 		int c = alphaOf(color, alpha);
 		if ((c >>> 24) < 10) return;
-		boolean fauxBold = "rapbattle:bold".equals(s.getStyle().getInsertion());
+		boolean fauxBold = scale >= 1f && "rapbattle:bold".equals(s.getStyle().getInsertion());
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().translate(x, y);
 		ctx.getMatrices().scale(scale, scale);
