@@ -484,5 +484,7 @@
   "rapbattle.act2.raid_enraged": "Рейд в ярости! Разбойники получили Силу и Скорость!",
   "rapbattle.status.bastion_guest": "Гость бастиона %s",
   "rapbattle.act3.bastion_guest": "Пиглины признали тебя: статус «Почётный гость бастиона» на 10 минут!",
-  "rapbattle.act3.wither_skull": "С %s выбит череп иссушителя!"
+  "rapbattle.act3.wither_skull": "С %s выбит череп иссушителя!",
+  "rapbattle.status.warden_quiet": "Затишье %s",
+  "rapbattle.act4.warden_quiet": "Варден повержен: скалк-крикуны в 48 блоках молчат 15 минут!"
 }

@@ -4,7 +4,8 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "MobEntityTargetMixin",
-    "PiglinBrainMixin"
+    "PiglinBrainMixin",
+    "SculkShriekerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
