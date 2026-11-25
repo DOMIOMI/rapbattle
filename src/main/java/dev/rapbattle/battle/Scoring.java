@@ -302,12 +302,21 @@ public final class Scoring {
 				String barText = sb.toString().trim();
 				double expectedBeat = s.startBeat() + 3.0;
 				double bestDelta = Double.MAX_VALUE;
-				// Check words in this bar (and within +-1.2 beats of its 4th beat) for the target rhyme word.
-				for (Transcriber.Word w : stt.words()) {
-					double b = (recordingStartMs + w.start() * 1000.0) / beatMs;
-					if (Math.abs(b - expectedBeat) > 1.5) continue;
-					if (matchesWord(w.text(), s.targetWord(), ru)) {
-						bestDelta = Math.min(bestDelta, Math.abs(b - expectedBeat));
+				if (s.targetWord() == null || s.targetWord().isBlank()) {
+					// Freestyle bar: measure timing of the last spoken word in this bar against beat 4.
+					if (!ws.isEmpty()) {
+						Transcriber.Word last = ws.get(ws.size() - 1);
+						double b = (recordingStartMs + last.start() * 1000.0) / beatMs;
+						bestDelta = Math.abs(b - expectedBeat);
+					}
+				} else {
+					// Check words in this bar (and within +-1.5 beats of its 4th beat) for the target rhyme word.
+					for (Transcriber.Word w : stt.words()) {
+						double b = (recordingStartMs + w.start() * 1000.0) / beatMs;
+						if (Math.abs(b - expectedBeat) > 1.5) continue;
+						if (matchesWord(w.text(), s.targetWord(), ru)) {
+							bestDelta = Math.min(bestDelta, Math.abs(b - expectedBeat));
+						}
 					}
 				}
 				out.add(new SlicedBar(s.lineIndex(), s.targetWord(), barText, barText.isBlank(),

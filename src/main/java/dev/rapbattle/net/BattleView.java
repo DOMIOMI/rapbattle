@@ -61,6 +61,14 @@ public class BattleView {
 	public boolean fuse;
 	/** Warden: he hears every noise you make while he reads. */
 	public boolean silence;
+	/** Creaking: looking directly at him freezes his interference. */
+	public boolean creakingGaze;
+	/** Anchor words from the mob's verse that players can flip for rebuttals. */
+	public List<String> targets = new ArrayList<>();
+	/** Chosen lobby topic: 0 = random, 1 = outfit/flex, 2 = turf/biome, 3 = no brakes. */
+	public int topic;
+	/** Whether the receiving player still has their once-per-round rhyme reroll. */
+	public boolean canReroll = true;
 	/** One-line hint about this mob's trick, shown in the lobby. */
 	public String trick = "";
 	public int mobStreak;
@@ -136,6 +144,8 @@ public class BattleView {
 		public int line;
 		public int lines;
 		public int startBeat;
+		/** True for the 4th bar of a block on Gold+ ranks: player invents their own rhyme. */
+		public boolean freestyle;
 	}
 
 	/** One player's recording window: from the get-ready bar to the end of their last line. */

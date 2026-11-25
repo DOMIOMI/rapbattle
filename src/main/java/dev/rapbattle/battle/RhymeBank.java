@@ -106,6 +106,36 @@ public final class RhymeBank {
 		return out;
 	}
 
+	/** Picks a spare rhyming word from the same rhyme group as {@code currentWord}, avoiding {@code exclude}. */
+	public static String spareWord(String currentWord, java.util.Collection<String> exclude, Random rnd, String lang) {
+		List<List<String>> groups = Lang.isRu(lang) ? GROUPS : GROUPS_EN;
+		String cur = currentWord == null ? "" : currentWord.trim().toLowerCase(java.util.Locale.ROOT);
+		for (List<String> g : groups) {
+			boolean inGroup = false;
+			for (String w : g) {
+				if (w.toLowerCase(java.util.Locale.ROOT).equals(cur)) {
+					inGroup = true;
+					break;
+				}
+			}
+			if (!inGroup) continue;
+			List<String> candidates = new ArrayList<>();
+			for (String w : g) {
+				String lw = w.toLowerCase(java.util.Locale.ROOT);
+				if (!lw.equals(cur) && (exclude == null || !exclude.contains(lw) && !exclude.contains(w))) {
+					candidates.add(w);
+				}
+			}
+			if (!candidates.isEmpty()) return candidates.get(rnd.nextInt(candidates.size()));
+		}
+		// Fallback for LLM-generated rhymes: pick a simple word from a random group.
+		List<String> fallbackGroup = groups.get(rnd.nextInt(groups.size()));
+		for (String w : fallbackGroup) {
+			if (!w.equalsIgnoreCase(cur) && (exclude == null || !exclude.contains(w))) return w;
+		}
+		return fallbackGroup.get(0);
+	}
+
 	@Deprecated
 	public static List<List<String>> pickBlocks(int blocks, Random rnd) {
 		return pickBlocks(blocks, rnd, Lang.RU);

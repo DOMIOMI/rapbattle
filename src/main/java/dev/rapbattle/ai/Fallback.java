@@ -188,14 +188,38 @@ public final class Fallback {
 		"The mob out-rapped you, outplayed you, and respawned you.",
 		"Next time practice on pigs. They are not as harsh when they judge.");
 
+	/** Extracts 2 anchor words from a mob verse for the rebuttal target bar. */
+	public static List<String> extractTargets(List<Llm.MobLine> lines, String lang) {
+		boolean ru = Lang.isRu(lang);
+		List<String> out = new ArrayList<>();
+		java.util.Set<String> stop = ru
+			? Set.of("это", "как", "что", "для", "про", "тебя", "меня", "тебе", "мне", "тут", "здесь", "даже", "просто", "если", "только")
+			: Set.of("this", "that", "with", "your", "from", "just", "even", "here", "there", "into", "about", "like", "you", "the");
+		for (Llm.MobLine ml : lines) {
+			for (String raw : ml.text().split("\\s+")) {
+				String w = raw.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}]", "");
+				if (w.length() >= (ru ? 4 : 4) && !stop.contains(w) && !out.contains(w)) {
+					out.add(w);
+					if (out.size() >= 2) return out;
+				}
+			}
+		}
+		return out;
+	}
+
 	/** Scores every line by whether its rhyme word was actually said; the mob's verse lands inside its rank range. */
 	public static Llm.Verdict judge(int lo, int hi, List<Llm.PlayerVerse> players, Random rnd, String lang) {
-		return judge(lo, hi, players, Map.of(), false, rnd, lang);
+		return judge(lo, hi, players, Map.of(), false, List.of(), rnd, lang);
+	}
+
+	public static Llm.Verdict judge(int lo, int hi, List<Llm.PlayerVerse> players, Map<String, List<Boolean>> loudBars,
+									boolean sttMissing, Random rnd, String lang) {
+		return judge(lo, hi, players, loudBars, sttMissing, List.of(), rnd, lang);
 	}
 
 	/** Offline judge; when {@code sttMissing} is true, grades each bar from client mic loudness (5..7 loud, 0 silent). */
 	public static Llm.Verdict judge(int lo, int hi, List<Llm.PlayerVerse> players, Map<String, List<Boolean>> loudBars,
-									boolean sttMissing, Random rnd, String lang) {
+									boolean sttMissing, List<String> targetWords, Random rnd, String lang) {
 		boolean ru = Lang.isRu(lang);
 		Map<String, List<Llm.LineScore>> lines = new LinkedHashMap<>();
 		int hits = 0, targets = 0, sum = 0;
@@ -223,22 +247,43 @@ public final class Fallback {
 					String barText = bars != null && i < bars.size()
 						? (ru ? bars.get(i).text().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(bars.get(i).text()))
 						: fullT;
-					Set<String> enWords = bars != null && i < bars.size() ? (ru ? Set.of() : wordsEn(barText)) : fullEnWords;
-					boolean matched;
-					if (ru) {
-						String last = lastWord(w).toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "");
-						String stem = last.length() > 4 ? last.substring(0, last.length() - 2) : last;
-						matched = !barText.isBlank() && !stem.isEmpty() && barText.contains(stem);
-					} else {
-						matched = !barText.isBlank() && matchesEn(barText, enWords, w);
+					boolean isReb = false;
+					if (targetWords != null && !barText.isBlank()) {
+						for (String tw : targetWords) {
+							String normTw = ru ? tw.toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "") : normalizeEn(tw);
+							String stemTw = normTw.length() > 4 ? normTw.substring(0, normTw.length() - 2) : normTw;
+							if (!stemTw.isEmpty() && barText.contains(stemTw)) {
+								isReb = true;
+								break;
+							}
+						}
 					}
-					if (barText.isBlank()) s = Llm.LineScore.silent(lang);
-					else if (matched) {
-						int meaning = 1 + rnd.nextInt(2) + (rnd.nextInt(5) == 0 ? 1 : 0);
-						s = Llm.LineScore.fromRubric(2, Math.min(3, meaning), false, ru ? "рифма в точку" : "on the rhyme");
-						hits++;
+					boolean freestyle = w == null || w.isBlank();
+					if (freestyle) {
+						if (barText.isBlank()) s = Llm.LineScore.silent(lang);
+						else {
+							int meaning = 2 + (rnd.nextInt(3) == 0 ? 1 : 0);
+							s = Llm.LineScore.fromRubric(2, meaning, isReb, ru ? "своя рифма" : "own rhyme");
+							hits++;
+						}
 					} else {
-						s = Llm.LineScore.fromRubric(0, 1, false, ru ? "мимо рифмы" : "missed the rhyme");
+						Set<String> enWords = bars != null && i < bars.size() ? (ru ? Set.of() : wordsEn(barText)) : fullEnWords;
+						boolean matched;
+						if (ru) {
+							String last = lastWord(w).toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "");
+							String stem = last.length() > 4 ? last.substring(0, last.length() - 2) : last;
+							matched = !barText.isBlank() && !stem.isEmpty() && barText.contains(stem);
+						} else {
+							matched = !barText.isBlank() && matchesEn(barText, enWords, w);
+						}
+						if (barText.isBlank()) s = Llm.LineScore.silent(lang);
+						else if (matched) {
+							int meaning = 1 + rnd.nextInt(2) + (rnd.nextInt(5) == 0 ? 1 : 0);
+							s = Llm.LineScore.fromRubric(2, Math.min(3, meaning), isReb, ru ? "рифма в точку" : "on the rhyme");
+							hits++;
+						} else {
+							s = Llm.LineScore.fromRubric(0, 1, isReb, ru ? "мимо рифмы" : "missed the rhyme");
+						}
 					}
 				}
 				ls.add(s);

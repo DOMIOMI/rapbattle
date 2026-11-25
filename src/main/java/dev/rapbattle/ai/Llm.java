@@ -49,8 +49,12 @@ public final class Llm {
 	/** One mob line: who of the mob team reads it, the text, and whether it is a punchline. */
 	public record MobLine(String speaker, String text, boolean punch) {}
 
-	/** The mob team's verse plus rhyme groups (4 words each) for the players. */
-	public record Content(List<MobLine> lines, List<List<String>> rhymes) {}
+	/** The mob team's verse, rhyme groups (4 words each) for players, and 2 target words for rebuttals. */
+	public record Content(List<MobLine> lines, List<List<String>> rhymes, List<String> targets) {
+		public Content(List<MobLine> lines, List<List<String>> rhymes) {
+			this(lines, rhymes, List.of());
+		}
+	}
 
 	public record Rapper(String name, String species, String adlib, String style) {}
 
@@ -80,6 +84,12 @@ public final class Llm {
 	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
 									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
 									   String lang) {
+		return roundContent(mobs, rankLabel, mood, language, lineCount, opponents, rhymeGroups, difficulty, round, previous, rivalry, "", lang);
+	}
+
+	public static Content roundContent(List<Rapper> mobs, String rankLabel, String mood, String language, int lineCount,
+									   List<String> opponents, int rhymeGroups, int difficulty, int round, String previous, String rivalry,
+									   String chosenTopic, String lang) {
 		boolean ru = Lang.isRu(lang);
 		String system;
 		String diff;
@@ -111,6 +121,7 @@ public final class Llm {
 				Слова в группе бери в разных формах, не только начальной: падежи, множественное число, глаголы
 				(например: «кирками, руками, врагами, веками» или «сгорел, умел, задел, пропел»).
 				Каждый раз новый куплет: не повторяй типовые фразы, придумывай свежие образы.
+				Также укажи targets: ровно 2 коротких опорных слова (существительных или ярких образа) прямо из твоего куплета мобов, которые игрок может обыграть в ответ.
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "простые, короткие, бытовые (кот/рот/живот/компот)";
@@ -125,7 +136,9 @@ public final class Llm {
 					.append(". Характер: ").append(r.style()).append('\n');
 			}
 			u.append("Соперники (игроки): ").append(String.join(", ", opponents)).append(".\n");
-			u.append("Угол атаки в этот раз: ").append(ANGLES.get(new java.util.Random().nextInt(ANGLES.size()))).append(".\n");
+			String angle = (chosenTopic != null && !chosenTopic.isBlank()) ? chosenTopic
+				: ANGLES.get(new java.util.Random().nextInt(ANGLES.size()));
+			u.append("Угол атаки в этот раз: ").append(angle).append(".\n");
 			if (rivalry != null && !rivalry.isBlank()) u.append(rivalry).append(' ');
 			if (round > 1) u.append("Это раунд ").append(round).append(". В прошлом раунде было:\n").append(previous).append("\nОтветь на это и не повторяйся.\n");
 			u.append("Напиши ровно ").append(lineCount).append(" строк для мобов и ").append(rhymeGroups)
@@ -156,6 +169,7 @@ public final class Llm {
 				Use varied word forms in each group, not just base nouns: plurals, past tense, -ing verbs
 				(for example: "mining, shining, whining, dining" or "burned, turned, learned, earned").
 				Fresh verse every time: do not recycle generic lines, invent new imagery.
+				Also return targets: exactly 2 short anchor words (nouns/images) from the mob's verse that the player can flip in a rebuttal.
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "simple, short, everyday words (cat/hat/bat/flat)";
@@ -170,7 +184,9 @@ public final class Llm {
 					.append(". Style: ").append(r.style()).append('\n');
 			}
 			u.append("Opponents (players): ").append(String.join(", ", opponents)).append(".\n");
-			u.append("Angle of attack this time: ").append(ANGLES_EN.get(new java.util.Random().nextInt(ANGLES_EN.size()))).append(".\n");
+			String angle = (chosenTopic != null && !chosenTopic.isBlank()) ? chosenTopic
+				: ANGLES_EN.get(new java.util.Random().nextInt(ANGLES_EN.size()));
+			u.append("Angle of attack this time: ").append(angle).append(".\n");
 			if (rivalry != null && !rivalry.isBlank()) u.append(rivalry).append(' ');
 			if (round > 1) u.append("This is round ").append(round).append(". In the previous round:\n").append(previous).append("\nRespond to it and do not repeat yourself.\n");
 			u.append("Write exactly ").append(lineCount).append(" lines for the mobs and ").append(rhymeGroups)
@@ -183,10 +199,11 @@ public final class Llm {
 		props.put("theme", Map.of("type", "string"));
 		props.put("lines", Map.of("type", "array", "items", line));
 		props.put("rhymes", Map.of("type", "array", "items", Map.of("type", "array", "items", Map.of("type", "string"))));
+		props.put("targets", Map.of("type", "array", "items", Map.of("type", "string")));
 		Map<String, Object> schema = Map.of(
 			"type", "object",
 			"properties", props,
-			"required", List.of("theme", "lines", "rhymes"),
+			"required", List.of("theme", "lines", "rhymes", "targets"),
 			"additionalProperties", false);
 		JsonObject o = ask(system, u.toString(), schema, 3000, VERSE_TEMPERATURE, lang);
 		if (o == null || !o.has("lines")) return null;
@@ -209,8 +226,15 @@ public final class Llm {
 					if (words.size() >= 4) rhymes.add(words.subList(0, 4));
 				}
 			}
+			List<String> targets = new ArrayList<>();
+			if (o.has("targets")) {
+				for (var tw : o.getAsJsonArray("targets")) {
+					String w = tw.getAsString().trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}-]", "");
+					if (!w.isEmpty() && !targets.contains(w) && targets.size() < 2) targets.add(w);
+				}
+			}
 			if (lines.size() < lineCount) return null;
-			return new Content(lines.subList(0, lineCount), rhymes);
+			return new Content(lines.subList(0, lineCount), rhymes, targets);
 		} catch (RuntimeException e) {
 			RapBattle.LOG.error("Bad verse JSON: {}", o, e);
 			return null;
@@ -353,7 +377,7 @@ public final class Llm {
 				ВАЖНО: строки с пометкой «(промолчал такт)» уже получили 0 автоматически — НЕ оценивай их и НЕ включай в массив lines!
 				Оценивай ТОЛЬКО непустые строки, указывая точный номер строки `line` из списка.
 				Рубрика для каждой непустой строки:
-				- rhyme (0..2): 0 — мимо заданной рифмы, 1 — неточная рифма / созвучие / искажение STT, 2 — точная рифма в конце строки.
+				- rhyme (0..2): 0 — мимо заданной рифмы, 1 — неточная рифма / созвучие / искажение STT, 2 — точная рифма в конце строки. Если у строки указано «СВОЯ РИФМА к предыдущей», оценивай, зарифмовал ли игрок свою строку с концом предыдущей строки!
 				- meaning (0..3): 0 — бессмысленный набор слов ради рифмы, 1 — простая связная фраза, 2 — адресный наезд по теме или сопернику, 3 — яркий образ, игра слов или мощный панч.
 				- rebuttal (boolean): true, только если строка прямо отбивает или переворачивает конкретный тезис из куплета моба.
 				- note: дерзкая подпись до 30 символов по-русски («рифма в точку», «панч про шерсть», «ответ про лаву», «вода»).
@@ -367,8 +391,9 @@ public final class Llm {
 			for (PlayerVerse p : players) {
 				u.append("\nИгрок ").append(p.name()).append(" (по тактам):\n");
 				for (BarPrompt b : barsByPlayer.get(p.name())) {
-					u.append("  ").append(b.line()).append(". [цель-рифма: «").append(b.targetWord())
-						.append("» | тайминг: ").append(b.timing()).append("] → ")
+					String targetInfo = b.targetWord().isEmpty() ? "СВОЯ РИФМА к предыдущей строке" : "цель-рифма: «" + b.targetWord() + "»";
+					u.append("  ").append(b.line()).append(". [").append(targetInfo)
+						.append(" | тайминг: ").append(b.timing()).append("] → ")
 						.append(b.silent() ? "(промолчал такт)" : "«" + b.text() + "»").append('\n');
 				}
 			}
@@ -379,7 +404,7 @@ public final class Llm {
 				IMPORTANT: bars marked "(silent bar)" are already scored 0 automatically — DO NOT evaluate them and DO NOT include them in `lines`!
 				Evaluate ONLY non-silent bars, returning their exact 1-based `line` number from the list.
 				Rubric for each non-silent bar:
-				- rhyme (0..2): 0 — missed target rhyme, 1 — slant rhyme / near-homophone / STT typo, 2 — exact rhyme landed at bar end.
+				- rhyme (0..2): 0 — missed target rhyme, 1 — slant rhyme / near-homophone / STT typo, 2 — exact rhyme landed at bar end. If a bar says "OWN RHYME to previous bar", judge whether it rhymes with the end of the previous bar!
 				- meaning (0..3): 0 — incoherent word salad, 1 — simple coherent line, 2 — aimed diss at opponent/topic, 3 — vivid image, wordplay, or hard punchline.
 				- rebuttal (boolean): true only if the bar directly counters or flips a specific claim from the mob's verse.
 				- note: punchy screen label up to 30 chars in English ("dead-on rhyme", "wool punchline", "flipped lava diss", "filler").
@@ -393,8 +418,9 @@ public final class Llm {
 			for (PlayerVerse p : players) {
 				u.append("\nPlayer ").append(p.name()).append(" (bar by bar):\n");
 				for (BarPrompt b : barsByPlayer.get(p.name())) {
-					u.append("  ").append(b.line()).append(". [target rhyme: \"").append(b.targetWord())
-						.append("\" | timing: ").append(b.timing()).append("] → ")
+					String targetInfo = b.targetWord().isEmpty() ? "OWN RHYME to previous bar" : "target rhyme: \"" + b.targetWord() + "\"";
+					u.append("  ").append(b.line()).append(". [").append(targetInfo)
+						.append(" | timing: ").append(b.timing()).append("] → ")
 						.append(b.silent() ? "(silent bar)" : "\"" + b.text() + "\"").append('\n');
 				}
 			}
