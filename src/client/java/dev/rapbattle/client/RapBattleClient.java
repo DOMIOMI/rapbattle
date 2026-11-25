@@ -43,6 +43,10 @@ public class RapBattleClient implements ClientModInitializer {
 					mc.send(() -> mc.setScreen(new StyleScreen(null)));
 					return 1;
 				}))
+				.then(net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal("legend").executes(ctx -> {
+					ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"legend\"}"));
+					return 1;
+				}))
 				.executes(ctx -> {
 				var mc = net.minecraft.client.MinecraftClient.getInstance();
 				// Open on the next frame: the chat screen closes right after the command runs.

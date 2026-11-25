@@ -486,5 +486,9 @@
   "rapbattle.act3.bastion_guest": "Piglins respect you: Honored Bastion Guest for 10 minutes!",
   "rapbattle.act3.wither_skull": "%s dropped a Wither Skeleton Skull!",
   "rapbattle.status.warden_quiet": "Silence %s",
-  "rapbattle.act4.warden_quiet": "Warden defeated: sculk shriekers within 48 blocks are silenced for 15 minutes!"
+  "rapbattle.act4.warden_quiet": "Warden defeated: sculk shriekers within 48 blocks are silenced for 15 minutes!",
+  "rapbattle.act5.jammers": "Take down the jammers: %s left",
+  "rapbattle.act5.cooldown": "Dragon is recovering: challenge again in %ss",
+  "rapbattle.act5.legend_empty": "The Golden Line of the World has not been written yet.",
+  "rapbattle.act5.legend_show": "Golden Line (%s, %s): \"%s\""
 }

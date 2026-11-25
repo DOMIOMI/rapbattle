@@ -77,23 +77,44 @@ public class Stats extends PersistentState {
 		void addTitle(String t) { if (!titles.contains(t)) titles.add(t); }
 	}
 
+	public record Legend(String player, String line, String date) {
+		public static final Legend EMPTY = new Legend("", "", "");
+		public static final Codec<Legend> CODEC = RecordCodecBuilder.create(i -> i.group(
+			Codec.STRING.optionalFieldOf("player", "").forGetter(Legend::player),
+			Codec.STRING.optionalFieldOf("line", "").forGetter(Legend::line),
+			Codec.STRING.optionalFieldOf("date", "").forGetter(Legend::date)
+		).apply(i, Legend::new));
+
+		public boolean isEmpty() { return line == null || line.isBlank(); }
+	}
+
 	/** players: UUID → record; species: id → [mob wins, player wins]. */
 	private final Map<String, Player> players;
 	private final Map<String, List<Integer>> species;
+	public Legend legend;
 
 	public static final Codec<Stats> CODEC = RecordCodecBuilder.create(i -> i.group(
 		Codec.unboundedMap(Codec.STRING, Player.CODEC).optionalFieldOf("players", Map.of()).forGetter(s -> s.players),
-		Codec.unboundedMap(Codec.STRING, Codec.INT.listOf()).optionalFieldOf("species", Map.of()).forGetter(s -> s.species)
+		Codec.unboundedMap(Codec.STRING, Codec.INT.listOf()).optionalFieldOf("species", Map.of()).forGetter(s -> s.species),
+		Legend.CODEC.optionalFieldOf("legend", Legend.EMPTY).forGetter(s -> s.legend)
 	).apply(i, Stats::new));
 
 	public static final PersistentStateType<Stats> TYPE = new PersistentStateType<>("rapbattle_stats", Stats::new, CODEC, null);
 
-	public Stats() { this(Map.of(), Map.of()); }
+	public Stats() { this(Map.of(), Map.of(), Legend.EMPTY); }
 
-	private Stats(Map<String, Player> players, Map<String, List<Integer>> species) {
+	private Stats(Map<String, Player> players, Map<String, List<Integer>> species, Legend legend) {
 		this.players = new HashMap<>(players);
 		this.species = new HashMap<>();
 		species.forEach((k, v) -> this.species.put(k, new ArrayList<>(v)));
+		this.legend = legend == null ? Legend.EMPTY : legend;
+	}
+
+	public void recordLegend(String player, String line) {
+		if (line == null || line.isBlank()) return;
+		String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+		this.legend = new Legend(player == null ? "" : player, line.trim(), date);
+		markDirty();
 	}
 
 	public static Stats of(MinecraftServer server) {

@@ -486,5 +486,9 @@
   "rapbattle.act3.bastion_guest": "Пиглины признали тебя: статус «Почётный гость бастиона» на 10 минут!",
   "rapbattle.act3.wither_skull": "С %s выбит череп иссушителя!",
   "rapbattle.status.warden_quiet": "Затишье %s",
-  "rapbattle.act4.warden_quiet": "Варден повержен: скалк-крикуны в 48 блоках молчат 15 минут!"
+  "rapbattle.act4.warden_quiet": "Варден повержен: скалк-крикуны в 48 блоках молчат 15 минут!",
+  "rapbattle.act5.jammers": "Сбей глушилки: осталось %s",
+  "rapbattle.act5.cooldown": "Дракон переводит дух: вызов через %s сек",
+  "rapbattle.act5.legend_empty": "Золотая строка мира ещё не записана.",
+  "rapbattle.act5.legend_show": "Золотая строка мира (%s, %s): «%s»"
 }

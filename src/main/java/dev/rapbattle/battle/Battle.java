@@ -170,6 +170,9 @@ public class Battle {
 		this.beatMs = track != null ? track.beatMs() : wantMs;
 		this.lobbyEnd = phaseStart + cfg.lobbySeconds * 1000L * (boss ? 2 : 1);
 		addMob(mob, opp.name());
+		if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
+			DragonBattle.holdHover(dragon);
+		}
 		if (this.raid != null) {
 			List<net.minecraft.entity.raid.RaiderEntity> crew = new ArrayList<>();
 			for (net.minecraft.entity.raid.RaiderEntity raider : this.raid.getAllRaiders()) {
@@ -802,6 +805,9 @@ public class Battle {
 		}
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
 		for (MobEntity m : mobTeam) if (m.isOnFire()) m.extinguish();
+		if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
+			DragonBattle.holdHover(dragon);
+		}
 		keepThePeace();
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
@@ -1281,7 +1287,7 @@ public class Battle {
 			playerStyles.put(u, stats.player(u).mcStyle());
 			Trophies.TrophyPerk perk = Trophies.equippedPerk(player(u));
 			playerPerks.put(u, perk);
-			if (perk == Trophies.TrophyPerk.DEFAULT) extraStyleBonus = 1;
+			if (perk == Trophies.TrophyPerk.DEFAULT || perk == Trophies.TrophyPerk.ENDER_DRAGON) extraStyleBonus = 1;
 		}
 		Set<UUID> witherForgiven = new HashSet<>();
 		Set<UUID> guardianUsed = new HashSet<>();
@@ -1700,7 +1706,15 @@ public class Battle {
 				pearlDrop.setToDefaultPickupDelay();
 				world.spawnEntity(pearlDrop);
 			}
-			// Some mobs refuse to accept it and go for the MVP instead of dying.
+			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
+				if (!bestLine.isEmpty()) {
+					Stats.of(world.getServer()).recordLegend(mvpPlayer != null ? mvpPlayer.getName().getString() : "", bestLine);
+				}
+				DamageSource src = killer != null ? world.getDamageSources().playerAttack(killer) : world.getDamageSources().generic();
+				dragon.damagePart(world, dragon.head, src, dragon.getMaxHealth() * 100f);
+				ExperienceOrbEntity.spawn(world, pos, xp * Math.max(1, players.size()));
+				return;
+			}
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
 			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
@@ -1799,6 +1813,9 @@ public class Battle {
 			}
 			if (mob instanceof net.minecraft.entity.mob.PiglinBruteEntity && BastionBattle.inBastion(world, mob.getBlockPos())) {
 				BastionBattle.onLoss(world, challenger(), mob.getBlockPos());
+			}
+			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
+				DragonBattle.onLoss(dragon);
 			}
 		}
 		RapBattle.LOG.info("Battle {} finished: players {} respect {} vs mob {} (ko {}, rank {})", id, result.playersWin ? "won" : "lost",

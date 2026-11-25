@@ -277,7 +277,9 @@ public final class BattleManager {
 	public static Battle start(ServerPlayerEntity challenger, MobEntity mob) {
 		Battle b = new Battle(challenger, mob);
 		BATTLES.add(b);
-		double r = RapConfig.get().inviteRadius;
+		double r = mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity
+			? Math.max(RapConfig.get().inviteRadius, 48.0)
+			: RapConfig.get().inviteRadius;
 		for (ServerPlayerEntity other : challenger.getEntityWorld().getPlayers()) {
 			if (other != challenger && byPlayer(other.getUuid()) == null && other.squaredDistanceTo(challenger) <= r * r) b.invite(other);
 		}
@@ -405,6 +407,9 @@ public final class BattleManager {
 				return ActionResult.FAIL;
 			}
 			if (byPlayer(sp.getUuid()) != null) return ActionResult.FAIL;
+			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon && sp.getMainHandStack().isEmpty()) {
+				if (!DragonBattle.canChallenge(sp, dragon)) return ActionResult.FAIL;
+			}
 
 			long now = System.currentTimeMillis();
 			Refused fight = BRAWLS.get(sp.getUuid());
@@ -598,6 +603,15 @@ public final class BattleManager {
 						ServerPlayNetworking.send(p, new Payloads.StateS2C(kv.toJson()));
 					}
 					case "style_status" -> sendStyleStatus(p);
+					case "legend" -> {
+						Stats.Legend leg = Stats.of(p.getEntityWorld().getServer()).legend;
+						if (leg == null || leg.isEmpty()) {
+							p.sendMessage(Text.translatable("rapbattle.act5.legend_empty").formatted(Formatting.GRAY), false);
+						} else {
+							p.sendMessage(Text.translatable("rapbattle.act5.legend_show", leg.player(), leg.line(), leg.date())
+								.formatted(Formatting.GOLD), false);
+						}
+					}
 					case "set_style" -> {
 						Stats stats = Stats.of(p.getEntityWorld().getServer());
 						Stats.Player st = stats.player(p.getUuid());
