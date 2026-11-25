@@ -441,6 +441,7 @@
   "rapbattle.manager.fallback_notice": "[Рэп-баттл] Нейросеть или распознавание голоса не настроены, баттлы в запасном режиме. Ключи: config/rapbattle-server.json",
   "rapbattle.manager.server_stopped": "Сервер остановлен",
   "rapbattle.settings.style": "Почерк МС",
+  "rapbattle.settings.camera_motion": "Камера в такт",
   "rapbattle.hud.card.player_style": "Игрок · %s",
   "rapbattle.style.title": "Почерк МС",
   "rapbattle.style.need_world": "Зайди в мир, чтобы выбрать стиль",

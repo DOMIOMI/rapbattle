@@ -441,6 +441,7 @@
   "rapbattle.manager.fallback_notice": "[Rap Battle] LLM or speech-to-text is not configured, running in fallback mode. Keys: config/rapbattle-server.json",
   "rapbattle.manager.server_stopped": "Server stopped",
   "rapbattle.settings.style": "MC Style",
+  "rapbattle.settings.camera_motion": "Beat Camera",
   "rapbattle.hud.card.player_style": "Player · %s",
   "rapbattle.style.title": "MC Style",
   "rapbattle.style.need_world": "Join a world to choose your style",

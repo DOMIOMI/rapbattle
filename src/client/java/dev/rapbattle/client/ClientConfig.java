@@ -18,6 +18,8 @@ public class ClientConfig {
 	public boolean spectatorHud = true;
 	/** Mobs and players bounce to the beat. */
 	public boolean animations = true;
+	/** Gentle camera nod on the beat and punch FOV kick. */
+	public boolean cameraMotion = true;
 	/** Camera fly-over before the first round (Space skips it). */
 	public boolean intro = true;
 	/** Chains, glasses and snapbacks on everyone in a battle. */
