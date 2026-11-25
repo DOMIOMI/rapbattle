@@ -210,6 +210,12 @@ public final class BattleHud {
 		}
 
 		long secs = (v.lobbyMsLeft + 999) / 1000;
+		if (ClientBattle.isChallenger()) {
+			String t1 = (v.topic == 1 ? "§e" : "§7") + I18n.translate("rapbattle.hud.topic_1");
+			String t2 = (v.topic == 2 ? "§e" : "§7") + I18n.translate("rapbattle.hud.topic_2");
+			String t3 = (v.topic == 3 ? "§e" : "§7") + I18n.translate("rapbattle.hud.topic_3");
+			ctx.drawCenteredTextWithShadow(tr, I18n.translate("rapbattle.hud.topic_pick", t1 + "  ·  " + t2 + "  ·  " + t3), mid, h - 42, TEXT);
+		}
 		String bottom = ClientBattle.isChallenger()
 			? I18n.translate("rapbattle.hud.lobby_challenger", secs)
 			: I18n.translate("rapbattle.hud.lobby_wait", secs);

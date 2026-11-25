@@ -218,6 +218,19 @@ public final class ClientBattle {
 
 	public static boolean isChallenger() { return view != null && me().equals(view.challenger); }
 
+	public static boolean inLobbyChallenger() { return view != null && "LOBBY".equals(view.phase) && isChallenger(); }
+
+	public static boolean creakingFrozen() {
+		if (view == null || !view.creakingGaze) return false;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null || mc.world == null) return false;
+		Entity e = mc.world.getEntityById(view.mobEntityId);
+		if (e == null) return false;
+		var eye = mc.player.getEyePos();
+		var to = e.getEyePos().subtract(eye).normalize();
+		return mc.player.getRotationVec(1f).dotProduct(to) >= Math.cos(Math.toRadians(15));
+	}
+
 	public static float micLevel() { return MIC.level; }
 
 	public static boolean recording() { return MIC.isRunning(); }
@@ -521,10 +534,20 @@ public final class ClientBattle {
 		}
 	}
 
-	/** R: rap battle, when the choice prompt is open and the mob accepts. */
+	/** R: rap battle when choice is open, or once-per-round rhyme reroll during your verse. */
 	public static void pressRap() {
-		if (choice == null || !choice.allowed) return;
-		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"rap\"}"));
-		choice = null;
+		if (choice != null && choice.allowed) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"rap\"}"));
+			choice = null;
+			return;
+		}
+		if (view != null && !view.spectator && "TIMELINE".equals(view.phase) && view.canReroll && !view.pvp) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"reroll\"}"));
+		}
+	}
+
+	public static void chooseTopic(int topic) {
+		if (!inLobbyChallenger() || topic < 1 || topic > 3) return;
+		ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"topic\",\"topic\":" + topic + "}"));
 	}
 }

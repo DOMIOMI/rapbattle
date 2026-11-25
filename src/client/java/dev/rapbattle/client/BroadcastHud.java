@@ -241,9 +241,17 @@ public final class BroadcastHud {
 	// ------------------------------------------------------------------ during the verse
 
 	static void timeline(DrawContext ctx, TextRenderer tr, BattleView v, int w, int h) {
-		scoreboard(ctx, tr, v, w, true);
+		int under = scoreboard(ctx, tr, v, w, true);
 		if (v.totalBeats <= 0) return;
 		int beat = Math.max(0, ClientBattle.beat());
+		if (!v.targets.isEmpty() && beat >= v.mobEndBeat && !v.spectator) {
+			String tText = I18n.translate("rapbattle.broadcast.targets", "«" + String.join("» · «", v.targets) + "»");
+			int tw = tr.getWidth(tText) + 16;
+			int ty = under + (v.combo >= 3 ? 19 : 4);
+			ctx.fill(w / 2 - tw / 2, ty, w / 2 + tw / 2, ty + 12, 0xD0151826);
+			ctx.drawStrokedRectangle(w / 2 - tw / 2, ty, tw, 12, alphaOf(GOLD, 0.7f));
+			ctx.drawCenteredTextWithShadow(tr, tText, w / 2, ty + 2, GOLD);
+		}
 		String me = ClientBattle.me();
 		float fr = ClientBattle.beatFrac();
 
@@ -299,6 +307,7 @@ public final class BroadcastHud {
 		}
 
 		String fx = live == null ? null : live.effect;
+		if (ClientBattle.creakingFrozen()) fx = null;
 		int k = live == null ? -1 : beat - live.startBeat;
 		// The table sits at the very bottom, centred, where the hotbar and hearts were (they are hidden during the battle).
 		// Cells grow to fit the mob's words; only on a very narrow screen the whole panel is drawn smaller.
@@ -312,10 +321,18 @@ public final class BroadcastHud {
 		int rowsH = 2 * ROW + GAP + 2 * PAD;
 		int ly = -6 - rowsH;
 
-		// Tag: who is on, a slanted tab; REC on the right end.
+		// Tag: who is on, a slanted tab; REC and optional [R] reroll hint on the right end.
 		boolean rec = ClientBattle.recording();
-		tag = BattleHud.fit(tr, tag, lw - (rec ? 64 : 24));
+		boolean showReroll = rec && v.canReroll && !v.pvp;
+		tag = BattleHud.fit(tr, tag, lw - (rec ? (showReroll ? 124 : 64) : 24));
 		tab(ctx, tr, tag, lx, ly, tagColor, DARK);
+		if (showReroll) {
+			String rr = I18n.translate("rapbattle.broadcast.reroll_hint");
+			int rrw = tr.getWidth(rr) + 10;
+			int rx = lx + lw - rrw - 48;
+			ctx.fill(rx, ly - 11, rx + rrw, ly, 0xD01A2030);
+			ctx.drawText(tr, rr, rx + 5, ly - 9, GOLD, false);
+		}
 		if (rec) {
 			Text r = bold("REC");
 			int rw = tr.getWidth(r) + 18, rx = lx + lw - rw;
@@ -437,7 +454,8 @@ public final class BroadcastHud {
 		String shown = shownWord(r, activeK);
 		boolean stolen = !r.mob && "stolen".equals(r.effect);
 		boolean burned = !r.mob && "burn".equals(r.effect) && activeK >= 2;
-		int cell = stolen ? 0xFF3A1A1A : burned ? 0xFFE86A17 : BattleHud.opaque(r.color);
+		boolean free = !r.mob && r.freestyle && !"???".equals(shown);
+		int cell = stolen ? 0xFF3A1A1A : burned ? 0xFFE86A17 : free ? GOLD : BattleHud.opaque(r.color);
 		if (live && k == 3) {
 			// The rhyme's beat: a glow around the cell.
 			int g = Math.round(2 + 2 * (1 - fr));
@@ -460,9 +478,10 @@ public final class BroadcastHud {
 	private static String shownWord(BattleView.Row r, int k) {
 		BattleView v = ClientBattle.view;
 		if (!r.mob && v != null && v.revealBeats > 0 && r.startBeat - ClientBattle.beat() > v.revealBeats) return "???";
+		if (!r.mob && r.freestyle) return I18n.translate("rapbattle.hud.word_freestyle");
 		if (r.effect == null || r.mob) return r.word;
 		return switch (r.effect) {
-			case "hidden" -> "???";
+			case "hidden", "web_pair" -> "???";
 			case "stolen" -> I18n.translate("rapbattle.hud.word_stolen");
 			case "burn" -> k >= 2 ? I18n.translate("rapbattle.hud.word_burned") : r.word;
 			case "illusion" -> k >= 0 && k < 3 ? fake(r) : r.word;

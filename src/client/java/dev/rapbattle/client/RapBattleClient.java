@@ -66,11 +66,28 @@ public class RapBattleClient implements ClientModInitializer {
 			while (accept.wasPressed()) ClientBattle.pressAccept();
 			while (decline.wasPressed()) ClientBattle.pressDecline();
 			while (rap.wasPressed()) ClientBattle.pressRap();
+			pollTopicKeys(client);
 			if (Intro.active() && client.options.jumpKey.isPressed()) Intro.skip();
 			// Keeps the beat and the mic going even when the HUD is hidden (F1).
 			ClientBattle.pump();
 		});
 
 		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.of(RapBattle.MOD_ID, "battle"), BattleHud::render);
+	}
+
+	private static final boolean[] TOPIC_DOWN = new boolean[3];
+
+	private static void pollTopicKeys(net.minecraft.client.MinecraftClient client) {
+		if (!ClientBattle.inLobbyChallenger() || client.currentScreen != null) {
+			java.util.Arrays.fill(TOPIC_DOWN, false);
+			return;
+		}
+		var win = client.getWindow();
+		int[] keys = {GLFW.GLFW_KEY_1, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_3};
+		for (int i = 0; i < 3; i++) {
+			boolean down = net.minecraft.client.util.InputUtil.isKeyPressed(win, keys[i]);
+			if (down && !TOPIC_DOWN[i]) ClientBattle.chooseTopic(i + 1);
+			TOPIC_DOWN[i] = down;
+		}
 	}
 }
