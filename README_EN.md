@@ -47,7 +47,7 @@ what happened, the mod version and, if you have it, the `logs/latest.log` file. 
 ## Installation
 1. Install Minecraft **1.21.11** with [Fabric Loader](https://fabricmc.net/use/installer/) **0.18.6+**.
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.11) for 1.21.11 into the `mods` folder.
-3. Download the mod: **[rapbattle-0.2.0.jar](https://github.com/DOMIOMI/rapbattle/releases/download/v0.2.0/rapbattle-0.2.0.jar)**
+3. Download the mod: **[rapbattle-0.3.0.jar](https://github.com/DOMIOMI/rapbattle/releases/download/v0.3.0/rapbattle-0.3.0.jar)**
    (all versions on the [Releases](https://github.com/DOMIOMI/rapbattle/releases) page) into `mods` too.
    Everything else (animations, sounds) is already inside.
 4. Optional: [Mod Menu](https://modrinth.com/mod/modmenu/versions?g=1.21.11), so the settings open from the mod
