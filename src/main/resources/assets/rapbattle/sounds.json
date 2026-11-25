@@ -1,0 +1,778 @@
+{
+  "crowd.cheer": {
+    "subtitle": "subtitles.rapbattle.crowd.cheer",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/cheer1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/cheer2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/cheer3",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/cheer4",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/cheer5",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.ooh": {
+    "subtitle": "subtitles.rapbattle.crowd.ooh",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/ooh1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/ooh2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/ooh3",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/ooh4",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.boo": {
+    "subtitle": "subtitles.rapbattle.crowd.boo",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/boo1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/boo2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/boo3",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/boo4",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/boo5",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.whistle": {
+    "subtitle": "subtitles.rapbattle.crowd.whistle",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/whistle1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/whistle2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/whistle3",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.laugh": {
+    "subtitle": "subtitles.rapbattle.crowd.laugh",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/laugh1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/laugh2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/laugh3",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.gasp": {
+    "subtitle": "subtitles.rapbattle.crowd.gasp",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/gasp1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/gasp2",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.applause": {
+    "subtitle": "subtitles.rapbattle.crowd.applause",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/applause1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/applause2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/applause3",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "crowd.hype": {
+    "subtitle": "subtitles.rapbattle.crowd.hype",
+    "sounds": [
+      {
+        "name": "rapbattle:crowd/hype1",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/hype2",
+        "attenuation_distance": 40
+      },
+      {
+        "name": "rapbattle:crowd/hype3",
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "shout.start.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/start_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.start.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/start_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.start.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/start_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.start.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/start_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.start.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/start_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.start.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/start_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_hit.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_hit_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_hit.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_hit_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_hit.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_hit_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_hit.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_hit_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_hit.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_hit_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_hit.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_hit_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.mob_punch.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/mob_punch_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.mob_punch.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/mob_punch_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.mob_punch.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/mob_punch_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.mob_punch.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/mob_punch_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.mob_punch.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/mob_punch_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.mob_punch.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/mob_punch_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_miss.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_miss_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_miss.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_miss_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_miss.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_miss_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_miss.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_miss_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_miss.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_miss_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.player_miss.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/player_miss_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_players.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_players_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_players.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_players_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_players.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_players_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_players.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_players_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_players.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_players_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_players.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_players_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_mob.1": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_mob_1",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_mob.2": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_mob_2",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_mob.3": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_mob_3",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_mob.4": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_mob_4",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_mob.5": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_mob_5",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "shout.win_mob.6": {
+    "sounds": [
+      {
+        "name": "rapbattle:shout/win_mob_6",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "solo.boo.v0": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/boo_v0_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v0_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v0_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v0_4",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.boo.v1": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/boo_v1_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v1_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v1_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v1_4",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.boo.v2": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/boo_v2_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v2_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v2_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v2_4",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.boo.v3": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/boo_v3_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v3_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v3_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v3_4",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.boo.v4": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/boo_v4_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v4_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v4_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v4_4",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.boo.v5": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/boo_v5_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v5_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v5_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/boo_v5_4",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.cheer.v0": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/cheer_v0_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v0_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v0_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v0_4",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v0_5",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.cheer.v1": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/cheer_v1_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v1_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v1_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v1_4",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v1_5",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.cheer.v2": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/cheer_v2_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v2_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v2_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v2_4",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v2_5",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.cheer.v3": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/cheer_v3_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v3_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v3_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v3_4",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v3_5",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.cheer.v4": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/cheer_v4_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v4_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v4_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v4_4",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v4_5",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "solo.cheer.v5": {
+    "sounds": [
+      {
+        "name": "rapbattle:solo/cheer_v5_1",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v5_2",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v5_3",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v5_4",
+        "attenuation_distance": 28
+      },
+      {
+        "name": "rapbattle:solo/cheer_v5_5",
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "beat.breaks": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/breaks",
+        "stream": false
+      }
+    ]
+  },
+  "beat.knock": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/knock",
+        "stream": false
+      }
+    ]
+  },
+  "beat.stomp": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/stomp",
+        "stream": false
+      }
+    ]
+  },
+  "beat.trapdrums": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/trapdrums",
+        "stream": false
+      }
+    ]
+  },
+  "beat.battle": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/battle",
+        "stream": false
+      }
+    ]
+  },
+  "beat.streets": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/streets",
+        "stream": false
+      }
+    ]
+  },
+  "beat.trap": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/trap",
+        "stream": false
+      }
+    ]
+  },
+  "beat.drill": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/drill",
+        "stream": false
+      }
+    ]
+  },
+  "beat.boss": {
+    "sounds": [
+      {
+        "name": "rapbattle:beat/boss",
+        "stream": false
+      }
+    ]
+  }
+}

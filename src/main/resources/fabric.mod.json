@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "rapbattle",
+  "version": "${version}",
+  "name": "Rap Battle",
+  "description": "Рэп-баттлы с мобами: читай в микрофон под бит, нейросеть-судья решает, кто кого.",
+  "authors": [
+    "DOMI"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.rapbattle.RapBattle"
+    ],
+    "client": [
+      "dev.rapbattle.client.RapBattleClient"
+    ],
+    "modmenu": [
+      "dev.rapbattle.client.ModMenuIntegration"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "mixins": [
+    "rapbattle.mixins.json",
+    {
+      "config": "rapbattle.client.mixins.json",
+      "environment": "client"
+    }
+  ]
+}

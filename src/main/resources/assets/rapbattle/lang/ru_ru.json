@@ -1,0 +1,16 @@
+{
+  "key.category.rapbattle.main": "Рэп-баттл",
+  "key.rapbattle.accept": "Вписаться / «Погнали»",
+  "key.rapbattle.decline": "Отклонить приглашение",
+  "key.rapbattle.rap": "Выбрать рэп-баттл",
+  "death.attack.rapbattle.rap_battle": "%1$s был разъебан %2$s в рэп-баттле",
+  "death.attack.rapbattle.rap_battle.player": "%1$s был разъебан %2$s в рэп-баттле",
+  "subtitles.rapbattle.crowd.cheer": "Толпа ликует",
+  "subtitles.rapbattle.crowd.ooh": "Толпа: «Ууух!»",
+  "subtitles.rapbattle.crowd.boo": "Толпа освистывает",
+  "subtitles.rapbattle.crowd.whistle": "Свист в зале",
+  "subtitles.rapbattle.crowd.laugh": "Толпа ржёт",
+  "subtitles.rapbattle.crowd.gasp": "Толпа ахает",
+  "subtitles.rapbattle.crowd.applause": "Аплодисменты",
+  "subtitles.rapbattle.crowd.hype": "Толпа качает"
+}

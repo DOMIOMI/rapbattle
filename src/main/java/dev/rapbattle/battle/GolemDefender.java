@@ -1,0 +1,93 @@
+package dev.rapbattle.battle;
+
+import net.minecraft.entity.passive.IronGolemEntity;
+import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+
+import java.util.*;
+
+/**
+ * The village iron golem protects its people: hit a villager or lose a battle to one, and the golem walks up
+ * to you, says its piece and calls you out. Answer on the mic, or it's a fistfight.
+ */
+public final class GolemDefender {
+	private GolemDefender() {}
+
+	private record Hunt(IronGolemEntity golem, UUID player, long until) {}
+
+	private static final List<Hunt> HUNTS = new ArrayList<>();
+	private static final List<String> LINES = List.of(
+		"Ты обидел моих людей. Теперь отвечай за базар.",
+		"Деревня под моей защитой. Микрофон или кулак?",
+		"*БОНГ* Жители говорят, ты тут борзый.");
+
+	/** A player wronged a villager. The nearest free golem comes for them. */
+	public static void offended(ServerPlayerEntity player, VillagerEntity villager) {
+		if (!(villager.getEntityWorld() instanceof ServerWorld w)) return;
+		for (Hunt h : HUNTS) if (h.player().equals(player.getUuid())) return;
+		List<IronGolemEntity> golems = w.getEntitiesByClass(IronGolemEntity.class, villager.getBoundingBox().expand(32),
+			g -> g.isAlive() && !g.isPlayerCreated() && BattleManager.byMob(g) == null);
+		if (golems.isEmpty()) return;
+		golems.sort(Comparator.comparingDouble(g -> g.squaredDistanceTo(player)));
+		IronGolemEntity g = golems.get(0);
+		HUNTS.add(new Hunt(g, player.getUuid(), System.currentTimeMillis() + 30_000));
+	}
+
+	/** Server tick: walk to the offender, then call them out. */
+	static void tick() {
+		long now = System.currentTimeMillis();
+		for (Hunt h : new ArrayList<>(HUNTS)) {
+			IronGolemEntity g = h.golem();
+			ServerPlayerEntity p = g.getEntityWorld().getServer() == null ? null
+				: g.getEntityWorld().getServer().getPlayerManager().getPlayer(h.player());
+			if (p == null || !g.isAlive() || now > h.until() || BattleManager.byPlayer(p.getUuid()) != null) {
+				HUNTS.remove(h);
+				continue;
+			}
+			g.setTarget(null); // no punching yet: first the words
+			if (g.squaredDistanceTo(p) > 4.5 * 4.5) {
+				g.getNavigation().startMovingTo(p, 1.0);
+				continue;
+			}
+			HUNTS.remove(h);
+			g.getNavigation().stop();
+			g.getLookControl().lookAt(p, 30, 30);
+			String line = LINES.get(new Random().nextInt(LINES.size()));
+			Speech.bubble(g, line, 0xFFE0A0, 4000);
+			for (ServerPlayerEntity near : ((ServerWorld) g.getEntityWorld()).getPlayers()) {
+				if (near.squaredDistanceTo(g) < 32 * 32) {
+					near.sendMessage(Text.literal("<" + Opponent.nameOf(g, MobProfiles.of(g.getType()), new Random()) + "> " + line)
+						.formatted(Formatting.GOLD), false);
+				}
+			}
+			BattleManager.challengeFrom(p, g);
+		}
+	}
+
+	/** The player didn't answer the golem's call: a normal fight, and everyone hears about it. */
+	public static void chickenedOut(ServerPlayerEntity p, IronGolemEntity g) {
+		g.setTarget(p);
+		for (ServerPlayerEntity near : ((ServerWorld) g.getEntityWorld()).getPlayers()) {
+			if (near.squaredDistanceTo(g) < 48 * 48) {
+				near.sendMessage(Text.literal(p.getName().getString() + " зассал перед "
+					+ Opponent.nameOf(g, MobProfiles.of(g.getType()), new Random())).formatted(Formatting.GRAY), false);
+			}
+		}
+	}
+
+	/** Lost the battle to the players: the golem accepts it, stays alive, and the village respects them. */
+	public static void respect(IronGolemEntity g, ServerPlayerEntity winner) {
+		g.setTarget(null);
+		g.stopAnger();
+		Speech.bubble(g, "*БОНГ* …Уважаю. Деревня твоя.", 0xA0FFA0, 4000);
+		if (winner != null) {
+			winner.giveItemStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_INGOT, 5));
+			winner.giveItemStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.POPPY, 1));
+		}
+	}
+
+	static void clear() { HUNTS.clear(); }
+}

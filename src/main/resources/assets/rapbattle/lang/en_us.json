@@ -1,0 +1,16 @@
+{
+  "key.category.rapbattle.main": "Rap Battle",
+  "key.rapbattle.accept": "Join battle / Start now",
+  "key.rapbattle.decline": "Decline invite",
+  "key.rapbattle.rap": "Choose rap battle",
+  "death.attack.rapbattle.rap_battle": "%1$s got destroyed by %2$s in a rap battle",
+  "death.attack.rapbattle.rap_battle.player": "%1$s got destroyed by %2$s in a rap battle",
+  "subtitles.rapbattle.crowd.cheer": "Crowd cheers",
+  "subtitles.rapbattle.crowd.ooh": "Crowd: \"Ooh!\"",
+  "subtitles.rapbattle.crowd.boo": "Crowd boos",
+  "subtitles.rapbattle.crowd.whistle": "Whistling",
+  "subtitles.rapbattle.crowd.laugh": "Crowd laughs",
+  "subtitles.rapbattle.crowd.gasp": "Crowd gasps",
+  "subtitles.rapbattle.crowd.applause": "Applause",
+  "subtitles.rapbattle.crowd.hype": "Crowd hypes"
+}

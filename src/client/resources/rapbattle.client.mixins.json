@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "package": "dev.rapbattle.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "MobEntityAccessor",
+    "LivingEntityRenderStateMixin",
+    "LivingEntityRendererMixin",
+    "ModelCommandRendererMixin",
+    "CameraMixin",
+    "BipedEntityModelMixin",
+    "QuadrupedEntityModelMixin",
+    "VillagerModelMixin",
+    "IllagerModelMixin",
+    "IronGolemModelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,14 @@
+.gradle/
+build/
+run/
+*.iml
+.idea/
+# Never commit keys or local configs
+config/
+*.key
+rapbattle-server.json
+rapbattle-clips/
+logs/
+crash-reports/
+*.log
+__pycache__/

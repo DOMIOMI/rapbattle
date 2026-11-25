@@ -1,0 +1,112 @@
+package dev.rapbattle.battle;
+
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.DyedColorComponent;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
+
+/**
+ * Dress code. Each armour slot scores by material (leather 1 … netherite 6, gold above iron because rap is
+ * about flex, not protection), plus up to +1 "style" for trims, a full set, a matching dyed leather fit and glint.
+ */
+public final class Outfit {
+	private Outfit() {}
+
+	private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+	public record Score(double value, String note) {
+		/** Rank-style level 0..6 (0 = naked). */
+		public int level() { return (int) Math.floor(value + 1e-6); }
+
+		public String label() {
+			int l = level();
+			return l <= 0 ? "ГОЛЫЙ" : Rank.ofLevel(l).armor;
+		}
+	}
+
+	public static Score of(LivingEntity e) {
+		double sum = 0, style = 0;
+		int material = -1;
+		boolean sameMaterial = true;
+		Integer dye = null;
+		boolean sameDye = true;
+		int leather = 0;
+		StringBuilder note = new StringBuilder();
+		for (EquipmentSlot slot : SLOTS) {
+			ItemStack s = e.getEquippedStack(slot);
+			int m = material(s);
+			if (s.isOf(Items.CARVED_PUMPKIN)) {
+				style -= 1;
+				note.append("тыква на голове; ");
+			}
+			if (isMobHead(s)) {
+				style += 0.5;
+				note.append("трофейная голова; ");
+			}
+			sum += Math.max(0, m);
+			if (material == -1) material = m;
+			else if (material != m) sameMaterial = false;
+			if (s.get(DataComponentTypes.TRIM) != null) style += 0.25;
+			if (s.hasGlint()) style += 0.1;
+			if (m == 1) {
+				leather++;
+				DyedColorComponent c = s.get(DataComponentTypes.DYED_COLOR);
+				Integer rgb = c == null ? null : c.rgb();
+				if (rgb == null) sameDye = false;
+				else if (dye == null) dye = rgb;
+				else if (!rgb.equals(dye)) sameDye = false;
+			}
+		}
+		Gangs.Gang set = Gangs.gangOf(e.getEquippedStack(EquipmentSlot.HEAD));
+		boolean fullGang = set != null;
+		for (EquipmentSlot slot : SLOTS) {
+			Gangs.Gang g = Gangs.gangOf(e.getEquippedStack(slot));
+			if (g == null || set == null || !g.id().equals(set.id())) fullGang = false;
+		}
+		if (fullGang) {
+			style += 0.5;
+			note.append("форма банды «").append(set.name()).append("»; ");
+		} else if (sameMaterial && material > 0) {
+			style += 0.25;
+			note.append("полный комплект; ");
+		}
+		if (leather == 4 && sameDye && dye != null) {
+			style += 0.5;
+			note.append("кожанка в цвет; ");
+		}
+		style = Math.max(-1, Math.min(1, style));
+		double value = Math.max(0, sum / 4.0 + style);
+		return new Score(value, note.toString().trim());
+	}
+
+	/** 0 empty / not armour, 1 leather, 2 chain, 3 iron (and turtle), 4 gold (and elytra), 5 diamond, 6 netherite. */
+	static int material(ItemStack s) {
+		if (s.isEmpty()) return 0;
+		Gangs.Gang gang = Gangs.gangOf(s);
+		if (gang != null) return gang.tier(); // street cred counts like real armour
+		if (s.isOf(Items.ELYTRA)) return 4;
+		if (s.isOf(Items.TURTLE_HELMET)) return 3;
+		String id = Registries.ITEM.getId(s.getItem()).getPath();
+		if (id.startsWith("leather_")) return 1;
+		if (id.startsWith("chainmail_")) return 2;
+		if (id.startsWith("iron_")) return 3;
+		if (id.startsWith("golden_")) return 4;
+		if (id.startsWith("diamond_")) return 5;
+		if (id.startsWith("netherite_")) return 6;
+		return 0;
+	}
+
+	private static boolean isMobHead(ItemStack s) {
+		String id = Registries.ITEM.getId(s.getItem()).getPath();
+		return id.endsWith("_head") || id.endsWith("_skull");
+	}
+
+	/** Lowest outfit level the mob accepts as challenger (one rank of slack). */
+	public static int required(Rank rank) { return Math.max(0, rank.level() - 1); }
+
+	/** Lowest level for a teammate to join (two ranks of slack, so one poor friend doesn't kill the lobby). */
+	public static int requiredToJoin(Rank rank) { return Math.max(0, rank.level() - 2); }
+}
