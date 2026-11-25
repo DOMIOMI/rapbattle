@@ -1,0 +1,35 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "C": "minecraft:copper_ingot",
+    "R": "minecraft:redstone",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    " C ",
+    " R ",
+    " S "
+  ],
+  "result": {
+    "count": 1,
+    "id": "minecraft:lightning_rod",
+    "components": {
+      "minecraft:custom_name": {
+        "translate": "rapbattle.trophies.mic.homemade",
+        "italic": false,
+        "color": "gold"
+      },
+      "minecraft:custom_data": {
+        "rapbattle_trophy": "homemade"
+      },
+      "minecraft:lore": [
+        {
+          "translate": "rapbattle.trophies.perk.homemade",
+          "italic": false,
+          "color": "aqua"
+        }
+      ]
+    }
+  }
+}

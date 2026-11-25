@@ -29,9 +29,12 @@ public final class MicModel {
 		BlockState button = Blocks.RED_CONCRETE.getDefaultState();
 		int headLight = light;
 
-		if (perk != null) {
+		if (perk == Trophies.TrophyPerk.HOMEMADE) {
+			button = Blocks.ORANGE_TERRACOTTA.getDefaultState();
+		} else if (perk != null) {
 			headLight = 0xF000F0;
 			button = switch (perk) {
+				case HOMEMADE -> Blocks.ORANGE_TERRACOTTA.getDefaultState();
 				case WARDEN -> Blocks.CYAN_CONCRETE.getDefaultState();
 				case ENDER_DRAGON -> Blocks.PURPLE_CONCRETE.getDefaultState();
 				case WITHER -> Blocks.SOUL_SOIL.getDefaultState();

@@ -121,7 +121,7 @@ public final class FirstPersonMic {
 		}
 	}
 
-	private static Trophies.TrophyPerk offhandPerk(ItemStack off) {
+	static Trophies.TrophyPerk offhandPerk(ItemStack off) {
 		if (off == null || off.isEmpty()) return null;
 		NbtComponent custom = off.get(DataComponentTypes.CUSTOM_DATA);
 		if (custom != null) {

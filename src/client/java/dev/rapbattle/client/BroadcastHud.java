@@ -360,6 +360,12 @@ public final class BroadcastHud {
 		boolean blind = "ink".equals(fx) || "blind".equals(fx);
 		if (first != null) cellRow(ctx, tr, first, cw, lx + PAD, ly + PAD, !leadIn && live == first, leadIn ? -1 : k, me, tagColor, fr);
 		if (second != null && !blind) cellRow(ctx, tr, second, cw, lx + PAD, ly + PAD + ROW + GAP, false, -1, me, tagColor, fr);
+		// Homemade mic perk (off-hand): brief white border flash on beat 4 of each player bar.
+		var mc = net.minecraft.client.MinecraftClient.getInstance();
+		if (!leadIn && live != null && !live.mob && ClientBattle.me().equals(live.reader) && k == 3 && fr < 0.35f
+			&& mc.player != null && FirstPersonMic.offhandPerk(mc.player.getOffHandStack()) == dev.rapbattle.battle.Trophies.TrophyPerk.HOMEMADE) {
+			ctx.drawStrokedRectangle(lx - 1, ly - 1, lw + 2, rowsH + 2, alphaOf(WHITE, 1f - fr / 0.35f));
+		}
 
 		// Bottom edge: the beat pulse, or your mic level while you record.
 		int by = ly + rowsH;

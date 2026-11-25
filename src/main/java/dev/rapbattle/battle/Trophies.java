@@ -22,6 +22,7 @@ public final class Trophies {
 	public static final String NBT_KEY = "rapbattle_trophy";
 
 	public enum TrophyPerk {
+		HOMEMADE("homemade"),
 		WARDEN("warden"),
 		ENDER_DRAGON("ender_dragon"),
 		WITHER("wither"),
