@@ -64,8 +64,14 @@ public final class PlayerMoves {
 			String now = PLAYING.get(p.getId());
 			BattleView v = ClientBattle.view;
 			boolean onBeat = want != null && (want.startsWith("rap") || ((want.equals("listen") || want.equals("hype")) && BattleDance.onBeat()));
-			layer.speed().speed = onBeat && v != null && v.beatMs > 0 ? MADE_AT_BEAT_MS / v.beatMs : want != null && want.equals("listen") ? 0.2f : 1f;
+			float baseSpeed = onBeat && v != null && v.beatMs > 0 ? MADE_AT_BEAT_MS / v.beatMs : want != null && want.equals("listen") ? 0.2f : 1f;
+			if (want != null && want.startsWith("rap")) {
+				baseSpeed *= (0.6f + 0.8f * ClientBattle.smoothMicLevel());
+			}
+			layer.speed().speed = baseSpeed;
 			if (java.util.Objects.equals(want, now)) continue;
+			// Align beat-driven animation restarts with ClientBattle.beatFrac() so head nods stay in phase.
+			if (want != null && want.startsWith("rap") && now != null && ClientBattle.beatFrac() > 0.15f) continue;
 			try {
 				if (want == null) {
 					layer.controller().stop();

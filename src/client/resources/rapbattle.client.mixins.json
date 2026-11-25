@@ -4,10 +4,13 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "MobEntityAccessor",
+    "ModelPartAccessor",
     "LivingEntityRenderStateMixin",
     "LivingEntityRendererMixin",
     "ModelCommandRendererMixin",
     "CameraMixin",
+    "GameRendererMixin",
+    "HeldItemRendererMixin",
     "BipedEntityModelMixin",
     "QuadrupedEntityModelMixin",
     "VillagerModelMixin",
