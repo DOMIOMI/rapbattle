@@ -34,12 +34,22 @@ public final class Bling {
 	/** Does this entity have a cigarette right now (the mob on stage, and about every third fan in the crowd). */
 	static boolean smokes(int id) {
 		BattleView v = ClientBattle.view;
-		if (v == null || id < 0 || "LOBBY".equals(v.phase) || !ClientConfig.get().bling) return false;
+		if (v == null || id < 0 || "LOBBY".equals(v.phase) || !ClientConfig.get().bling || nosed(id)) return false;
 		if (v.mobEntityIds.contains(id)) return true;
 		return v.crowdIds.contains(id) && Math.floorMod(id * 7 + 1, 3) == 0;
 	}
 
 	static boolean isBiped(String type) { return BIPEDS.contains(type); }
+
+	/** Villagers and illagers: their big nose sits right where the mouth is, so a cigarette would stick out of it. */
+	private static final Set<String> NOSED = Set.of("villager", "wandering_trader", "zombie_villager", "pillager",
+		"vindicator", "evoker", "illusioner", "witch");
+
+	static boolean nosed(int id) {
+		var mc = net.minecraft.client.MinecraftClient.getInstance();
+		var e = mc.world == null ? null : mc.world.getEntityById(id);
+		return e != null && NOSED.contains(Registries.ENTITY_TYPE.getId(e.getType()).getPath());
+	}
 
 	/** What this entity wears in the current battle, or null. */
 	static Kit kitFor(int id) {
@@ -58,7 +68,7 @@ public final class Bling {
 			boolean glasses = r >= 3 || "На понтах".equals(v.mobMood) || "Опасный".equals(v.mobMood)
 				|| "Flexing".equals(v.mobMood) || "Dangerous".equals(v.mobMood);
 			BlockState cap = v.gangColor >= 0 && !helmet ? concrete(v.gangColor) : null;
-			return new Kit(chain, pendant, glasses, cap, true);
+			return new Kit(chain, pendant, glasses, cap, !nosed(id));
 		}
 		if (smokes(id)) return new Kit(null, null, false, null, true);
 		for (BattleView.Member mm : v.team) {
