@@ -21,7 +21,7 @@ import net.minecraft.util.math.RotationAxis;
 /**
  * First-person microphone & left-hand reactions during the TIMELINE phase:
  * <ul>
- *   <li>Right hand (empty): holds the mic model (with trophy mic colour & glow if one is in off-hand).</li>
+ *   <li>Right arm (empty): positions the fist and draws the mic inside it (with trophy mic colour & glow from off-hand).</li>
  *   <li>Mob's turn: slightly lower, swaying to the beat; own turn: closer to center-bottom, bouncing with voice level.</li>
  *   <li>Silence &gt; 2 beats on own turn: mic hand lowers.</li>
  *   <li>Left hand: forward jab on loud on-beat rhyme; DJ scratch gesture on rhyme reroll (R).</li>
@@ -30,42 +30,41 @@ import net.minecraft.util.math.RotationAxis;
 public final class FirstPersonMic {
 	private FirstPersonMic() {}
 
-	public static boolean shouldRenderRight(AbstractClientPlayerEntity player, Hand hand, ItemStack item) {
+	public static boolean activeRightArm(Arm arm) {
+		if (arm != Arm.RIGHT) return false;
 		BattleView v = ClientBattle.view;
-		if (v == null || v.spectator || !"TIMELINE".equals(v.phase) || !ClientBattle.onStage()) return false;
-		Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-		return arm == Arm.RIGHT && item.isEmpty();
+		return v != null && !v.spectator && "TIMELINE".equals(v.phase) && ClientBattle.onStage();
 	}
 
-	public static void renderRight(AbstractClientPlayerEntity player, MatrixStack m, OrderedRenderCommandQueue q, int light) {
-		BattleView v = ClientBattle.view;
-		if (v == null) return;
-		boolean myTurn = ClientBattle.readerId() == player.getId();
+	public static void applyArmTransform(MatrixStack m, Arm arm) {
+		if (!activeRightArm(arm)) return;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null) return;
+		boolean myTurn = ClientBattle.readerId() == mc.player.getId();
 		float beatFrac = ClientBattle.beatFrac();
 		float pu = BattleDance.onBeat() ? MobMoves.pulse(beatFrac) : 0f;
 		float wave = (float) Math.sin(Math.PI * (ClientBattle.beat() + beatFrac) / 2.0);
 		float voice = ClientBattle.smoothMicLevel();
 		boolean silentDrop = myTurn && ClientBattle.silentBeats() > 2f;
 
-		m.push();
 		if (silentDrop) {
-			m.translate(0.45f, -0.68f, -0.65f);
-			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-25f));
+			m.translate(0.05f, -0.22f, 0.02f);
+			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-20f));
 		} else if (myTurn) {
 			float bounce = 0.045f * voice + 0.015f * pu;
-			m.translate(0.28f, -0.34f + bounce, -0.58f);
-			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-22f));
-			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-18f + 6f * voice));
-			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(10f));
+			m.translate(-0.14f, 0.06f + bounce, 0.12f);
 		} else {
-			m.translate(0.46f, -0.48f - 0.025f * pu, -0.68f);
-			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-18f));
-			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(6f * wave));
-			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-12f));
+			m.translate(0.02f, -0.08f - 0.02f * pu, 0.0f);
+			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(5f * wave));
 		}
+	}
 
-		// Trophy mic colour & glow if held in off-hand.
-		Trophies.TrophyPerk perk = offhandPerk(player.getOffHandStack());
+	public static void renderMicInArm(MatrixStack m, OrderedRenderCommandQueue q, int light, Arm arm) {
+		if (!activeRightArm(arm)) return;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null) return;
+
+		Trophies.TrophyPerk perk = offhandPerk(mc.player.getOffHandStack());
 		BlockState grip = Blocks.BLACK_CONCRETE.getDefaultState();
 		BlockState head = Blocks.GRAY_CONCRETE.getDefaultState();
 		int useLight = light;
@@ -79,8 +78,13 @@ public final class FirstPersonMic {
 				case DEFAULT -> Blocks.GOLD_BLOCK.getDefaultState();
 			};
 		}
-		block(m, q, useLight, grip, 0f, -0.08f, 0f, 0.065f, 0.22f, 0.065f);
-		block(m, q, useLight, head, 0f, 0.06f, 0f, 0.11f, 0.11f, 0.11f);
+
+		m.push();
+		m.translate(0.14f, -0.20f, -0.20f);
+		m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-35f));
+		m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-15f));
+		block(m, q, useLight, grip, 0f, -0.08f, 0f, 0.065f, 0.24f, 0.065f);
+		block(m, q, useLight, head, 0f, 0.06f, 0f, 0.115f, 0.115f, 0.115f);
 		m.pop();
 	}
 
