@@ -30,6 +30,8 @@ public class BattleView {
 
 	public int round = 1;
 	public int rounds = 1;
+	/** How many beats ahead a player's rhyme word shows up (0 = the whole verse is visible). */
+	public int revealBeats;
 	public int roundWinsPlayers;
 	public int roundWinsMob;
 

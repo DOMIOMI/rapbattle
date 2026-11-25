@@ -138,7 +138,7 @@ public class Battle {
 		this.boss = rank.isBoss();
 		this.rounds = boss ? 3 : 1;
 		this.winsNeeded = boss ? 2 : 1;
-		this.respectMax = boss ? 180 : 100;
+		this.respectMax = boss ? 200 : 100;
 		this.respectTeam = respectMax;
 		this.respectMob = respectMax;
 		long wantMs = Math.round(60000.0 / Math.max(40, Math.min(220, rank.bpm * cfg.tempoScale * tempoOf(opp.profile().id()))));
@@ -428,6 +428,22 @@ public class Battle {
 		if (hasPlayer(p.getUuid()) && opp.profile().id().equals("warden")) noise += Math.max(0, Math.min(10, count));
 	}
 
+	/** Rhymes on the beat: 2 each (1 for "almost"), and a run of them multiplies: x1.5 from 3 in a row, x2 from 6. */
+	static int flowDamage(int[] tm) {
+		double sum = 0;
+		int streak = 0;
+		for (int x : tm) {
+			if (x == 2) {
+				streak++;
+				sum += 2 * (streak >= 6 ? 2.0 : streak >= 3 ? 1.5 : 1.0);
+			} else {
+				streak = 0;
+				if (x == 1) sum += 1;
+			}
+		}
+		return (int) Math.round(sum);
+	}
+
 	/** One rhyme slot of a player: said loud on the beat, or silence. Feeds the crowd. */
 	public void onBar(ServerPlayerEntity p, boolean loud) {
 		if (!hasPlayer(p.getUuid()) || phase != Phase.TIMELINE) return;
@@ -439,13 +455,10 @@ public class Battle {
 			combo++;
 			bestCombo = Math.max(bestCombo, combo);
 			linesOnBeat++;
-			float mult = combo >= 6 ? 2f : combo >= 3 ? 1.5f : 1f;
-			int d = Math.round(3 * mult);
-			liveHit(true, d, who);
-			DamagePop.spawn(world, mob, "-" + d + (mult > 1 ? "  x" + (mult == 2f ? "2" : "1.5") : ""), 0xFFD84A);
+			// Volume alone deals nothing now: the judge and the beat timing do. It only hypes the crowd and the combo.
+			if (combo >= 3) DamagePop.spawn(world, p, "x" + combo, 0xFFD84A);
 		} else {
 			combo = 0;
-			liveHit(false, 2, who);
 			DamagePop.spawn(world, p, Lang.t(lang, "rapbattle.battle.stumbled_pop"), 0xFF6060);
 		}
 		Crowd.react(this, loud ? Crowd.Moment.PLAYER_HIT : Crowd.Moment.PLAYER_MISS);
@@ -712,6 +725,8 @@ public class Battle {
 				long readMs = ROUND_RESULT_MS + (result == null ? 0 : Math.min(6000, result.comment.length() * 40L) + result.hits.size() * 400L);
 				if (now - phaseStart >= readMs) {
 					round++;
+					// The boss catches his breath between rounds.
+					if (boss) respectMob = Math.min(respectMax, respectMob + 20);
 					beginRoundContent(now);
 				}
 			}
@@ -1048,7 +1063,8 @@ public class Battle {
 			for (int i = 0; i < ls.size(); i++) {
 				Llm.LineScore l = ls.get(i);
 				String word = i < words.size() ? words.get(i) : "";
-				int d = l.damage();
+				// Weak bars bounce off strong mobs: below the rank's bar a line deals nothing, the rest goes through its defence.
+				int d = l.score() < rank.minLineScore() ? 0 : (int) Math.round(l.damage() * rank.defense());
 				hits.add(new BattleView.Hit(ps.name, (word.isEmpty() ? "" : "«" + word + "» · ") + l.note(), d, true, l.punch()));
 				roundDealt.merge(ps.name, d, Integer::sum);
 				battleDealt.merge(ps.name, d, Integer::sum);
@@ -1066,7 +1082,7 @@ public class Battle {
 			int on = count(tm, 2), near = count(tm, 1);
 			onBeatTotal += on;
 			timedTotal += tm.length;
-			int d = on * 3 + near;
+			int d = flowDamage(tm);
 			if (d > 0) {
 				hits.add(new BattleView.Hit(names.get(u),
 					Lang.t(lang, "rapbattle.battle.hit_rhymes_on_beat", on, tm.length)
@@ -1136,6 +1152,7 @@ public class Battle {
 		v.beatTrack = track == null ? null : track.id();
 		v.boss = boss;
 		v.rounds = rounds;
+		v.revealBeats = rank.revealBeats();
 		v.round = round;
 		v.roundWinsPlayers = winsPlayers;
 		v.roundWinsMob = winsMob;

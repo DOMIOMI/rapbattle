@@ -476,6 +476,8 @@ public final class BattleHud {
 					default -> {}
 				}
 			}
+			// Strong mobs leave no time to prepare: the word shows up only shortly before its line.
+			if (!r.mob && v.revealBeats > 0 && r.startBeat - beat > v.revealBeats) shown = "???";
 			ctx.fill(x, y, x + WORD_W, y + ROW_H, cellColor);
 			if (live && kInBar == 3) ctx.drawStrokedRectangle(x - 1, y - 1, WORD_W + 2, ROW_H + 2, YELLOW);
 			else if (live) ctx.drawStrokedRectangle(x - 1, y - 1, WORD_W + 2, ROW_H + 2, 0xFFFFFFFF);

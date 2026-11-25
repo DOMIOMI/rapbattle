@@ -232,16 +232,11 @@ public final class PvpBattle {
 		if (phase != Phase.TIMELINE) return;
 		UUID u = p.getUuid();
 		if (loud) {
+			// Volume alone deals nothing: the judge and the beat timing do.
 			int c = combo.merge(u, 1, Integer::sum);
-			float mult = c >= 6 ? 2f : c >= 3 ? 1.5f : 1f;
-			int d = Math.round(3 * mult);
-			hit(other(u), d, true);
-			dealt.merge(u, d, Integer::sum);
-			ServerPlayerEntity o = player(other(u));
-			if (o != null) DamagePop.spawn(world, o, "-" + d + (mult > 1 ? "  x" + (mult == 2f ? "2" : "1.5") : ""), 0xFFD84A);
+			if (c >= 3) DamagePop.spawn(world, p, "x" + c, 0xFFD84A);
 		} else {
 			combo.put(u, 0);
-			hit(u, 2, true);
 			DamagePop.spawn(world, p, Lang.t(langOf(u), "rapbattle.battle.stumbled_pop"), 0xFF6060);
 		}
 		broadcast();
@@ -396,7 +391,7 @@ public final class PvpBattle {
 			if (tm != null) {
 				int on = 0, near = 0;
 				for (int x : tm) if (x == 2) on++; else if (x == 1) near++;
-				int d = on * 3 + near;
+				int d = Battle.flowDamage(tm);
 				if (d > 0) {
 					for (Map.Entry<String, BattleView.Result> e : results.entrySet())
 						e.getValue().hits.add(new BattleView.Hit(names.get(u), Lang.t(e.getKey(), "rapbattle.battle.hit_rhymes_on_beat", on, tm.length), d, u.equals(a), false));
