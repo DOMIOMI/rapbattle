@@ -27,6 +27,7 @@ public final class RaidBattle {
 	private RaidBattle() {}
 
 	private static final Set<Integer> CHALLENGED_RAIDS = new HashSet<>();
+	private static final Set<UUID> FINAL_CAPTAINS = new HashSet<>();
 
 	static void tick(MinecraftServer server) {
 		if (server.getTicks() % 20 != 0) return;
@@ -46,6 +47,7 @@ public final class RaidBattle {
 				}
 				if (captain.squaredDistanceTo(p) > 24 * 24 || BattleManager.byMob(captain) != null) continue;
 				CHALLENGED_RAIDS.add(raidKey);
+				FINAL_CAPTAINS.add(captain.getUuid());
 				captain.getNavigation().startMovingTo(p, 1.1);
 				Speech.bubble(captain, Lang.t(Lang.of(p), "rapbattle.act2.raid_callout"), 0xF07167, 4000);
 				BattleManager.challengeFrom(p, captain);
@@ -56,7 +58,18 @@ public final class RaidBattle {
 	static Raid activeRaidFor(MobEntity mob) {
 		if (mob instanceof RaiderEntity r) {
 			Raid raid = r.getRaid();
-			if (raid != null && !raid.isFinished() && !raid.hasStopped()) return raid;
+			if (raid == null || raid.isFinished() || raid.hasStopped() || raid.hasWon()) return null;
+			if (FINAL_CAPTAINS.contains(mob.getUuid())) return raid;
+			if (mob.getEntityWorld() instanceof ServerWorld sw) {
+				int groups = raid.getGroupsSpawned();
+				int maxWaves = raid.getMaxWaves(sw.getDifficulty());
+				RaiderEntity captain = findCaptain(raid);
+				boolean isCap = captain != null && captain.getUuid().equals(mob.getUuid());
+				if (Acts.isFinalWaveCaptainMatch(true, true, groups, maxWaves, isCap)) {
+					FINAL_CAPTAINS.add(mob.getUuid());
+					return raid;
+				}
+			}
 		}
 		return null;
 	}

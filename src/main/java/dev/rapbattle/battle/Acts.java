@@ -36,6 +36,12 @@ public final class Acts {
 		return hasRaid && raidActive && maxWaves > 0 && groupsSpawned >= maxWaves && captainAlive;
 	}
 
+	/** Act 2 (6.7): raid mode applies ONLY to the final-wave captain, never to regular raiders or earlier waves. */
+	public static boolean isFinalWaveCaptainMatch(boolean hasRaid, boolean raidActive, int groupsSpawned,
+												  int maxWaves, boolean isCaptain) {
+		return isFinalWaveWithCaptain(hasRaid, raidActive, groupsSpawned, maxWaves, isCaptain);
+	}
+
 	public static final int BLAZE_RODS_LETHAL_MIN = 2;
 	public static final int BLAZE_RODS_LETHAL_MAX = 3;
 	public static final int BLAZE_RODS_CLOSE = 1;

@@ -84,4 +84,21 @@ class ActsTest {
 		assertEquals("piglin", Acts.rivalOf("hoglin"));
 		assertNull(Acts.rivalOf("sheep"));
 	}
+
+	@Test
+	void raidModeAppliesOnlyToFinalWaveCaptain() {
+		assertTrue(Acts.isFinalWaveCaptainMatch(true, true, 3, 3, true));
+		assertFalse(Acts.isFinalWaveCaptainMatch(true, true, 1, 3, true));
+		assertFalse(Acts.isFinalWaveCaptainMatch(true, true, 3, 3, false));
+		assertFalse(Acts.isFinalWaveCaptainMatch(true, false, 3, 3, true));
+	}
+
+	@Test
+	void cleanTargetNeverGluesMultiWordTargets() {
+		assertEquals("лавовый", dev.rapbattle.ai.Llm.cleanTarget("лавовый компот"));
+		assertEquals("шахтёр", dev.rapbattle.ai.Llm.cleanTarget("шахтёр!"));
+		String multi = dev.rapbattle.ai.Llm.cleanTarget("пять дней");
+		assertFalse(multi.equals("пятьдней"), "Multi-word targets must not glue without spaces");
+		assertEquals("пять", multi);
+	}
 }
