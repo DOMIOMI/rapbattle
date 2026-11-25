@@ -96,6 +96,8 @@ public class BlingFeature extends FeatureRenderer<LivingEntityRenderState, Entit
 				m.peek().getPositionMatrix().set(arm.pos());
 				m.peek().getNormalMatrix().set(arm.normal());
 				m.translate(ax / 16f, ay / 16f, az / 16f);
+				// Tilt slightly upward so the ring and mesh head stick out above the fist toward the chin.
+				m.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotationDegrees(-20f));
 				MicModel.render(m, q, light, 1 / 16f, null);
 				m.pop();
 			} else if (!Bling.isBiped(type)) {

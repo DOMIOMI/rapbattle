@@ -241,26 +241,26 @@ public final class MobMoves {
 			to(id, leftArm, b, q[1], 0f, -0.05f);
 			head.yaw += (beat % 2 == 0 ? 0.35f : -0.35f) * b;
 		} else if (skeleton) {
-			float[][] poses = {{-1.3f, -0.2f}, {-0.2f, -1.3f}, {-1.6f, -1.6f}, {-0.4f, -0.4f}};
+			float[][] poses = {{-1.75f, -1.35f}, {-1.60f, -0.35f}, {-1.85f, -1.55f}, {-1.65f, -0.45f}};
 			float[] q = poses[Math.floorMod(beat, 4)];
-			to(id, rightArm, b, q[0], 0f, 0.08f);
+			to(id, rightArm, b, q[0], -0.25f, 0.06f);
 			to(id, leftArm, b, q[1], 0f, -0.08f);
 			head.roll += (float) Math.sin(ClientBattle.beatFrac() * Math.PI * 10) * 0.1f * pu * b;
 		} else if (zombie) {
-			float chop = rhyme ? 1.5f : 0.95f;
-			to(id, rightArm, b, -0.7f - chop * pu, 0.15f, 0.08f);
+			float nod = rhyme ? 0.35f : 0.2f;
+			to(id, rightArm, b, -1.72f - nod * pu, -0.28f, 0.06f);
 			to(id, leftArm, b, rhyme ? -0.6f - 1.3f * pu : -0.45f + 0.2f * pu, -0.15f, -0.1f);
 		} else if (piglin) {
-			to(id, rightArm, b, -2.3f + 1.7f * pu, 0f, 0.1f);
+			to(id, rightArm, b, -1.85f + 0.35f * pu, -0.25f, 0.08f);
 			to(id, leftArm, b, -0.5f, -0.1f, -0.1f);
 		} else {
 			float[] q = switch (Math.floorMod(k < 0 ? beat : k, 4)) {
-				case 0 -> new float[]{-1.4f, 0.25f};
-				case 1 -> new float[]{-0.7f, 0f};
-				case 2 -> new float[]{-2.2f, 0.15f};
-				default -> new float[]{-1.1f, -0.35f};
+				case 0 -> new float[]{-1.75f, -0.25f};
+				case 1 -> new float[]{-1.60f, -0.30f};
+				case 2 -> new float[]{-1.85f, -0.20f};
+				default -> new float[]{-1.65f, -0.35f};
 			};
-			to(id, rightArm, b, q[0] - 0.15f * pu, q[1], 0.05f);
+			to(id, rightArm, b, q[0] - 0.12f * pu, q[1], 0.05f);
 			to(id, leftArm, b, -0.35f, -0.15f, -0.05f);
 		}
 	}
