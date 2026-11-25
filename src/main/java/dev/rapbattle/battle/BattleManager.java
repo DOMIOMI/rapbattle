@@ -663,6 +663,7 @@ public final class BattleManager {
 	}
 
 	private static final Map<UUID, Long> CHAMPION_COOLDOWN = new HashMap<>();
+	private static final Map<UUID, Long> REMATCH_COOLDOWN = new HashMap<>();
 
 	private static void tickChampions(net.minecraft.server.MinecraftServer server) {
 		long now = System.currentTimeMillis();
@@ -678,10 +679,29 @@ public final class BattleManager {
 		}
 		if (server.getTicks() % 20 != 0) return;
 		CHAMPION_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
+		REMATCH_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
 		Stats stats = Stats.of(server);
 		for (var w : server.getWorlds()) {
 			for (ServerPlayerEntity p : w.getPlayers()) {
 				if (p.isSpectator() || byPlayer(p.getUuid()) != null || PENDING.containsKey(p.getUuid())) continue;
+				// 1. Rematch: a mob that fled after a close loss remembers the player and calls for a rematch.
+				String pName = p.getName().getString();
+				List<MobEntity> rivals = w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(16),
+					m -> {
+						if (!m.isAlive() || Opponent.isBoss(m) || byMob(m) != null || inAnyCrowd(m) || Crowd.inTruce(m)) return false;
+						if (REMATCH_COOLDOWN.containsKey(m.getUuid())) return false;
+						MobRecord.Rival rv = MobRecord.rival(m, pName);
+						return rv != null && !rv.mobWon();
+					});
+				if (!rivals.isEmpty()) {
+					rivals.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
+					MobEntity rival = rivals.get(0);
+					REMATCH_COOLDOWN.put(rival.getUuid(), now + 2 * 60_000L);
+					Speech.bubble(rival, Lang.t(Lang.of(p), "rapbattle.act6.rematch_callout"), 0xFF8A7A, 4000);
+					challengeFrom(p, rival);
+					continue;
+				}
+				// 2. Champion (wins > 0) calls out a player on a 3+ win streak.
 				if (stats.player(p.getUuid()).streak < 3) continue;
 				List<MobEntity> champs = w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(24),
 					m -> m.isAlive() && !Opponent.isBoss(m) && byMob(m) == null && !inAnyCrowd(m)

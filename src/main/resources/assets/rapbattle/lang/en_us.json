@@ -492,5 +492,6 @@
   "rapbattle.act5.legend_empty": "The Golden Line of the World has not been written yet.",
   "rapbattle.act5.legend_show": "Golden Line (%s, %s): \"%s\"",
   "rapbattle.act6.gang_rival": "+1 rank (gang rivalry)",
-  "rapbattle.act6.champion_callout": "Heard about your win streak. Step up to a champion?"
+  "rapbattle.act6.champion_callout": "Heard about your win streak. Step up to a champion?",
+  "rapbattle.act6.rematch_callout": "I remember you! No backing out this time — rematch!"
 }

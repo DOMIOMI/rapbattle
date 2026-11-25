@@ -492,5 +492,6 @@
   "rapbattle.act5.legend_empty": "Золотая строка мира ещё не записана.",
   "rapbattle.act5.legend_show": "Золотая строка мира (%s, %s): «%s»",
   "rapbattle.act6.gang_rival": "+1 ранг (вражда банд)",
-  "rapbattle.act6.champion_callout": "Слышал про твою серию. Потягаемся с чемпионом?"
+  "rapbattle.act6.champion_callout": "Слышал про твою серию. Потягаемся с чемпионом?",
+  "rapbattle.act6.rematch_callout": "Я тебя запомнил! В этот раз не уйдёшь — реванш!"
 }
