@@ -15,6 +15,12 @@
 Увидел такую идею где-то в ТикТоке и пошёл искать мод. Не нашёл ни на Modrinth, ни на CurseForge, ни на других
 площадках, поэтому решил сделать его сам.
 
+Делал я его для себя и друзей, а выкладываю, чтобы и вы могли пофаниться со своими. Это не какой-то
+суперсерьёзный проект, так что без фанатизма.
+
+**Нашёл баг?** Пиши сразу в [Issues на GitHub](https://github.com/DOMIOMI/rapbattle/issues): что делал, что
+случилось, версия мода и, если есть, файл `logs/latest.log`. Постараюсь исправить в ближайшее время.
+
 > **Честно предупреждаю:** мод целиком написан ИИ (Claude), я это не скрываю. Я придумывал, тестировал и говорил,
 > что поправить, а код писала нейросеть. Биты, голоса толпы и выкрики тоже сделаны нейросетями (ElevenLabs).
 
@@ -50,10 +56,11 @@
 Лицензия MIT. Бери мод, включай в свои сборки, переделывай, выкладывай свои версии. Спрашивать не надо,
 только оставь файл LICENSE с указанием автора (DOMI).
 
-Исходники: GitHub (ссылка появится после публикации).
+Исходники и баг-репорты: https://github.com/DOMIOMI/rapbattle
 
 ---
 
 **English, briefly:** rap battles against mobs and friends. You rap into your microphone over a real beat, an LLM
 writes the mob's verse and judges every line, the crowd cheers or boos. Russian-language only for now.
 Fully AI-written (Claude), beats and crowd voices made with ElevenLabs. MIT: use it in modpacks, fork it, change it.
+A just-for-fun project made for friends. Found a bug? Open an issue on GitHub: https://github.com/DOMIOMI/rapbattle/issues
