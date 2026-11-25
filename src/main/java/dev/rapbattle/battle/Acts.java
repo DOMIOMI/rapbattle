@@ -17,4 +17,22 @@ public final class Acts {
 		if (baseXp <= 0) return 0;
 		return (rank != null && rank.level() <= 2 && isNight) ? (int) Math.round(baseXp * 1.5) : baseXp;
 	}
+
+	public static final long TICKS_PER_DAY = 24_000L;
+
+	/** Act 2: villager battle discounts can be granted at most once per in-game day (24000 ticks). */
+	public static boolean canGiveVillagerDiscount(long lastDiscountTick, long worldTime) {
+		return lastDiscountTick <= 0 || (worldTime - lastDiscountTick) >= TICKS_PER_DAY;
+	}
+
+	/** Act 2: defending the village requires at least 2 nearby villager witnesses within 32 blocks. */
+	public static boolean hasVillageDefenseWitnesses(int nearbyVillagerCount) {
+		return nearbyVillagerCount >= 2;
+	}
+
+	/** Act 2: raid finale triggers on the final wave when the patrol captain is alive. */
+	public static boolean isFinalWaveWithCaptain(boolean hasRaid, boolean raidActive, int groupsSpawned,
+												 int maxWaves, boolean captainAlive) {
+		return hasRaid && raidActive && maxWaves > 0 && groupsSpawned >= maxWaves && captainAlive;
+	}
 }

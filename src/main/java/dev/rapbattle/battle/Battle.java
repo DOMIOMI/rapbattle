@@ -87,6 +87,7 @@ public class Battle {
 	private final Set<MobEntity> dressed = new HashSet<>();
 	/** Mobs around the stage watching and reacting. */
 	Crowd crowd;
+	private final net.minecraft.village.raid.Raid raid;
 	private final Set<Integer> punchesFired = new HashSet<>();
 	private Entity currentReader;
 
@@ -146,6 +147,8 @@ public class Battle {
 		this.mob = mob;
 		this.opp = Opponent.of(mob, rnd, challenger, lang);
 		Rank r = opp.rank();
+		this.raid = RaidBattle.activeRaidFor(mob);
+		if (this.raid != null && r.level() < 4) r = Rank.GOLD;
 		String mobId = opp.profile().id();
 		if (challenger != null && (mobId.equals("villager") || mobId.equals("wandering_trader")
 			|| mobId.equals("pillager") || mobId.equals("vindicator"))
@@ -167,6 +170,17 @@ public class Battle {
 		this.beatMs = track != null ? track.beatMs() : wantMs;
 		this.lobbyEnd = phaseStart + cfg.lobbySeconds * 1000L * (boss ? 2 : 1);
 		addMob(mob, opp.name());
+		if (this.raid != null) {
+			List<net.minecraft.entity.raid.RaiderEntity> crew = new ArrayList<>();
+			for (net.minecraft.entity.raid.RaiderEntity raider : this.raid.getAllRaiders()) {
+				if (raider != mob && raider.isAlive() && BattleManager.byMob(raider) == null) crew.add(raider);
+			}
+			crew.sort(Comparator.comparingDouble(e -> e.squaredDistanceTo(mob)));
+			for (int i = 0; i < Math.min(3, crew.size()); i++) {
+				MobEntity ally = crew.get(i);
+				addMob(ally, Opponent.nameOf(ally, MobProfiles.of(ally.getType()), rnd, lang));
+			}
+		}
 		addPlayer(challenger);
 		greetRival(challenger);
 	}
@@ -1643,10 +1657,47 @@ public class Battle {
 				ExperienceOrbEntity.spawn(world, pos, xp);
 				return;
 			}
+			if (mob instanceof net.minecraft.entity.passive.VillagerEntity villager) {
+				// Friendly villager battle: never kill/damage the villager, grant cured-level discounts at most once per day.
+				if (Acts.canGiveVillagerDiscount(MobRecord.of(villager).lastDiscountTick(), world.getTime())) {
+					for (UUID u : players) {
+						ServerPlayerEntity pl = player(u);
+						if (pl != null) villager.onInteractionWith(net.minecraft.entity.EntityInteraction.ZOMBIE_VILLAGER_CURED, pl);
+					}
+					MobRecord.markDiscount(villager, world.getTime());
+					broadcastChat(Text.translatable("rapbattle.act2.villager_discount", opp.name()).formatted(Formatting.GREEN));
+				}
+				ExperienceOrbEntity.spawn(world, pos, xp);
+				return;
+			}
+			if (mob instanceof net.minecraft.entity.mob.HostileEntity) {
+				List<net.minecraft.entity.passive.VillagerEntity> witnesses = world.getEntitiesByClass(
+					net.minecraft.entity.passive.VillagerEntity.class, mob.getBoundingBox().expand(32),
+					net.minecraft.entity.LivingEntity::isAlive);
+				if (Acts.hasVillageDefenseWitnesses(witnesses.size())) {
+					for (net.minecraft.entity.passive.VillagerEntity v : witnesses) {
+						for (UUID u : players) {
+							v.getGossip().startGossip(u, net.minecraft.village.VillagerGossipType.MINOR_POSITIVE, 25);
+						}
+					}
+					broadcastChat(Text.translatable("rapbattle.act2.village_defended").formatted(Formatting.GREEN));
+				}
+			}
 			// Some mobs refuse to accept it and go for the MVP instead of dying.
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
 			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
+			if (raid != null) {
+				Vec3d awayFrom = killer != null ? new Vec3d(killer.getX(), killer.getY(), killer.getZ()) : pos;
+				RaidBattle.onWin(world, raid, players, lethal, pos, awayFrom, mob, rnd);
+				if (!lethal) {
+					Crowd.retreat(mobTeam, awayFrom, 15_000L);
+					broadcastChat(Text.translatable("rapbattle.battle.mob_escaped", opp.name(),
+						Text.translatable("rapbattle.battle.escaped." + rnd.nextInt(ESCAPED_LINES))).formatted(Formatting.GRAY));
+					ExperienceOrbEntity.spawn(world, pos, Math.max(1, xp / 2));
+					return;
+				}
+			}
 			if (!lethal) {
 				DamageSource rap = new DamageSource(world.getRegistryManager().getOrThrow(RegistryKeys.DAMAGE_TYPE).getOrThrow(RAP_DEATH));
 				for (MobEntity m : new ArrayList<>(mobTeam)) {
@@ -1708,6 +1759,9 @@ public class Battle {
 			// Lost to a villager: the village golem takes it personally.
 			if (mob instanceof net.minecraft.entity.passive.VillagerEntity villager && challenger() != null) {
 				GolemDefender.offended(challenger(), villager);
+			}
+			if (raid != null) {
+				RaidBattle.onLoss(world, raid, new Vec3d(mob.getX(), mob.getY(), mob.getZ()));
 			}
 		}
 		RapBattle.LOG.info("Battle {} finished: players {} respect {} vs mob {} (ko {}, rank {})", id, result.playersWin ? "won" : "lost",
