@@ -74,9 +74,12 @@ On your own server you can set the keys with environment variables: `OPENROUTER_
 
 ## How to play
 - **Challenge a mob:** punch it with an empty hand → choose **R** (battle) or punch again (fight).
+- **Pick a topic in the lobby:** the challenger can press **1 / 2 / 3** to set the angle ("Fit & Flex", "Whose Turf", or "No Brakes").
 - **Challenge a player:** punch a player with an empty hand → they press **Y** (accept) or **N**.
 - **Countdown 4-3-2-1**, your opponent's turn, a "GET READY" bar, then your lines. A yellow dot moves across the beats,
   and the rhyme from the coloured cell must land on the 4th beat.
+- **Rebuttals, reroll & freestyle:** flip the anchor words shown under "FLIP" to parry the mob's verse damage; press **R** once per round to swap an awkward rhyme; on Gold+ the 4th bar of each block is **★ OWN RHYME** with extra punchline damage.
+- **Crowd & mob gimmicks:** combos win neutral fans (and even mob fans at 6+) over to your side with stage gifts after a win; hold an emerald in your off-hand against a villager or illager to drop their rank.
 - **If your rhymes don't count as "on beat":** settings → "Latency" → run the calibration (clap along to the clicks).
 - Crowd volume is the "Friendly Creatures" slider in the game's sound settings.
 
