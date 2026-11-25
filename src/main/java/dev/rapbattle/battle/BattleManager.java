@@ -510,6 +510,8 @@ public final class BattleManager {
 			Later.tick();
 			GolemDefender.tick();
 			RaidBattle.tick(server);
+			BastionBattle.tick(server);
+			PlayerStatus.tick(server);
 			PvpBattle.tickAll();
 			tickStares(server);
 		});

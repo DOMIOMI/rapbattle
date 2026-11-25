@@ -3,7 +3,8 @@
   "package": "dev.rapbattle.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "MobEntityTargetMixin"
+    "MobEntityTargetMixin",
+    "PiglinBrainMixin"
   ],
   "injectors": {
     "defaultRequire": 1
