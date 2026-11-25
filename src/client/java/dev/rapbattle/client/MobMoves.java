@@ -71,7 +71,7 @@ public final class MobMoves {
 							 ModelPart rightArm, ModelPart leftArm, ModelPart rightLeg, ModelPart leftLeg) {
 		float b = blend(id, mode);
 		int beat = ClientBattle.beat();
-		float pu = pulse(ClientBattle.beatFrac());
+		float pu = BattleDance.onBeat() ? pulse(ClientBattle.beatFrac()) : 0f;
 		String t = type(s);
 		boolean zombie = t.contains("zombie") || t.equals("husk") || t.equals("drowned") || t.equals("giant");
 		boolean skeleton = t.contains("skeleton") || t.equals("stray") || t.equals("bogged") || t.equals("parched");
@@ -149,7 +149,7 @@ public final class MobMoves {
 								 ModelPart leftFront, ModelPart rightHind, ModelPart leftHind) {
 		float b = blend(id, mode);
 		int beat = ClientBattle.beat();
-		float pu = pulse(ClientBattle.beatFrac());
+		float pu = BattleDance.onBeat() ? pulse(ClientBattle.beatFrac()) : 0f;
 		if (mode == BattleDance.Mode.LISTEN) {
 			head.pitch += 0.25f * pu * b;
 			return;
@@ -175,7 +175,7 @@ public final class MobMoves {
 	public static void simple(LivingEntityRenderState s, int id, BattleDance.Mode mode, ModelPart head, ModelPart arms, ModelPart otherArm) {
 		float b = blend(id, mode);
 		int beat = ClientBattle.beat();
-		float pu = pulse(ClientBattle.beatFrac());
+		float pu = BattleDance.onBeat() ? pulse(ClientBattle.beatFrac()) : 0f;
 		boolean golem = type(s).equals("iron_golem");
 		if (mode == BattleDance.Mode.LISTEN) {
 			head.pitch += 0.22f * pu * b;

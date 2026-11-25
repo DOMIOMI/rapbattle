@@ -36,6 +36,7 @@ public final class BattleDance {
 			}
 			case "ROUND_RESULT", "RESULT" -> {
 				if (v.result == null) return Mode.NONE;
+				if (!BroadcastHud.verdictReady(v)) return Mode.LISTEN;
 				if (v.pvp) {
 					// Player battle: the winner dances, the other one hangs his head.
 					for (BattleView.Member m : v.team) if (m.entityId == entityId) return m.name.equals(v.result.winner) ? Mode.WIN : Mode.LOSE;
@@ -104,7 +105,7 @@ public final class BattleDance {
 		Mode m = mode(entityId);
 		return switch (m) {
 			case READ -> 0.09f * MobMoves.pulse(ClientBattle.beatFrac()) * s.height * 0.5f;
-			case LISTEN -> 0.03f * MobMoves.pulse(ClientBattle.beatFrac()) * s.height * 0.5f;
+			case LISTEN -> onBeat() ? 0.03f * MobMoves.pulse(ClientBattle.beatFrac()) * s.height * 0.5f : 0f;
 			case WIN -> 0.15f * freeHit() * s.height * 0.5f;
 			case CROWD -> (crowdStyle(entityId) == 2 ? 0.03f : 0.09f) * crowdHit(entityId) * (0.6f + 0.6f * crowdHype()) * s.height * 0.5f;
 			default -> 0f;
@@ -121,7 +122,7 @@ public final class BattleDance {
 		if (!type.equals("slime") && !type.equals("magma_cube") && !type.equals("creeper")) {
 			float sq = switch (mode) {
 				case READ -> 0.08f * MobMoves.pulse(ClientBattle.beatFrac());
-				case LISTEN -> 0.03f * MobMoves.pulse(ClientBattle.beatFrac());
+				case LISTEN -> onBeat() ? 0.03f * MobMoves.pulse(ClientBattle.beatFrac()) : 0f;
 				case CROWD -> 0.045f * crowdHit(entityId) * (0.6f + 0.6f * crowdHype());
 				default -> 0f;
 			};

@@ -204,6 +204,13 @@ public final class BroadcastHud {
 		return t < 0 ? 0 : (int) Math.min(r.hits.size(), t / HIT_MS + 1);
 	}
 
+	/** True once all breakdown lines have appeared and the verdict banner lands. */
+	public static boolean verdictReady(BattleView v) {
+		return v != null && v.result != null
+			&& ("ROUND_RESULT".equals(v.phase) || "RESULT".equals(v.phase))
+			&& revealed(v) >= v.result.hits.size();
+	}
+
 	/** When the last breakdown line comes in, i.e. when the verdict lands. */
 	private static long verdictAt(BattleView v) {
 		revealed(v);

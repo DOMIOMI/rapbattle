@@ -63,8 +63,8 @@ public final class PlayerMoves {
 			String want = ClientConfig.get().animations ? wanted(p.getId()) : null;
 			String now = PLAYING.get(p.getId());
 			BattleView v = ClientBattle.view;
-			boolean onBeat = want != null && (want.startsWith("rap") || want.equals("listen") || want.equals("hype"));
-			layer.speed().speed = onBeat && v != null && v.beatMs > 0 ? MADE_AT_BEAT_MS / v.beatMs : 1f;
+			boolean onBeat = want != null && (want.startsWith("rap") || ((want.equals("listen") || want.equals("hype")) && BattleDance.onBeat()));
+			layer.speed().speed = onBeat && v != null && v.beatMs > 0 ? MADE_AT_BEAT_MS / v.beatMs : want != null && want.equals("listen") ? 0.2f : 1f;
 			if (java.util.Objects.equals(want, now)) continue;
 			try {
 				if (want == null) {
