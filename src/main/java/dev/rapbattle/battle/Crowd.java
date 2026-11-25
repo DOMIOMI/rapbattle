@@ -28,6 +28,14 @@ public final class Crowd {
 	private static final int RADIUS = 16, MAX = 20;
 	/** After the battle the truce holds a little longer, then everyone is free to fight. */
 	private static final List<Map.Entry<MobEntity, Long>> TRUCE = new ArrayList<>();
+	private record Retreat(MobEntity mob, Vec3d awayFrom, long until) {}
+	private static final List<Retreat> RETREATING = new ArrayList<>();
+
+	static boolean isAquaticOnly(MobEntity m) {
+		return m instanceof net.minecraft.entity.mob.WaterCreatureEntity
+			|| m instanceof net.minecraft.entity.mob.GuardianEntity
+			|| (m instanceof net.minecraft.entity.passive.AxolotlEntity && m.isTouchingWater());
+	}
 
 	final Map<MobEntity, Side> members = new LinkedHashMap<>();
 	private final Map<MobEntity, Boolean> wasSilent = new HashMap<>();
@@ -52,8 +60,10 @@ public final class Crowd {
 		center = challenger == null ? new Vec3d(star.getX(), star.getY(), star.getZ())
 			: new Vec3d((star.getX() + challenger.getX()) / 2, star.getY(), (star.getZ() + challenger.getZ()) / 2);
 		String kin = battle.opp.profile().kin();
+		boolean stageInWater = w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(center)).isIn(net.minecraft.registry.tag.FluidTags.WATER);
 		List<MobEntity> near = w.getEntitiesByClass(MobEntity.class, star.getBoundingBox().expand(RADIUS),
-			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null && !Opponent.isBoss(m));
+			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null && !Opponent.isBoss(m)
+				&& (!isAquaticOnly(m) || stageInWater));
 		near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(star)));
 		for (MobEntity m : near) {
 			if (members.size() >= MAX) break;
@@ -83,6 +93,7 @@ public final class Crowd {
 		for (MobEntity m : members.keySet()) {
 			int slot = i++;
 			if (!m.isAlive()) continue;
+			if (m.isOnFire()) m.extinguish();
 			if (m instanceof HostileEntity || m.getTarget() != null) m.setTarget(null);
 			if (fear) {
 				// Peaceful mobs keep their distance from a boss.
@@ -124,8 +135,10 @@ public final class Crowd {
 
 	/** Standing spot on the ground near (x, z): free space, solid below. */
 	private Vec3d ground(ServerWorld w, MobEntity m, double x, double z) {
+		boolean needWater = isAquaticOnly(m);
 		for (int dy : new int[]{0, 1, -1, 2, -2, 3}) {
 			Vec3d at = new Vec3d(x, Math.floor(center.y) + dy, z);
+			if (needWater && !w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(at)).isIn(net.minecraft.registry.tag.FluidTags.WATER)) continue;
 			var box = m.getBoundingBox().offset(at.subtract(m.getX(), m.getY(), m.getZ()));
 			if (w.isSpaceEmpty(m, box) && !w.isSpaceEmpty(m, box.offset(0, -0.2, 0))) return at;
 		}
@@ -326,11 +339,60 @@ public final class Crowd {
 		}
 	}
 
-	/** Server tick: hostile crowd keeps its hands off until the truce ends. */
+	/** Escaped mob team: 15 s truce and actively walking away from {@code awayFrom}. */
+	public static void retreat(Collection<MobEntity> mobs, Vec3d awayFrom, long durationMs) {
+		long until = System.currentTimeMillis() + durationMs;
+		for (MobEntity m : mobs) {
+			if (m == null || !m.isAlive()) continue;
+			m.setTarget(null);
+			m.setAttacker(null);
+			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
+			TRUCE.add(Map.entry(m, until));
+			RETREATING.add(new Retreat(m, awayFrom, until));
+			steerAway(m, awayFrom);
+		}
+	}
+
+	private static void steerAway(MobEntity m, Vec3d from) {
+		if (from == null) return;
+		double dx = m.getX() - from.x, dz = m.getZ() - from.z;
+		double len = Math.hypot(dx, dz);
+		if (len < 1e-3) {
+			dx = 1;
+			dz = 0;
+		} else {
+			dx /= len;
+			dz /= len;
+		}
+		m.getNavigation().startMovingTo(m.getX() + dx * 12, m.getY(), m.getZ() + dz * 12, 1.2);
+	}
+
+	public static boolean inTruce(MobEntity m) {
+		long now = System.currentTimeMillis();
+		for (Map.Entry<MobEntity, Long> e : TRUCE) if (e.getKey() == m && now <= e.getValue()) return true;
+		return false;
+	}
+
+	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
 		long now = System.currentTimeMillis();
 		TRUCE.removeIf(e -> now > e.getValue() || !e.getKey().isAlive());
-		for (Map.Entry<MobEntity, Long> e : TRUCE) e.getKey().setTarget(null);
+		for (Map.Entry<MobEntity, Long> e : TRUCE) {
+			MobEntity m = e.getKey();
+			m.setTarget(null);
+			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
+			if (m.isOnFire()) m.extinguish();
+		}
+		RETREATING.removeIf(r -> now > r.until() || !r.mob().isAlive());
+		for (Retreat r : RETREATING) {
+			MobEntity m = r.mob();
+			if (m.getNavigation().isIdle()) steerAway(m, r.awayFrom());
+		}
+	}
+
+	static void clear() {
+		TRUCE.clear();
+		RETREATING.clear();
 	}
 
 	Side sideOf(MobEntity m) { return members.getOrDefault(m, null); }

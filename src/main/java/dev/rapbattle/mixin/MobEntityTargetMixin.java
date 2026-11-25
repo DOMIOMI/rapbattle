@@ -14,9 +14,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** When a hostile mob picks a player as its new target, it shouts a line. */
 @Mixin(MobEntity.class)
 public abstract class MobEntityTargetMixin {
-	@Inject(method = "setTarget", at = @At("HEAD"))
+	@Inject(method = "setTarget", at = @At("HEAD"), cancellable = true)
 	private void rapbattle$aggroLine(LivingEntity target, CallbackInfo ci) {
 		MobEntity self = (MobEntity) (Object) this;
+		if (target != null && dev.rapbattle.battle.Crowd.inTruce(self)) {
+			ci.cancel();
+			return;
+		}
 		if (!(target instanceof ServerPlayerEntity player) || self.getTarget() == target) return;
 		if (self instanceof HostileEntity || self instanceof Angerable) Speech.onAggro(self, player);
 	}
