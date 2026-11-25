@@ -46,7 +46,7 @@
 ## Установка
 1. Поставь Minecraft **1.21.11** с [Fabric Loader](https://fabricmc.net/use/installer/) **0.18.6+**.
 2. Скачай [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.11) для 1.21.11 и положи в папку `mods`.
-3. Скачай мод: **[rapbattle-0.1.0.jar](https://github.com/DOMIOMI/rapbattle/releases/download/v0.1.0/rapbattle-0.1.0.jar)**
+3. Скачай мод: **[rapbattle-0.2.0.jar](https://github.com/DOMIOMI/rapbattle/releases/download/v0.2.0/rapbattle-0.2.0.jar)**
    (все версии на странице [Releases](https://github.com/DOMIOMI/rapbattle/releases)) и положи туда же, в `mods`.
    Всё остальное (анимации, звуки) уже внутри.
 4. Необязательно: [Mod Menu](https://modrinth.com/mod/modmenu/versions?g=1.21.11), тогда настройки откроются
