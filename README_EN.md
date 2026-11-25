@@ -14,6 +14,10 @@ whistles and boos.
 | ![Mob verse](docs/screenshots/02-hud-mob-verse.png) | ![Mob with a chain and a cigarette](docs/screenshots/03-mob-close.png) |
 | ![Your turn](docs/screenshots/06-hud-player-verse.png) | ![Judge breakdown](docs/screenshots/10-hud-result.png) |
 
+> ⚠️ **Online play is not fully tested yet.** Singleplayer is tested. Multiplayer (two real players over the
+> network, players with different game languages, on-beat detection with Groq speech recognition) will be
+> tested in the next few days. The Modrinth and CurseForge release comes after that.
+
 ## Why this mod exists
 I saw the idea somewhere on TikTok and went looking for a mod. Couldn't find one on Modrinth, CurseForge or anywhere
 else, so I decided to make it myself.
