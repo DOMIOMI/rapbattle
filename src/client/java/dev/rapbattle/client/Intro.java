@@ -3,8 +3,11 @@ package dev.rapbattle.client;
 import dev.rapbattle.net.BattleView;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 /**
  * The intro fly-over before the first round, UFC style: wide shot from above, past the mob's side to a close-up
@@ -83,10 +86,24 @@ public final class Intro {
 		float s = local * local * (3 - 2 * local); // smoothstep
 		Vec3d camPos = pos[i].lerp(pos[i + 1], s);
 		Vec3d target = look[i].lerp(look[i + 1], s);
+		camPos = avoidBlocks(mc, target, camPos);
 		Vec3d d = target.subtract(camPos);
 		float yaw = (float) (MathHelper.atan2(d.z, d.x) * 180 / Math.PI) - 90f;
 		float pitch = (float) -(MathHelper.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)) * 180 / Math.PI);
 		return new Shot(camPos, yaw, pitch);
+	}
+
+	/** Pulls the camera closer to {@code target} (or lifts it slightly) if a block sits on the ray from {@code target} to {@code camPos}. */
+	private static Vec3d avoidBlocks(MinecraftClient mc, Vec3d target, Vec3d camPos) {
+		if (mc.world == null || mc.player == null) return camPos;
+		BlockHitResult hit = mc.world.raycast(new RaycastContext(target, camPos,
+			RaycastContext.ShapeType.VISUAL, RaycastContext.FluidHandling.NONE, mc.player));
+		if (hit.getType() != HitResult.Type.BLOCK) return camPos;
+		Vec3d pulled = target.lerp(hit.getPos(), 0.78);
+		Vec3d raised = pulled.add(0, 0.8, 0);
+		BlockHitResult hitRaised = mc.world.raycast(new RaycastContext(target, raised,
+			RaycastContext.ShapeType.VISUAL, RaycastContext.FluidHandling.NONE, mc.player));
+		return hitRaised.getType() != HitResult.Type.BLOCK ? raised : pulled;
 	}
 
 	/** Player battles: the other player is the one in the red corner. */
