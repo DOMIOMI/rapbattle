@@ -147,4 +147,49 @@ class ScoringTest {
 		List<Scoring.SlicedBar> late = Scoring.sliceBars(stt, 72 * 600, transcript, slots, 600, "ru_ru");
 		assertTrue(late.stream().anyMatch(b -> !b.silent()), "Late shifted timestamps must fall back to non-silent bars");
 	}
+
+	@Test
+	void stylesProduceDistinctButCloseDamageWithin15Percent() {
+		int[] scores = {6, 8, 4, 8, 6, 4, 8, 6};
+		int[] meanings = {2, 3, 1, 3, 2, 1, 3, 2};
+		boolean[] punches = {false, true, false, true, false, false, true, false};
+		boolean[] rebuttals = {false, false, false, true, false, false, false, true};
+		int[] beats = {2, 2, 1, 2, 2, 0, 2, 1};
+		Scoring.Bonuses bonuses = Scoring.computeBonuses(48, true, 0);
+
+		int[] totals = new int[McStyle.values().length];
+		Scoring.RoundOutcome[] outcomes = new Scoring.RoundOutcome[McStyle.values().length];
+		for (int s = 0; s < McStyle.values().length; s++) {
+			McStyle style = McStyle.values()[s];
+			List<Scoring.LineInput> inputs = new ArrayList<>(8);
+			for (int i = 0; i < 8; i++) {
+				inputs.add(style.lineInput("Steve", "w" + i, scores[i], meanings[i],
+					punches[i], rebuttals[i], "note", beats[i], false, false, 1.0, false));
+			}
+			outcomes[s] = Scoring.evaluateRound(Rank.GOLD, inputs, bonuses, 6, 0);
+			totals[s] = outcomes[s].totalToMob();
+		}
+		int min = Math.min(totals[0], Math.min(totals[1], totals[2]));
+		int max = Math.max(totals[0], Math.max(totals[1], totals[2]));
+		assertTrue(totals[0] != totals[1] || totals[1] != totals[2], "Styles should produce distinct totals");
+		assertTrue((max - min) <= max * 0.15, "Style spread must stay <= 15%: min=" + min + " max=" + max);
+		// Provoker's 2 rebuttals heal +8 Respect
+		assertEquals(8, outcomes[McStyle.PROVOKER.ordinal()].teamHeal());
+	}
+
+	@Test
+	void trophyPerksApplySilenceForgivenessBeatWindowAndStyleBonus() {
+		// Wither mic forgives the 1st silent bar (+5 saved)
+		List<Scoring.LineInput> lines = List.of(
+			McStyle.PUNCHER.lineInput("Steve", "w0", 0, 0, false, false, "silence", 0, true, false, 1.0, true),
+			McStyle.PUNCHER.lineInput("Steve", "w1", 0, 0, false, false, "silence", 0, true, false, 1.0, false)
+		);
+		Scoring.RoundOutcome o = Scoring.evaluateRound(Rank.GOLD, lines, Scoring.computeBonuses(0, false, 0, 1), 6, 0);
+		assertEquals(1, o.silentBars());
+		assertEquals(5, o.silenceDamage());
+		assertEquals(1, o.bonuses().styleBonus());
+		// Elder Guardian widens on-beat window by +0.05 (0.33 misses 0.30, hits 0.35)
+		assertEquals(1, Scoring.hybridBeat(0.33, 2, false, 400, 600, 0.30, 0.35));
+		assertEquals(2, Scoring.hybridBeat(0.33, 2, false, 400, 600, 0.35, 0.40));
+	}
 }

@@ -120,6 +120,7 @@ public class Battle {
 	private final Map<String, List<Boolean>> playerBarSilent = new HashMap<>();
 	private final Set<UUID> gazedPlayers = new HashSet<>();
 	private final Set<UUID> rerolledPlayers = new HashSet<>();
+	private final Set<UUID> wardenTriggered = new HashSet<>();
 	private List<String> targets = List.of();
 	private int chosenTopic;
 	private boolean hasStyleBonus;
@@ -468,6 +469,7 @@ public class Battle {
 	public void onGaze(ServerPlayerEntity p) {
 		UUID u = p.getUuid();
 		if (phase != Phase.TIMELINE || view == null || !hasPlayer(u) || !opp.profile().id().equals("enderman")) return;
+		if (Trophies.equippedPerk(p) == Trophies.TrophyPerk.WARDEN && wardenTriggered.add(u)) return;
 		if (!gazedPlayers.add(u)) return;
 		String name = names.get(u);
 		int curBeat = (int) Math.floorDiv(System.currentTimeMillis() - beatZero, Math.max(1, beatMs));
@@ -937,6 +939,7 @@ public class Battle {
 		playerBarSilent.clear();
 		gazedPlayers.clear();
 		rerolledPlayers.clear();
+		wardenTriggered.clear();
 		targets = List.of();
 		pendingVerses = List.of();
 		transcripts.clear();
@@ -958,14 +961,18 @@ public class Battle {
 		String rivalry = rivalryText();
 		int r = round;
 		String topicText = topicPromptText();
+		Stats stats = Stats.of(world.getServer());
+		int maxTargets = 2;
+		for (UUID u : players) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		int targetLimit = maxTargets;
 		contentFuture = CompletableFuture.supplyAsync(() -> {
 			Llm.Content c = Llm.roundContent(rappers, rank.label(lang), opp.mood(), opp.profile().language(lang), lineCount,
-				opponents, groupsNeeded, rank.rhymeDifficulty, r, prev, rivalry, topicText, lang);
+				opponents, groupsNeeded, rank.rhymeDifficulty, r, prev, rivalry, topicText, targetLimit, lang);
 			if (c == null) {
 				List<String> speakers = new ArrayList<>();
 				for (Llm.Rapper rp : rappers) speakers.add(rp.name());
 				List<Llm.MobLine> fbLines = Fallback.mobVerse(speakers, opponents, lineCount, rnd, lang);
-				c = new Llm.Content(fbLines, List.of(), Fallback.extractTargets(fbLines, lang));
+				c = new Llm.Content(fbLines, List.of(), Fallback.extractTargets(fbLines, lang, targetLimit));
 			}
 			return c;
 		}, POOL);
@@ -991,7 +998,10 @@ public class Battle {
 		List<Llm.MobLine> lines = content != null ? content.lines()
 			: Fallback.mobVerse(speakers, namesList(), rank.mobLines, rnd, lang);
 		mobLines = lines;
-		targets = (content != null && !content.targets().isEmpty()) ? content.targets() : Fallback.extractTargets(lines, lang);
+		Stats stats = Stats.of(world.getServer());
+		int maxTargets = 2;
+		for (UUID u : players) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		targets = (content != null && !content.targets().isEmpty()) ? content.targets() : Fallback.extractTargets(lines, lang, maxTargets);
 		BattleView v = baseView();
 		v.targets = new ArrayList<>(targets);
 		int beat = 4; // 4-3-2-1 countdown
@@ -1103,6 +1113,19 @@ public class Battle {
 			byPlayer.add(own);
 		}
 		MobTricks.apply(opp.profile().id(), byPlayer, rnd);
+		for (int i = 0; i < players.size(); i++) {
+			UUID u = players.get(i);
+			if (Trophies.equippedPerk(player(u)) == Trophies.TrophyPerk.WARDEN) {
+				boolean blocked = false;
+				for (BattleView.Row r : byPlayer.get(i)) {
+					if (r.effect != null) {
+						r.effect = null;
+						blocked = true;
+					}
+				}
+				if (blocked) wardenTriggered.add(u);
+			}
+		}
 		view = v;
 	}
 
@@ -1236,6 +1259,19 @@ public class Battle {
 		double micOnWin = skeletonStrict ? 0.26 : 0.35;
 		double flowScale = skeletonStrict ? 1.15 : 1.0;
 
+		Stats stats = Stats.of(world.getServer());
+		Map<UUID, McStyle> playerStyles = new HashMap<>();
+		Map<UUID, Trophies.TrophyPerk> playerPerks = new HashMap<>();
+		int extraStyleBonus = 0;
+		for (UUID u : players) {
+			playerStyles.put(u, stats.player(u).mcStyle());
+			Trophies.TrophyPerk perk = Trophies.equippedPerk(player(u));
+			playerPerks.put(u, perk);
+			if (perk == Trophies.TrophyPerk.DEFAULT) extraStyleBonus = 1;
+		}
+		Set<UUID> witherForgiven = new HashSet<>();
+		Set<UUID> guardianUsed = new HashSet<>();
+
 		int onBeatTotal = 0, timedTotal = 0;
 		if (view != null) {
 			for (BattleView.Row row : view.rows) {
@@ -1257,19 +1293,26 @@ public class Battle {
 				boolean sttSilent = sb != null && sb.silent();
 				boolean micSilent = idx < silents.size() && Boolean.TRUE.equals(silents.get(idx));
 				boolean barSilent = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
+				Trophies.TrophyPerk perk = playerPerks.get(u);
+				boolean silenceForgiven = barSilent && perk == Trophies.TrophyPerk.WITHER && witherForgiven.add(u);
+				double wWin = whisperOnWin + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+				double mWin = micOnWin + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
 				int deltaMs = idx < deltas.size() ? deltas.get(idx) : (idx < louds.size() && Boolean.TRUE.equals(louds.get(idx)) ? 0 : -1);
 				int beatState = barSilent ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
-					l.rhyme(), sttMissing, deltaMs, beatMs, whisperOnWin, micOnWin);
+					l.rhyme(), sttMissing, deltaMs, beatMs, wWin, mWin);
 				timedTotal++;
-				if (beatState == 2) onBeatTotal++;
-				int punchBonus = row.freestyle ? 3 : 2;
-				teamInputs.add(new Scoring.LineInput(pName, row.freestyle ? "★" : row.word, l.score(), l.punch(), l.rebuttal(),
-					l.note(), beatState, barSilent, punchBonus, flowScale));
+				if (beatState == 2) {
+					onBeatTotal++;
+					if (perk == Trophies.TrophyPerk.ELDER_GUARDIAN) guardianUsed.add(u);
+				}
+				McStyle style = playerStyles.getOrDefault(u, McStyle.PUNCHER);
+				teamInputs.add(style.lineInput(pName, row.freestyle ? "★" : row.word, l.score(), l.meaning(),
+					l.punch(), l.rebuttal(), l.note(), beatState, barSilent, row.freestyle, flowScale, silenceForgiven));
 			}
 		}
 
 		int hypeVal = Math.max(-100, Math.min(100, (barsHit - barsMissed) * 18 - punchesFired.size() * 8));
-		Scoring.Bonuses bonuses = Scoring.computeBonuses(hypeVal, hasStyleBonus, allyBonus);
+		Scoring.Bonuses bonuses = Scoring.computeBonuses(hypeVal, hasStyleBonus, allyBonus, extraStyleBonus);
 		int wardenNoise = noise > 0 ? 2 * noise : 0;
 		Scoring.RoundOutcome outcome = Scoring.evaluateRound(rank, teamInputs, bonuses, v.mobVerse(), wardenNoise);
 
@@ -1300,6 +1343,18 @@ public class Battle {
 		if (noise > 0) {
 			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_warden_noise", noise), wardenNoise, false, false));
 			noise = 0;
+		}
+		for (UUID u : players) {
+			Trophies.TrophyPerk perk = playerPerks.get(u);
+			if (perk == null) continue;
+			boolean triggered = switch (perk) {
+				case WARDEN -> wardenTriggered.contains(u);
+				case ENDER_DRAGON -> rank.revealBeats() > 0;
+				case WITHER -> witherForgiven.contains(u);
+				case ELDER_GUARDIAN -> guardianUsed.contains(u);
+				case DEFAULT -> extraStyleBonus > 0;
+			};
+			if (triggered) hits.add(new BattleView.Hit(names.get(u), perk.triggeredNote(lang), 0, true, false));
 		}
 
 		// Apply only the post-judging delta to live respect bars (live mob hits were already applied during TIMELINE).
@@ -1387,6 +1442,7 @@ public class Battle {
 			mm.mvp = st.mvp;
 			mm.best = st.best;
 			mm.title = st.title(lang);
+			mm.style = st.mcStyle().label(lang);
 			v.team.add(mm);
 		}
 		int[] sp = stats.species(opp.profile().id());
@@ -1460,10 +1516,17 @@ public class Battle {
 		v.topic = chosenTopic;
 		v.targets = new ArrayList<>(targets);
 		v.spectator = false;
+		Stats stats = Stats.of(world.getServer());
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
 			if (p != null) {
 				v.canReroll = !rerolledPlayers.contains(u);
+				int targetCap = stats.player(u).mcStyle().targetCount();
+				v.targets = targets.size() > targetCap ? new ArrayList<>(targets.subList(0, targetCap)) : new ArrayList<>(targets);
+				Trophies.TrophyPerk perk = Trophies.equippedPerk(p);
+				v.revealBeats = (rank.revealBeats() > 0 && perk == Trophies.TrophyPerk.ENDER_DRAGON)
+					? rank.revealBeats() + 2
+					: rank.revealBeats();
 				send(p, v);
 			}
 		}

@@ -427,6 +427,7 @@ public final class PvpBattle {
 		}
 
 		int before0 = respectA, before1 = respectB;
+		Stats stats = Stats.of(world.getServer());
 		Map<UUID, Scoring.RoundOutcome> outcomes = new HashMap<>();
 		for (UUID u : List.of(a, b)) {
 			String pName = names.get(u);
@@ -438,6 +439,14 @@ public final class PvpBattle {
 			List<Integer> deltas = barDeltaMs.getOrDefault(pName, List.of());
 			List<Boolean> silents = barSilent.getOrDefault(pName, List.of());
 			List<String> words = rhymes.getOrDefault(u, List.of());
+
+			McStyle style = stats.player(u).mcStyle();
+			Trophies.TrophyPerk perk = Trophies.equippedPerk(player(u));
+			boolean witherForgiven = false;
+			boolean guardianUsed = false;
+			double wWin = 0.30 + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+			double mWin = 0.35 + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
+
 			List<Scoring.LineInput> inputs = new ArrayList<>();
 			for (int i = 0; i < words.size(); i++) {
 				Llm.LineScore l = i < ownScores.size() ? ownScores.get(i) : Llm.LineScore.silent(uLang);
@@ -445,13 +454,22 @@ public final class PvpBattle {
 				boolean sttSilent = sb != null && sb.silent();
 				boolean micSilent = i < silents.size() && Boolean.TRUE.equals(silents.get(i));
 				boolean barSilentFlag = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
+				boolean silenceForgiven = false;
+				if (barSilentFlag && perk == Trophies.TrophyPerk.WITHER && !witherForgiven) {
+					silenceForgiven = true;
+					witherForgiven = true;
+				}
 				int deltaMs = i < deltas.size() ? deltas.get(i) : (i < louds.size() && Boolean.TRUE.equals(louds.get(i)) ? 0 : -1);
 				int beatState = barSilentFlag ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
-					l.rhyme(), sttMissing, deltaMs, beatMs);
-				inputs.add(new Scoring.LineInput(pName, words.get(i), l.score(), l.punch(), l.rebuttal(), l.note(), beatState, barSilentFlag));
+					l.rhyme(), sttMissing, deltaMs, beatMs, wWin, mWin);
+				if (beatState == 2 && perk == Trophies.TrophyPerk.ELDER_GUARDIAN) guardianUsed = true;
+				inputs.add(style.lineInput(pName, words.get(i), l.score(), l.meaning(), l.punch(), l.rebuttal(),
+					l.note(), beatState, barSilentFlag, false, 1.0, silenceForgiven));
 			}
 			int hypeVal = Math.max(-100, Math.min(100, (hitsCount.getOrDefault(u, 0) - missesCount.getOrDefault(u, 0)) * 18));
-			Scoring.Bonuses bonuses = new Scoring.Bonuses(Scoring.hypeBonus(hypeVal), 0, 0, Scoring.hypeBonus(hypeVal));
+			int extraStyle = perk == Trophies.TrophyPerk.DEFAULT ? 1 : 0;
+			int hb = Scoring.hypeBonus(hypeVal);
+			Scoring.Bonuses bonuses = new Scoring.Bonuses(hb, extraStyle, 0, Math.min(10, hb + extraStyle));
 			Scoring.RoundOutcome o = Scoring.evaluateRound(null, inputs, bonuses, 0, 0);
 			outcomes.put(u, o);
 			dealt.put(u, o.totalToMob());
@@ -463,6 +481,19 @@ public final class PvpBattle {
 					List<Llm.LineScore> theirs = pvpVerdict.forLang(e.getKey()).playerLines().getOrDefault(pName, List.of());
 					String note = i < theirs.size() ? theirs.get(i).note() : el.input().note();
 					e.getValue().hits.add(new BattleView.Hit(pName, (word.isEmpty() ? "" : "«" + word + "» · ") + note, el.damage(), u.equals(a), el.input().punch()));
+				}
+			}
+			if (perk != null) {
+				boolean triggered = switch (perk) {
+					case WITHER -> witherForgiven;
+					case ELDER_GUARDIAN -> guardianUsed;
+					case DEFAULT -> extraStyle > 0;
+					default -> false;
+				};
+				if (triggered) {
+					for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+						e.getValue().hits.add(new BattleView.Hit(pName, perk.triggeredNote(e.getKey()), 0, u.equals(a), false));
+					}
 				}
 			}
 			if (bonuses.hypeBonus() > 0) {
@@ -479,8 +510,8 @@ public final class PvpBattle {
 
 		Scoring.RoundOutcome oA = outcomes.get(a);
 		Scoring.RoundOutcome oB = outcomes.get(b);
-		respectA = Math.max(0, 100 - oB.totalToMob() - oA.silenceDamage());
-		respectB = Math.max(0, 100 - oA.totalToMob() - oB.silenceDamage());
+		respectA = Math.min(100, Math.max(0, 100 - oB.totalToMob() - oA.silenceDamage() + oA.teamHeal()));
+		respectB = Math.min(100, Math.max(0, 100 - oA.totalToMob() - oB.silenceDamage() + oB.teamHeal()));
 		boolean ko = respectA <= 0 || respectB <= 0;
 		UUID winner = respectB <= 0 && respectA > 0 ? a : respectA <= 0 && respectB > 0 ? b : respectA >= respectB ? a : b;
 		for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
@@ -593,6 +624,7 @@ public final class PvpBattle {
 			mm.mvp = st.mvp;
 			mm.best = st.best;
 			mm.title = st.title(l);
+			mm.style = st.mcStyle().label(l);
 			c.team.add(mm);
 		}
 		if (v.result != null) c.result = results.getOrDefault(l, v.result);
