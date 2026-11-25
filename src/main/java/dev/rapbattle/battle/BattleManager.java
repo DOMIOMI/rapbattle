@@ -558,6 +558,14 @@ public final class BattleManager {
 						Battle b = byPlayer(p.getUuid());
 						if (b != null) b.startEarly(p);
 					}
+					case "topic" -> {
+						Battle b = byPlayer(p.getUuid());
+						if (b != null) b.setTopic(p, o.get("topic").getAsInt());
+					}
+					case "reroll" -> {
+						Battle b = byPlayer(p.getUuid());
+						if (b != null) b.onReroll(p);
+					}
 					case "rap" -> {
 						Pending pending = PENDING.remove(p.getUuid());
 						if (pending == null || !pending.allowed || !pending.mob.isAlive() || byMob(pending.mob) != null

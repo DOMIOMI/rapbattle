@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AllayEntity;
@@ -254,6 +255,7 @@ public final class Crowd {
 		if (!fear) {
 			shout(moment);
 			soloReactions(moment);
+			swaySides(moment);
 		}
 		ServerWorld w = battle.world;
 		for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
@@ -315,6 +317,65 @@ public final class Crowd {
 		} else {
 			m.playAmbientSound();
 		}
+	}
+
+	private void swaySides(Moment moment) {
+		if (members.isEmpty()) return;
+		ServerWorld w = battle.world;
+		if (moment == Moment.PLAYER_HIT && battle.combo >= 3) {
+			Side targetSide = battle.combo >= 6 ? Side.MOB : Side.NEUTRAL;
+			MobEntity candidate = null;
+			for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+				if (e.getKey().isAlive() && e.getValue() == targetSide) {
+					candidate = e.getKey();
+					break;
+				}
+			}
+			if (candidate == null && battle.combo >= 6) {
+				for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+					if (e.getKey().isAlive() && e.getValue() == Side.NEUTRAL) {
+						candidate = e.getKey();
+						break;
+					}
+				}
+			}
+			if (candidate != null) {
+				members.put(candidate, Side.PLAYERS);
+				Speech.bubble(candidate, Lang.t(battle.lang, "rapbattle.crowd.defected_players"), 0x7CF0A0, 2200);
+				particles(w, ParticleTypes.HAPPY_VILLAGER, candidate.getX(), candidate.getY() + candidate.getHeight() + 0.3, candidate.getZ(), 8);
+			}
+		} else if (moment == Moment.PLAYER_MISS) {
+			for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+				if (e.getKey().isAlive() && e.getValue() == Side.NEUTRAL) {
+					members.put(e.getKey(), Side.MOB);
+					Speech.bubble(e.getKey(), Lang.t(battle.lang, "rapbattle.crowd.defected_mob"), 0xFF8080, 2000);
+					particles(w, ParticleTypes.ANGRY_VILLAGER, e.getKey().getX(), e.getKey().getY() + e.getKey().getHeight() + 0.3, e.getKey().getZ(), 4);
+					break;
+				}
+			}
+		}
+	}
+
+	/** After a player victory, a friendly fan may toss a small gift (emerald, apple, or glowstone dust). */
+	void dropGift(net.minecraft.server.network.ServerPlayerEntity winner) {
+		if (winner == null || members.isEmpty() || rnd.nextInt(100) >= 45) return;
+		MobEntity fan = null;
+		for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
+			if (e.getKey().isAlive() && e.getValue() == Side.PLAYERS) {
+				fan = e.getKey();
+				break;
+			}
+		}
+		if (fan == null) return;
+		net.minecraft.item.Item[] pool = {net.minecraft.item.Items.EMERALD, net.minecraft.item.Items.APPLE, net.minecraft.item.Items.GLOWSTONE_DUST};
+		net.minecraft.item.ItemStack gift = new net.minecraft.item.ItemStack(pool[rnd.nextInt(pool.length)], 1);
+		net.minecraft.entity.ItemEntity drop = new net.minecraft.entity.ItemEntity(
+			battle.world, winner.getX(), winner.getY() + 0.5, winner.getZ(), gift);
+		drop.setToDefaultPickupDelay();
+		battle.world.spawnEntity(drop);
+		Speech.bubble(fan, Lang.t(battle.lang, "rapbattle.crowd.gift_bubble"), 0xFFE84A, 2200);
+		winner.sendMessage(net.minecraft.text.Text.translatable("rapbattle.crowd.gift_chat", gift.getName())
+			.formatted(net.minecraft.util.Formatting.GREEN), false);
 	}
 
 	private static void particles(ServerWorld w, ParticleEffect type, double x, double y, double z, int count) {
