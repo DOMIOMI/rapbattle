@@ -1348,6 +1348,7 @@ public class Battle {
 			Trophies.TrophyPerk perk = playerPerks.get(u);
 			if (perk == null) continue;
 			boolean triggered = switch (perk) {
+				case HOMEMADE -> false;
 				case WARDEN -> wardenTriggered.contains(u);
 				case ENDER_DRAGON -> rank.revealBeats() > 0;
 				case WITHER -> witherForgiven.contains(u);
@@ -1663,6 +1664,8 @@ public class Battle {
 				ExperienceOrbEntity.spawn(world, pos, Math.max(1, xp / 2));
 				return;
 			}
+			boolean isNight = Opponent.isNight(world);
+			boolean nightHunt = Acts.isNightHuntDoubleLoot(rank, isNight, mobTeam.size(), overdressed);
 			boolean raged = SoreLosers.tryRage(opp, MobRecord.of(mob), margin, killer, rnd, lang);
 			// The battle is already marked finished, so the damage guard no longer protects the mob team.
 			for (MobEntity m : new ArrayList<>(mobTeam)) {
@@ -1670,10 +1673,12 @@ public class Battle {
 				DamageSource src = killer != null ? world.getDamageSources().playerAttack(killer) : world.getDamageSources().generic();
 				Vec3d at = new Vec3d(m.getX(), m.getY(), m.getZ());
 				m.damage(world, src, m.getMaxHealth() * 100f);
-				// Street level and up: the loot comes doubled.
-				if (rank.level() >= 3 && !overdressed && !m.isAlive()) SoreLosers.doubleFreshDrops(world, at);
+				// Street level and up, or Act 1 Night Hunt (solo mob, ranks 1-2): the loot comes doubled.
+				if (((rank.level() >= 3 && !overdressed) || nightHunt) && !m.isAlive()) SoreLosers.doubleFreshDrops(world, at);
 			}
-			ExperienceOrbEntity.spawn(world, pos, xp * Math.max(1, players.size()));
+			int finalXp = Acts.applyNightHuntXp(xp, rank, isNight);
+			ExperienceOrbEntity.spawn(world, pos, finalXp * Math.max(1, players.size()));
+			if (nightHunt) broadcastChat(Text.translatable("rapbattle.act1.night_hunt").formatted(Formatting.AQUA));
 			// A piece of the crew's gear for the winner.
 			Gangs.Gang gang = Gangs.of(opp.profile());
 			if (gang != null && !overdressed && rnd.nextInt(100) < Gangs.dropChance(rank)) {
@@ -1728,6 +1733,34 @@ public class Battle {
 				}
 			}
 		});
+		for (UUID u : players) {
+			ServerPlayerEntity p = player(u);
+			if (p != null) notifyStyleUnlock(stats, u, p);
+		}
+	}
+
+	static void notifyStyleUnlock(Stats stats, UUID u, ServerPlayerEntity p) {
+		Stats.Player st = stats.player(u);
+		if (st.respect >= McStyle.METRONOME.unlockRespect && !st.hinted500) {
+			st.hinted500 = true;
+			stats.markDirty();
+			sendStyleHint(p, McStyle.METRONOME);
+		}
+		if (st.respect >= McStyle.PROVOKER.unlockRespect && !st.hinted1500) {
+			st.hinted1500 = true;
+			stats.markDirty();
+			sendStyleHint(p, McStyle.PROVOKER);
+		}
+	}
+
+	private static void sendStyleHint(ServerPlayerEntity p, McStyle style) {
+		String pLang = Lang.of(p);
+		Text btn = Text.translatable("rapbattle.act1.style_btn").styled(s -> s
+			.withColor(Formatting.GOLD)
+			.withUnderline(true)
+			.withClickEvent(new net.minecraft.text.ClickEvent.RunCommand("/rapbattle style")));
+		p.sendMessage(Text.translatable("rapbattle.act1.style_unlocked", style.label(pLang), style.unlockRespect, btn)
+			.formatted(Formatting.GREEN), false);
 	}
 
 	/** The boss's last word and its signature attack, then the death the team signed up for. */
