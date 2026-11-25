@@ -123,4 +123,28 @@ class ScoringTest {
 		assertTrue(Scoring.isLethalWin(o.playersWinRound(), o.knockout(), o.respectTeamAfter(), o.respectMobAfter(), false),
 			"Average player vs Leather should finish the mob: margin=" + (o.respectTeamAfter() - o.respectMobAfter()));
 	}
+
+	@Test
+	void sliceBarsShiftedTimestampsStillProducesNonEmptyBars() {
+		List<Scoring.BarSlot> slots = new ArrayList<>();
+		for (int i = 0; i < 8; i++) slots.add(new Scoring.BarSlot(i + 1, 36 + i * 4, "слово" + i));
+		List<dev.rapbattle.ai.Transcriber.Word> words = List.of(
+			new dev.rapbattle.ai.Transcriber.Word("Ты", 0.2),
+			new dev.rapbattle.ai.Transcriber.Word("овца", 0.6),
+			new dev.rapbattle.ai.Transcriber.Word("без", 1.0),
+			new dev.rapbattle.ai.Transcriber.Word("мозгов", 1.4),
+			new dev.rapbattle.ai.Transcriber.Word("я", 2.0),
+			new dev.rapbattle.ai.Transcriber.Word("читаю", 2.5),
+			new dev.rapbattle.ai.Transcriber.Word("жёстко", 3.0),
+			new dev.rapbattle.ai.Transcriber.Word("шахте", 3.5)
+		);
+		String transcript = "Ты овца без мозгов я читаю жёстко шахте";
+		var stt = new dev.rapbattle.ai.Transcriber.Result(transcript, words);
+		// Shifted by 2 bars (8 beats = 4800 ms) earlier than slots[0]
+		List<Scoring.SlicedBar> early = Scoring.sliceBars(stt, 36 * 600 - 4800, transcript, slots, 600, "ru_ru");
+		assertTrue(early.stream().anyMatch(b -> !b.silent()), "Early shifted timestamps must not become all silent");
+		// Shifted far past the end (2 bars after last slot)
+		List<Scoring.SlicedBar> late = Scoring.sliceBars(stt, 72 * 600, transcript, slots, 600, "ru_ru");
+		assertTrue(late.stream().anyMatch(b -> !b.silent()), "Late shifted timestamps must fall back to non-silent bars");
+	}
 }

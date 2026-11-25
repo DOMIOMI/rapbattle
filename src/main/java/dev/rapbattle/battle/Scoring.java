@@ -275,14 +275,22 @@ public final class Scoring {
 					}
 				}
 				if (bestIdx == -1) {
-					// Nearest bar within 1.0 beat of its edges (e.g. early pickup during get-ready bar).
-					double bestDist = 1.0;
-					for (int i = 0; i < slots.size(); i++) {
-						BarSlot s = slots.get(i);
-						double d = beat < s.startBeat() ? s.startBeat() - beat : beat - (s.startBeat() + 4.0);
-						if (d <= bestDist) {
-							bestDist = d;
-							bestIdx = i;
+					// Nearest bar within 1.0 beat of its edges, or early pickup during get-ready (up to 4.5 beats before bar 1).
+					double firstStart = slots.get(0).startBeat();
+					double lastEnd = slots.get(slots.size() - 1).startBeat() + 4.0;
+					if (beat < firstStart && beat >= firstStart - 4.5) {
+						bestIdx = 0;
+					} else if (beat > lastEnd && beat <= lastEnd + 2.0) {
+						bestIdx = slots.size() - 1;
+					} else {
+						double bestDist = 1.0;
+						for (int i = 0; i < slots.size(); i++) {
+							BarSlot s = slots.get(i);
+							double d = beat < s.startBeat() ? s.startBeat() - beat : beat - (s.startBeat() + 4.0);
+							if (d <= bestDist) {
+								bestDist = d;
+								bestIdx = i;
+							}
 						}
 					}
 				}
@@ -322,7 +330,16 @@ public final class Scoring {
 				out.add(new SlicedBar(s.lineIndex(), s.targetWord(), barText, barText.isBlank(),
 					bestDelta < Double.MAX_VALUE ? bestDelta : null));
 			}
-			return out;
+			boolean allSilent = out.stream().allMatch(SlicedBar::silent);
+			String nonEmpty = fallbackTranscript != null && !fallbackTranscript.isBlank()
+				? fallbackTranscript.trim()
+				: (stt.text() != null ? stt.text().trim() : "");
+			if (!allSilent || nonEmpty.isEmpty()) {
+				return out;
+			}
+			// Safety net: word timestamps missed all bar windows while a non-empty transcript exists —
+			// fall through to distribute words evenly across bars so spoken verses are never marked silent.
+			out.clear();
 		}
 
 		// Plain transcript without word timestamps (or empty transcript).

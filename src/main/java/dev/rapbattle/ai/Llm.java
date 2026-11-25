@@ -365,7 +365,10 @@ public final class Llm {
 			for (BarPrompt b : bp) if (!b.silent()) anySpoken = true;
 		}
 		// Silent bars are immediately 0 — if nobody said anything at all, skip asking the model about player lines.
-		if (!anySpoken) return null;
+		if (!anySpoken) {
+			RapBattle.LOG.warn("Judge skipped: all player bars marked silent (players={})", players.size());
+			return null;
+		}
 
 		String system;
 		StringBuilder u = new StringBuilder();
@@ -447,7 +450,10 @@ public final class Llm {
 			"additionalProperties", false);
 
 		JsonObject o = ask(system, u.toString(), schema, 4000, JUDGE_TEMPERATURE, lang);
-		if (o == null) return null;
+		if (o == null) {
+			RapBattle.LOG.warn("Judge LLM returned null (OpenRouter/model error or empty response)");
+			return null;
+		}
 		try {
 			Map<String, JsonObject> playerJsonByName = new LinkedHashMap<>();
 			List<JsonObject> playerJsonOrdered = new ArrayList<>();
