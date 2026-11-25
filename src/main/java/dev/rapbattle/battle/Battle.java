@@ -1721,7 +1721,16 @@ public class Battle {
 				if (!bestLine.isEmpty()) {
 					Stats.of(world.getServer()).recordLegend(mvpPlayer != null ? mvpPlayer.getName().getString() : "", bestLine);
 				}
-				DamageSource src = killer != null ? world.getDamageSources().playerAttack(killer) : world.getDamageSources().generic();
+				ServerPlayerEntity dragonKiller = killer;
+				if (dragonKiller == null) {
+					for (UUID u : players) {
+						ServerPlayerEntity pl = player(u);
+						if (pl != null && pl.isAlive()) { dragonKiller = pl; break; }
+					}
+				}
+				DamageSource src = dragonKiller != null
+					? world.getDamageSources().playerAttack(dragonKiller)
+					: world.getDamageSources().badRespawnPoint(pos);
 				dragon.damagePart(world, dragon.head, src, dragon.getMaxHealth() * 100f);
 				ExperienceOrbEntity.spawn(world, pos, xp * Math.max(1, players.size()));
 				return;

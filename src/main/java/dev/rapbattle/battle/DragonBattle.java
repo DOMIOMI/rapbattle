@@ -48,7 +48,7 @@ public final class DragonBattle {
 	static void onLoss(EnderDragonEntity dragon) {
 		cooldownUntil = System.currentTimeMillis() + 60_000L;
 		if (dragon.isAlive() && dragon.ticksSinceDeath == 0) {
-			dragon.getPhaseManager().setPhase(PhaseType.TAKEOFF);
+			dragon.getPhaseManager().setPhase(PhaseType.HOLDING_PATTERN);
 		}
 	}
 }
