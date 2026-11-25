@@ -62,6 +62,7 @@ public final class PvpBattle {
 	private int respectA = 100, respectB = 100;
 	private final Map<UUID, Integer> combo = new HashMap<>();
 	private final Map<UUID, Integer> dealt = new HashMap<>();
+	private final Map<String, List<Boolean>> barLoud = new ConcurrentHashMap<>();
 	private final Map<UUID, ByteArrayOutputStream> audio = new HashMap<>();
 	private final Map<UUID, CompletableFuture<String>> transcripts = new ConcurrentHashMap<>();
 	private final Map<UUID, Transcriber.Result> timed = new ConcurrentHashMap<>();
@@ -231,6 +232,8 @@ public final class PvpBattle {
 		if (phase == Phase.INTRO) return;
 		if (phase != Phase.TIMELINE) return;
 		UUID u = p.getUuid();
+		barLoud.computeIfAbsent(names.getOrDefault(u, p.getName().getString()),
+			k -> Collections.synchronizedList(new ArrayList<>())).add(loud);
 		if (loud) {
 			// Volume alone deals nothing: the judge and the beat timing do.
 			int c = combo.merge(u, 1, Integer::sum);
@@ -353,7 +356,7 @@ public final class PvpBattle {
 					Llm.Verdict v = noStt ? null : Llm.judge("—", Lang.t(l, "rapbattle.pvp.judge_species"), "PvP",
 						Lang.t(l, "rapbattle.pvp.judge_expectation"),
 						0, 0, List.of(), verses, l);
-					if (v == null) v = Fallback.judge(0, 0, verses, rnd, l);
+					if (v == null) v = Fallback.judge(0, 0, verses, barLoud, noStt, rnd, l);
 					return v;
 				}, Battle.POOL));
 				BattleView.Result r = new BattleView.Result();

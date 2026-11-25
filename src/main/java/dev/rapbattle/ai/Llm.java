@@ -262,7 +262,11 @@ public final class Llm {
 
 	// ---------------------------------------------------------------- judge
 
-	public record PlayerVerse(String name, List<String> rhymeWords, String transcript) {}
+	public record PlayerVerse(String name, List<String> rhymeWords, String transcript, String timingNote) {
+		public PlayerVerse(String name, List<String> rhymeWords, String transcript) {
+			this(name, rhymeWords, transcript, "");
+		}
+	}
 
 	/** One line of a player as the judge saw it: 0..10, a punchline or not, a short note for the screen. */
 	public record LineScore(int score, boolean punch, String note) {
@@ -303,6 +307,7 @@ public final class Llm {
 				u.append("\nИгрок ").append(p.name()).append(". Заданные рифмы по порядку строк: ").append(String.join(", ", p.rhymeWords()))
 					.append(" (строк: ").append(p.rhymeWords().size()).append(")\n");
 				u.append("Что он прочитал: ").append(p.transcript().isBlank() ? "(молчал)" : p.transcript()).append('\n');
+				if (p.timingNote() != null && !p.timingNote().isBlank()) u.append("Тайминг: ").append(p.timingNote()).append('\n');
 			}
 		} else {
 			system = """
@@ -326,6 +331,7 @@ public final class Llm {
 				u.append("\nPlayer ").append(p.name()).append(". Assigned rhymes in line order: ").append(String.join(", ", p.rhymeWords()))
 					.append(" (lines: ").append(p.rhymeWords().size()).append(")\n");
 				u.append("What they rapped: ").append(p.transcript().isBlank() ? "(silent)" : p.transcript()).append('\n');
+				if (p.timingNote() != null && !p.timingNote().isBlank()) u.append("Timing: ").append(p.timingNote()).append('\n');
 			}
 		}
 		Map<String, Object> line = new java.util.LinkedHashMap<>();

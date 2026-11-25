@@ -115,6 +115,8 @@ public class Battle {
 	private int noise;
 	/** Crowd: rhyme slots players hit loudly / missed in silence this round. */
 	int barsHit, barsMissed;
+	private final Map<String, List<Boolean>> playerBarLoud = new HashMap<>();
+	private List<Llm.PlayerVerse> pendingVerses = List.of();
 	/** Respect: the battle's health bars. Not reset between rounds. */
 	int respectTeam, respectMob, respectMax;
 	/** The team's run of lines on the beat (x1.5 from the 3rd, x2 from the 6th). */
@@ -447,6 +449,7 @@ public class Battle {
 	/** One rhyme slot of a player: said loud on the beat, or silence. Feeds the crowd. */
 	public void onBar(ServerPlayerEntity p, boolean loud) {
 		if (!hasPlayer(p.getUuid()) || phase != Phase.TIMELINE) return;
+		playerBarLoud.computeIfAbsent(names.getOrDefault(p.getUuid(), p.getName().getString()), k -> new ArrayList<>()).add(loud);
 		if (loud) barsHit++;
 		else barsMissed++;
 		linesTotal++;
@@ -545,7 +548,7 @@ public class Battle {
 		int[] out = new int[mine.size()];
 		for (int i = 0; i < mine.size(); i++) {
 			BattleView.Row row = mine.get(i);
-			String target = ru ? stemRu(row.word) : lastWordEn(row.word);
+			String target = ru ? stemRu(Fallback.lastWord(row.word)) : lastWordEn(row.word);
 			double expected = (row.startBeat + 3) * (double) beatMs;
 			double best = Double.MAX_VALUE;
 			for (dev.rapbattle.ai.Transcriber.Word w : r.words()) {
@@ -579,9 +582,11 @@ public class Battle {
 		if (target.isEmpty()) return false;
 		String w = spoken.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}]", "");
 		if (w.length() < 2) return false;
-		if (w.equals(target)) return true;
-		if (w.equals(target + "s") || w.equals(target + "es") || w.equals(target + "ed") || w.equals(target + "d")) return true;
-		if (target.equals(w + "s") || target.equals(w + "es") || target.equals(w + "ed") || target.equals(w + "d")) return true;
+		for (String cand : Fallback.homophonesEn(target)) {
+			if (w.equals(cand)) return true;
+			if (w.equals(cand + "s") || w.equals(cand + "es") || w.equals(cand + "ed") || w.equals(cand + "d")) return true;
+			if (cand.equals(w + "s") || cand.equals(w + "es") || cand.equals(w + "ed") || cand.equals(w + "d")) return true;
+		}
 		return false;
 	}
 
@@ -815,6 +820,8 @@ public class Battle {
 		roundDealt.clear();
 		barsHit = 0;
 		barsMissed = 0;
+		playerBarLoud.clear();
+		pendingVerses = List.of();
 		transcripts.clear();
 		audio.clear();
 		verdictFuture = null;
@@ -1015,14 +1022,18 @@ public class Battle {
 			List<Llm.PlayerVerse> verses = new ArrayList<>();
 			for (UUID u : players) {
 				CompletableFuture<String> f = transcripts.get(u);
-				String text = f != null ? f.getNow("") : "";
+				String raw = f != null ? f.getNow("") : "";
+				String text = raw == null ? "" : raw.trim();
 				int[] tm = beatTiming(u);
-				String note = tm == null || text == null || text.isBlank() ? ""
+				String note = tm == null || text.isBlank() ? ""
 					: Lang.isRu(lang)
-						? " [по таймингу: в бит " + count(tm, 2) + " из " + tm.length + " рифм, рядом с долей " + count(tm, 1) + "]"
-						: " [timing: on beat " + count(tm, 2) + " of " + tm.length + " rhymes, near beat " + count(tm, 1) + "]";
-				verses.add(new Llm.PlayerVerse(names.get(u), rhymeWords.getOrDefault(u, List.of()), text == null ? "" : text + note));
+						? "[по таймингу: в бит " + count(tm, 2) + " из " + tm.length + " рифм, рядом с долей " + count(tm, 1) + "]"
+						: "[timing: on beat " + count(tm, 2) + " of " + tm.length + " rhymes, near beat " + count(tm, 1) + "]";
+				verses.add(new Llm.PlayerVerse(names.get(u), rhymeWords.getOrDefault(u, List.of()), text, note));
 			}
+			pendingVerses = List.copyOf(verses);
+			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
+			playerBarLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
 			List<String> mobCopy = new ArrayList<>();
 			for (Llm.MobLine l : mobLines) mobCopy.add(l.speaker() + ": " + l.text());
 			boolean noStt = sttMissing;
@@ -1032,7 +1043,7 @@ public class Battle {
 				Llm.Verdict v = noStt ? null : Llm.judge(opp.name(), opp.profile().species(lang), rank.label(lang), expectation,
 					rank.verseLo, rank.verseHi, mobCopy, verses, lang);
 				if (v == null) {
-					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, rnd, lang);
+					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, loudSnapshot, noStt, rnd, lang);
 					if (noStt) v = new Llm.Verdict(v.mobVerse(), v.playerLines(),
 						Lang.t(lang, "rapbattle.battle.no_stt_prefix") + v.comment());
 				}
@@ -1048,7 +1059,7 @@ public class Battle {
 		if (t < MIN_JUDGING_MS) return;
 		if (!verdictFuture.isDone() && now - verdictStart < JUDGE_WAIT_MS) return;
 		Llm.Verdict v = verdictFuture.getNow(null);
-		if (v == null) v = Fallback.judge(rank.verseLo, rank.verseHi, List.of(), rnd, lang);
+		if (v == null) v = Fallback.judge(rank.verseLo, rank.verseHi, pendingVerses, playerBarLoud, sttMissing, rnd, lang);
 
 		// The breakdown: every player line hits the mob, the bonuses too; the mob's verse hits the team.
 		int mobVerse = Math.max(rank.verseLo, Math.min(rank.verseHi, v.mobVerse()));
