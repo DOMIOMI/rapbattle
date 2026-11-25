@@ -211,6 +211,18 @@ public final class BroadcastHud {
 			&& revealed(v) >= v.result.hits.size();
 	}
 
+	/** 0..1 flinch impulse for the side that just took damage on the breakdown reveal. */
+	public static float recentHitImpulse(BattleView v, boolean mobSide) {
+		if (v == null || v.result == null || !("ROUND_RESULT".equals(v.phase) || "RESULT".equals(v.phase))) return 0f;
+		int n = revealed(v);
+		if (n <= 0 || n > v.result.hits.size()) return 0f;
+		BattleView.Hit h = v.result.hits.get(n - 1);
+		if (h.damage <= 0 || h.toMob != mobSide) return 0f;
+		long since = System.currentTimeMillis() - (revealAt + FIRST_HIT_MS + (n - 1) * HIT_MS);
+		if (since < 0 || since > 220) return 0f;
+		return (float) Math.sin((since / 220.0) * Math.PI);
+	}
+
 	/** When the last breakdown line comes in, i.e. when the verdict lands. */
 	private static long verdictAt(BattleView v) {
 		revealed(v);

@@ -427,6 +427,12 @@ public final class ClientBattle {
 		}
 		if (mine) {
 			rowPeak = Math.max(rowPeak, MIC.level);
+			smoothMic += (MIC.level - smoothMic) * 0.25f;
+			if (MIC.level < 0.02f) {
+				if (silentSinceMs == 0) silentSinceMs = System.currentTimeMillis();
+			} else {
+				silentSinceMs = 0;
+			}
 			long heard = clock() - ClientConfig.get().latencyMs;
 			long bm = Math.max(1, view.beatMs);
 			long expected = (live.startBeat + 3) * bm;
@@ -439,11 +445,47 @@ public final class ClientBattle {
 				nearRhymePeak = MIC.level;
 				nearPeakDeltaMs = (int) absDelta;
 			}
+			if (beat() - live.startBeat == 3 && MIC.level > 0.08f && absDelta <= bm * 35 / 100) {
+				long now = System.currentTimeMillis();
+				if (now - playerJabAt > bm * 2) {
+					playerJabAt = now;
+					if (view.combo >= 2) mobFlinchAt = now;
+				}
+			}
+		} else {
+			smoothMic *= 0.85f;
+			silentSinceMs = 0;
+		}
+		if (live != null && live.mob && live.punch && beat() - live.startBeat == 3 && beatFrac() < 0.25f) {
+			long now = System.currentTimeMillis();
+			if (now - mobPunchAt > Math.max(400, view.beatMs)) mobPunchAt = now;
 		}
 	}
 
-	private static float rhymePeak, nearRhymePeak;
+	private static float rhymePeak, nearRhymePeak, smoothMic;
 	private static int rhymePeakDeltaMs = -1, nearPeakDeltaMs = -1;
+	private static long silentSinceMs, mobPunchAt, mobFlinchAt, playerJabAt, scratchAt;
+
+	public static float smoothMicLevel() { return smoothMic; }
+
+	public static float silentBeats() {
+		if (silentSinceMs == 0 || view == null || view.beatMs <= 0) return 0f;
+		return (System.currentTimeMillis() - silentSinceMs) / (float) view.beatMs;
+	}
+
+	public static float mobPunchImpulse() { return impulse(mobPunchAt, 220); }
+	public static float fovImpulse() { return impulse(mobPunchAt, 120); }
+	public static float mobFlinchImpulse() { return impulse(mobFlinchAt, 260); }
+	public static float playerJabImpulse() { return impulse(playerJabAt, 220); }
+	public static float scratchImpulse() { return impulse(scratchAt, 300); }
+
+	private static float impulse(long at, long durMs) {
+		if (at <= 0) return 0f;
+		long dt = System.currentTimeMillis() - at;
+		if (dt < 0 || dt > durMs) return 0f;
+		float t = dt / (float) durMs;
+		return (float) Math.sin(t * Math.PI);
+	}
 
 	private static void say(Text text, Formatting color) {
 		MinecraftClient mc = MinecraftClient.getInstance();
@@ -543,6 +585,7 @@ public final class ClientBattle {
 			return;
 		}
 		if (view != null && !view.spectator && "TIMELINE".equals(view.phase) && view.canReroll && !view.pvp) {
+			scratchAt = System.currentTimeMillis();
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"reroll\"}"));
 		}
 	}
