@@ -121,6 +121,7 @@
   "rapbattle.broadcast.countdown": "BEAT DROPS IN",
   "rapbattle.broadcast.your_cue": "YOU'RE UP",
   "rapbattle.broadcast.live": "LIVE",
+  "rapbattle.broadcast.more_silence": "+%s bars: silence",
   "rapbattle.hud.choice_title": "RAP OR FIGHT?",
   "rapbattle.hud.invite_title": "CHALLENGE",
   "rapbattle.hud.round_upper": "ROUND %s",

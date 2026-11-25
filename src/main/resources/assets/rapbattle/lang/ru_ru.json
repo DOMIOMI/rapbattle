@@ -121,6 +121,7 @@
   "rapbattle.broadcast.countdown": "БИТ ЧЕРЕЗ",
   "rapbattle.broadcast.your_cue": "ТВОЙ ВЫХОД",
   "rapbattle.broadcast.live": "ЭФИР",
+  "rapbattle.broadcast.more_silence": "+%s строк: тишина",
   "rapbattle.hud.choice_title": "БАТТЛ ИЛИ ДРАКА?",
   "rapbattle.hud.invite_title": "ВЫЗОВ",
   "rapbattle.hud.round_upper": "РАУНД %s",

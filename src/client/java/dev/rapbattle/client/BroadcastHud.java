@@ -542,12 +542,36 @@ public final class BroadcastHud {
 		// The breakdown on the left: 3 summary bars on top (Text / Beat / Rebuttals), bonus line, then lines & mob damage.
 		int cw = Math.min(230, w / 2 - 16), cx = 8, cy = under + 28;
 		int summaryH = 26 + (r.bonusTotal > 0 ? 11 : 0);
-		int maxRows = Math.max(3, Math.min(8, (h - 140 - cy - summaryH) / 11));
-		int from = Math.max(0, n - maxRows);
-		int rows = n - from;
 		boolean hasMobInfo = r.mobLiveDamage + r.mobVerseDamage + r.silenceDamage + r.wardenNoiseDamage > 0;
 		int statsH = allIn ? 16 + (r.bestLine.isEmpty() ? 0 : 12) + (hasMobInfo ? 11 : 0) + (r.players.size() > 1 ? r.players.size() * 10 : 0) : 0;
-		int ph = 6 + summaryH + rows * 11 + statsH + 2;
+		// Collapse consecutive 0-damage silent lines only if all rows would not fit on a small screen.
+		int rowH = r.hits.size() > 5 ? 9 : 11;
+		int availH = Math.max(40, h - 58 - cy - summaryH - statsH);
+		int maxRows = Math.max(4, Math.min(14, availH / rowH));
+		List<BattleView.Hit> displayHits = r.hits;
+		int collapsedSilent = 0;
+		if (n > maxRows) {
+			List<BattleView.Hit> compacted = new java.util.ArrayList<>();
+			for (int i = 0; i < n; i++) {
+				BattleView.Hit hit = r.hits.get(i);
+				if (hit.toMob && hit.damage == 0 && collapsedSilent < n - maxRows + 1) {
+					collapsedSilent++;
+				} else {
+					compacted.add(hit);
+				}
+			}
+			if (collapsedSilent > 1) {
+				compacted.add(0, new BattleView.Hit("", I18n.translate("rapbattle.broadcast.more_silence", collapsedSilent), 0, true, false));
+			} else if (collapsedSilent == 1) {
+				compacted = r.hits;
+				collapsedSilent = 0;
+			}
+			displayHits = compacted;
+		}
+		int dn = displayHits.size();
+		int from = Math.max(0, dn - maxRows);
+		int rows = dn - from;
+		int ph = 6 + summaryH + rows * rowH + statsH + 2;
 		tab(ctx, tr, I18n.translate("rapbattle.broadcast.breakdown"), cx, cy, GOLD, DARK);
 		panel(ctx, cx, cy, cw, ph, GOLD);
 		ctx.fill(cx, cy, cx + 3, cy + ph, GOLD);
@@ -583,12 +607,12 @@ public final class BroadcastHud {
 		ctx.fill(cx + 8, ry - 1, cx + cw - 6, ry, alphaOf(GOLD, 0.35f));
 		ry += 2;
 
-		for (int i = from; i < n; i++) {
-			BattleView.Hit hit = r.hits.get(i);
-			long since = now - (revealAt + FIRST_HIT_MS + i * HIT_MS);
+		for (int i = from; i < dn; i++) {
+			BattleView.Hit hit = displayHits.get(i);
+			long since = now - (revealAt + FIRST_HIT_MS + Math.min(i, n - 1) * HIT_MS);
 			float a = easeOutCubic(since / 220f);
 			int off = Math.round((1 - a) * -16);
-			if ((i & 1) == 0) ctx.fill(cx + 4, ry - 2, cx + cw - 2, ry + 9, 0x0CFFFFFF);
+			if ((i & 1) == 0) ctx.fill(cx + 4, ry - 1, cx + cw - 2, ry + rowH - 1, 0x0CFFFFFF);
 			String target = !v.pvp ? I18n.translate(hit.toMob ? "rapbattle.broadcast.target_mob" : "rapbattle.broadcast.target_team")
 				: hit.toMob ? v.mobName : (v.team.isEmpty() ? "" : v.team.get(0).name);
 			String dmg = hit.damage == 0 ? "0" : target + " -" + hit.damage;
@@ -597,14 +621,14 @@ public final class BroadcastHud {
 			String text = BattleHud.fit(tr, who + hit.note, cw - 26 - dw);
 			int col = !hit.toMob ? 0xFFFF8A8A : hit.damage == 0 ? DIM : hit.punch ? ORANGE : TEXT;
 			int dcol = hit.toMob ? (hit.damage == 0 ? DIM : YELLOW) : RED;
-			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry - 2, cx + 6, ry + 9, alphaOf(ORANGE, a));
+			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry - 1, cx + 6, ry + rowH - 1, alphaOf(ORANGE, a));
 			text(ctx, tr, text, cx + 9 + off, ry, 1f, col, a, false);
 			int px = cx + cw - 8 - dw;
-			ctx.fill(px - 3, ry - 2, cx + cw - 4, ry + 9, alphaOf(mix(dcol, BG, 0.8f), a));
+			ctx.fill(px - 3, ry - 1, cx + cw - 4, ry + rowH - 1, alphaOf(mix(dcol, BG, 0.8f), a));
 			text(ctx, tr, dmg, px, ry, 1f, dcol, a, false);
 			// A fresh line flashes once.
-			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry - 2, cx + cw - 2, ry + 9, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
-			ry += 11;
+			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry - 1, cx + cw - 2, ry + rowH - 1, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
+			ry += rowH;
 		}
 		if (allIn) {
 			ry += 3;
