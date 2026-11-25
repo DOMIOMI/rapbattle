@@ -321,14 +321,6 @@ public final class Crowd {
 		w.spawnParticles(type, x, y, z, count, 0.3, 0.2, 0.3, 0.02);
 	}
 
-	/** Fans on the players' side cheering more than the rest: the crowd prize, 0..2 degrees. */
-	int prize() {
-		if (members.isEmpty()) return 0;
-		int hit = battle.barsHit, miss = battle.barsMissed;
-		if (hit == 0) return 0;
-		return hit >= 2 * miss + 2 ? 2 : hit > miss ? 1 : 0;
-	}
-
 	/** Battle over: keep the truce 5 more seconds, then let everyone go. */
 	void release() {
 		long until = System.currentTimeMillis() + 5000;

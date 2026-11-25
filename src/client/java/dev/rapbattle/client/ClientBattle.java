@@ -386,7 +386,7 @@ public final class ClientBattle {
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.ENTITY_ENDERMAN_STARE, 1f, 0.8f));
 	}
 
-	/** At the end of each of my rows: was the rhyme slot loud (crowd cheers) or silent (creeper fuse)? */
+	/** At the end of each of my rows: send whether the rhyme slot was loud, the voice peak offset from beat 4 (ms), and silence. */
 	private static void trackRows() {
 		BattleView.Row live = liveRow();
 		int idx = live == null ? -1 : view.rows.indexOf(live);
@@ -395,27 +395,41 @@ public final class ClientBattle {
 			if (trackedRow >= 0 && trackedRow < view.rows.size()) {
 				BattleView.Row done = view.rows.get(trackedRow);
 				if (!done.mob && me().equals(done.reader) && MIC.isRunning() && !monitoring) {
-					// Loud right on the rhyme beat (shifted by the player's latency), not just anywhere in the line.
-					boolean loud = rhymePeak > 0.08f;
-					ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"bar\",\"loud\":" + loud + "}"));
-					if (view.fuse && rowPeak < 0.02f) ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"silent\"}"));
+					boolean onBeatLoud = rhymePeak > 0.08f;
+					boolean anyNearLoud = onBeatLoud || nearRhymePeak > 0.08f;
+					int deltaMs = onBeatLoud ? rhymePeakDeltaMs : anyNearLoud ? nearPeakDeltaMs : -1;
+					boolean silentBar = rowPeak < 0.02f;
+					ClientPlayNetworking.send(new Payloads.ActionC2S(
+						"{\"type\":\"bar\",\"loud\":" + onBeatLoud + ",\"deltaMs\":" + deltaMs + ",\"silent\":" + silentBar + "}"));
+					if (view.fuse && silentBar) ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"silent\"}"));
 				}
 			}
 			trackedRow = idx;
 			rowPeak = 0;
 			rhymePeak = 0;
+			nearRhymePeak = 0;
+			rhymePeakDeltaMs = -1;
+			nearPeakDeltaMs = -1;
 		}
 		if (mine) {
 			rowPeak = Math.max(rowPeak, MIC.level);
 			long heard = clock() - ClientConfig.get().latencyMs;
-			long bm = view.beatMs;
-			if (heard >= (live.startBeat + 3) * bm - bm * 35 / 100 && heard < (live.startBeat + 4) * bm + bm / 4) {
-				rhymePeak = Math.max(rhymePeak, MIC.level);
+			long bm = Math.max(1, view.beatMs);
+			long expected = (live.startBeat + 3) * bm;
+			long absDelta = Math.abs(heard - expected);
+			if (absDelta <= bm * 35 / 100 && MIC.level > rhymePeak) {
+				rhymePeak = MIC.level;
+				rhymePeakDeltaMs = (int) absDelta;
+			}
+			if (absDelta <= bm * 70 / 100 && MIC.level > nearRhymePeak) {
+				nearRhymePeak = MIC.level;
+				nearPeakDeltaMs = (int) absDelta;
 			}
 		}
 	}
 
-	private static float rhymePeak;
+	private static float rhymePeak, nearRhymePeak;
+	private static int rhymePeakDeltaMs = -1, nearPeakDeltaMs = -1;
 
 	private static void say(Text text, Formatting color) {
 		MinecraftClient mc = MinecraftClient.getInstance();

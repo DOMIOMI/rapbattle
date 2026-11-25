@@ -595,10 +595,13 @@ public final class BattleManager {
 						if (b != null) b.onNoise(p, o.get("n").getAsInt());
 					}
 					case "bar" -> {
+						boolean loud = o.get("loud").getAsBoolean();
+						int deltaMs = o.has("deltaMs") ? o.get("deltaMs").getAsInt() : -1;
+						boolean silentBar = o.has("silent") && o.get("silent").getAsBoolean();
 						Battle b = byPlayer(p.getUuid());
-						if (b != null) b.onBar(p, o.get("loud").getAsBoolean());
+						if (b != null) b.onBar(p, loud, deltaMs, silentBar);
 						PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
-						if (pvp != null) pvp.onBar(p, o.get("loud").getAsBoolean());
+						if (pvp != null) pvp.onBar(p, loud, deltaMs, silentBar);
 					}
 					case "leave" -> {
 						Battle b = byPlayer(p.getUuid());
