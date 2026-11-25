@@ -65,11 +65,14 @@ public final class Bling {
 			if (mm.entityId != id) continue;
 			boolean boss = mm.title.contains("Босс") || mm.title.contains("дракон")
 				|| mm.title.contains("Boss") || mm.title.contains("Dragon");
-			BlockState chain = boss ? Blocks.DIAMOND_BLOCK.getDefaultState() : mm.wins >= 1 ? Blocks.GOLD_BLOCK.getDefaultState()
-				: Blocks.IRON_BLOCK.getDefaultState();
-			BlockState pendant = mm.mvp >= 3 ? Blocks.EMERALD_BLOCK.getDefaultState() : chain;
+			// Same ladder as the mobs, by the outfit level (0 naked .. 6 netherite); wins and MVPs push it a step up.
+			int r = Math.min(6, mm.outfitLevel + (mm.wins >= 5 ? 1 : 0));
+			BlockState chain = boss || r >= 5 ? Blocks.DIAMOND_BLOCK.getDefaultState()
+				: r >= 2 ? Blocks.GOLD_BLOCK.getDefaultState() : Blocks.IRON_BLOCK.getDefaultState();
+			BlockState pendant = r >= 6 ? Blocks.DIAMOND_BLOCK.getDefaultState()
+				: r >= 4 || mm.mvp >= 3 ? Blocks.EMERALD_BLOCK.getDefaultState() : chain;
 			BlockState cap = mm.title.isEmpty() || helmet ? null : concrete(0xFF000000 | (mm.name.hashCode() & 0xFFFFFF));
-			return new Kit(chain, pendant, mm.mvp >= 1 || mm.wins >= 3, cap, false);
+			return new Kit(chain, pendant, r >= 3 || mm.mvp >= 1 || mm.wins >= 3, cap, r >= 4);
 		}
 		return null;
 	}

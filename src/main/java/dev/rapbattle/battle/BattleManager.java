@@ -132,6 +132,39 @@ public final class BattleManager {
 	private static final long REFUSED_MS = 60_000;
 	private record Refused(MobEntity mob, long until) {}
 	private static final Map<UUID, Refused> REFUSED = new HashMap<>();
+	/** A fist fight already started with this mob: further hits are just hits, no new choice and no new lines. */
+	private static final Map<UUID, Refused> BRAWLS = new HashMap<>();
+	private static final long BRAWL_MS = 60_000;
+
+	/** Mobs that already offered a choice on approach; they do not ask again for a while. */
+	private static final Map<UUID, Long> ASKED = new HashMap<>();
+	private static final long ASK_AGAIN_MS = 5 * 60_000;
+
+	/** A hostile mob walking up to a player gives him the same choice as an empty-hand hit: rap or fight. */
+	private static void offerOnApproach(net.minecraft.server.MinecraftServer server) {
+		long now = System.currentTimeMillis();
+		ASKED.values().removeIf(t -> now > t);
+		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+			if (p.isSpectator() || p.isCreative() || !p.isAlive()) continue;
+			UUID u = p.getUuid();
+			if (byPlayer(u) != null || PvpBattle.byPlayer(u) != null || PENDING.containsKey(u)) continue;
+			Refused fight = BRAWLS.get(u);
+			if (fight != null && now < fight.until()) continue;
+			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(7),
+				m -> m.isAlive() && m.getTarget() == p && m instanceof net.minecraft.entity.mob.Monster
+					&& byMob(m) == null && !inAnyCrowd(m) && !ASKED.containsKey(m.getUuid()));
+			if (near.isEmpty()) continue;
+			MobEntity mob = near.get(0);
+			ASKED.put(mob.getUuid(), now + ASK_AGAIN_MS);
+			mob.setTarget(null);
+			stareAt(mob, p, CHOICE_MS);
+			offerChoice(p, mob);
+		}
+	}
+
+	private static void brawl(ServerPlayerEntity p, MobEntity mob) {
+		BRAWLS.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + BRAWL_MS));
+	}
 	/** Mobs turning to look at someone while they talk to him. */
 	private record Stare(MobEntity mob, UUID player, long until) {}
 	private static final List<Stare> STARES = new ArrayList<>();
@@ -333,8 +366,13 @@ public final class BattleManager {
 			}
 			if (byPlayer(sp.getUuid()) != null) return ActionResult.FAIL;
 
-			Pending pending = PENDING.get(sp.getUuid());
 			long now = System.currentTimeMillis();
+			Refused fight = BRAWLS.get(sp.getUuid());
+			if (fight != null && fight.mob() == mob && now < fight.until()) {
+				brawl(sp, mob); // keep the fight going while he keeps swinging
+				return ActionResult.PASS;
+			}
+			Pending pending = PENDING.get(sp.getUuid());
 			if (pending != null && pending.mob == mob && now < pending.until) {
 				// Second hit while the choice is open = "набить ебало": a normal fight, and the kin takes offence.
 				PENDING.remove(sp.getUuid());
@@ -344,6 +382,7 @@ public final class BattleManager {
 				else disrespect(sp, mob);
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				fightAfterBattle(sp, mob);
+				brawl(sp, mob);
 				return ActionResult.PASS;
 			}
 			Refused refused = REFUSED.get(sp.getUuid());
@@ -355,12 +394,14 @@ public final class BattleManager {
 				disrespect(sp, mob);
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				fightAfterBattle(sp, mob);
+				brawl(sp, mob);
 				return ActionResult.PASS;
 			}
 			if (!sp.getMainHandStack().isEmpty()) {
 				// Weapons just fight. Hurting a villager brings the golem; brawling at a finished battle wakes the crowd.
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				fightAfterBattle(sp, mob);
+				brawl(sp, mob);
 				return ActionResult.PASS;
 			}
 			if (RapConfig.get().skipChoice) {
@@ -403,6 +444,14 @@ public final class BattleManager {
 					GolemDefender.chickenedOut(pl, (net.minecraft.entity.passive.IronGolemEntity) pd.mob);
 				}
 			}
+			// While he decides, the mob that asked stands still and waits.
+			for (Pending pd : PENDING.values()) {
+				if (!pd.golem && pd.mob.isAlive() && pd.mob.getTarget() != null) {
+					pd.mob.setTarget(null);
+					pd.mob.getNavigation().stop();
+				}
+			}
+			if (server.getTicks() % 10 == 0) offerOnApproach(server);
 			Later.tick();
 			GolemDefender.tick();
 			PvpBattle.tickAll();

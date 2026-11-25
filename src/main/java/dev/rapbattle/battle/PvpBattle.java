@@ -43,7 +43,9 @@ public final class PvpBattle {
 	private static final int[] COLORS = {0x6EC6F0, 0xF07167};
 
 	public final int id;
+	/** The challenger's language: only a default. Everyone gets the battle in their own Minecraft language. */
 	public final String lang;
+	private final Map<UUID, String> langs = new HashMap<>();
 	private final ServerWorld world;
 	private final UUID a, b;
 	private final Map<UUID, String> names = new HashMap<>();
@@ -64,7 +66,8 @@ public final class PvpBattle {
 	private final Map<UUID, CompletableFuture<String>> transcripts = new ConcurrentHashMap<>();
 	private final Map<UUID, Transcriber.Result> timed = new ConcurrentHashMap<>();
 	private final Map<UUID, Integer> recordingStart = new ConcurrentHashMap<>();
-	private CompletableFuture<Llm.Verdict> verdict;
+	private final Map<String, CompletableFuture<Llm.Verdict>> verdicts = new LinkedHashMap<>();
+	private final Map<String, BattleView.Result> results = new LinkedHashMap<>();
 	private long verdictAsked;
 	private boolean sttMissing;
 	boolean finished;
@@ -144,6 +147,8 @@ public final class PvpBattle {
 	private PvpBattle(int id, ServerPlayerEntity pa, ServerPlayerEntity pb) {
 		this.id = id;
 		this.lang = Lang.of(pa);
+		langs.put(pa.getUuid(), Lang.of(pa));
+		langs.put(pb.getUuid(), Lang.of(pb));
 		this.world = pa.getEntityWorld();
 		this.a = pa.getUuid();
 		this.b = pb.getUuid();
@@ -175,16 +180,13 @@ public final class PvpBattle {
 		v.round = 1;
 		v.challenger = names.get(a);
 		v.mobName = names.get(b);
-		v.rankArmor = Lang.t(lang, "rapbattle.pvp.rank_armor");
-		v.rankStreet = Lang.t(lang, "rapbattle.pvp.rank_street");
 		v.rankColor = 0xF07167;
 		v.respectMax = 100;
 		int beat = 4; // countdown
-		List<List<String>> groups = RhymeBank.pickBlocks(4, rnd, lang);
-		int g = 0;
 		for (UUID u : List.of(a, b)) {
+			// Each reader gets rhymes in his own language.
 			List<String> words = new ArrayList<>();
-			for (int i = 0; i < LINES / 4; i++) words.addAll(groups.get(g++));
+			for (List<String> grp : RhymeBank.pickBlocks(LINES / 4, rnd, langOf(u))) words.addAll(grp);
 			rhymes.put(u, words.subList(0, LINES));
 			BattleView.Segment seg = new BattleView.Segment();
 			seg.reader = names.get(u);
@@ -221,6 +223,8 @@ public final class PvpBattle {
 
 	private UUID other(UUID u) { return u.equals(a) ? b : a; }
 
+	private String langOf(UUID u) { return langs.getOrDefault(u, lang); }
+
 	// ------------------------------------------------------------------ during the battle
 
 	public void onBar(ServerPlayerEntity p, boolean loud) {
@@ -238,7 +242,7 @@ public final class PvpBattle {
 		} else {
 			combo.put(u, 0);
 			hit(u, 2, true);
-			DamagePop.spawn(world, p, Lang.t(lang, "rapbattle.battle.stumbled_pop"), 0xFF6060);
+			DamagePop.spawn(world, p, Lang.t(langOf(u), "rapbattle.battle.stumbled_pop"), 0xFF6060);
 		}
 		broadcast();
 	}
@@ -261,6 +265,7 @@ public final class PvpBattle {
 		audio.remove(u);
 		recordingStart.put(u, chunk.startMs());
 		List<String> hints = rhymes.getOrDefault(u, List.of());
+		String lang = langOf(u);
 		transcripts.put(u, CompletableFuture.supplyAsync(() -> {
 			Transcriber.Result r = Transcriber.transcribeTimed(wav, hints, lang);
 			if (r == null) {
@@ -336,7 +341,7 @@ public final class PvpBattle {
 	private void judging(long now) {
 		long t = now - phaseStart;
 		if (t > AUDIO_WAIT_MS) for (UUID u : List.of(a, b)) transcripts.putIfAbsent(u, CompletableFuture.completedFuture(""));
-		if (verdict == null) {
+		if (verdicts.isEmpty()) {
 			boolean done = transcripts.size() == 2 && transcripts.values().stream().allMatch(CompletableFuture::isDone);
 			if (!done && t < AUDIO_WAIT_MS + STT_WAIT_MS) return;
 			List<Llm.PlayerVerse> verses = new ArrayList<>();
@@ -347,62 +352,82 @@ public final class PvpBattle {
 			}
 			boolean noStt = sttMissing;
 			verdictAsked = now;
-			verdict = CompletableFuture.supplyAsync(() -> {
-				Llm.Verdict v = noStt ? null : Llm.judge("—", Lang.t(lang, "rapbattle.pvp.judge_species"), "PvP",
-					Lang.t(lang, "rapbattle.pvp.judge_expectation"),
-					0, 0, List.of(), verses, lang);
-				if (v == null) v = Fallback.judge(0, 0, verses, rnd, lang);
-				return v;
-			}, Battle.POOL);
-			BattleView.Result r = new BattleView.Result();
-			for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? Lang.t(lang, "rapbattle.battle.silence") : pv.transcript()));
-			view.result = r;
+			// One judge per language in the battle: each player reads the breakdown in his own language.
+			for (String l : new LinkedHashSet<>(List.of(langOf(a), langOf(b)))) {
+				verdicts.put(l, CompletableFuture.supplyAsync(() -> {
+					Llm.Verdict v = noStt ? null : Llm.judge("—", Lang.t(l, "rapbattle.pvp.judge_species"), "PvP",
+						Lang.t(l, "rapbattle.pvp.judge_expectation"),
+						0, 0, List.of(), verses, l);
+					if (v == null) v = Fallback.judge(0, 0, verses, rnd, l);
+					return v;
+				}, Battle.POOL));
+				BattleView.Result r = new BattleView.Result();
+				for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? Lang.t(l, "rapbattle.battle.silence") : pv.transcript()));
+				results.put(l, r);
+			}
+			view.result = results.get(langOf(a));
 			return;
 		}
 		if (t < MIN_JUDGING_MS) return;
-		if (!verdict.isDone() && now - verdictAsked < JUDGE_WAIT_MS) return;
-		Llm.Verdict v = verdict.getNow(null);
-		if (v == null) v = Fallback.judge(0, 0, List.of(), rnd, lang);
-		BattleView.Result r = view.result;
-		r.teamBefore = respectA;
-		r.mobBefore = respectB;
-		r.respectMax = 100;
+		boolean allDone = verdicts.values().stream().allMatch(CompletableFuture::isDone);
+		if (!allDone && now - verdictAsked < JUDGE_WAIT_MS) return;
+		Map<String, Llm.Verdict> vs = new HashMap<>();
+		for (Map.Entry<String, CompletableFuture<Llm.Verdict>> e : verdicts.entrySet()) {
+			Llm.Verdict v = e.getValue().getNow(null);
+			vs.put(e.getKey(), v != null ? v : Fallback.judge(0, 0, List.of(), rnd, e.getKey()));
+		}
+		int before0 = respectA, before1 = respectB;
 		for (UUID u : List.of(a, b)) {
 			List<String> words = rhymes.getOrDefault(u, List.of());
-			List<Llm.LineScore> ls = v.playerLines().getOrDefault(names.get(u), List.of());
-			for (int i = 0; i < ls.size(); i++) {
-				Llm.LineScore l = ls.get(i);
+			// Damage comes from the judge in the reader's language; the notes are shown in each viewer's language.
+			List<Llm.LineScore> own = vs.get(langOf(u)).playerLines().getOrDefault(names.get(u), List.of());
+			for (int i = 0; i < own.size(); i++) {
+				Llm.LineScore l = own.get(i);
 				String word = i < words.size() ? words.get(i) : "";
 				int d = l.damage();
-				r.hits.add(new BattleView.Hit(names.get(u), (word.isEmpty() ? "" : "«" + word + "» · ") + l.note(), d, u.equals(a), l.punch()));
+				for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+					List<Llm.LineScore> theirs = vs.get(e.getKey()).playerLines().getOrDefault(names.get(u), List.of());
+					String note = i < theirs.size() ? theirs.get(i).note() : l.note();
+					e.getValue().hits.add(new BattleView.Hit(names.get(u), (word.isEmpty() ? "" : "«" + word + "» · ") + note, d, u.equals(a), l.punch()));
+				}
 				dealt.merge(u, d, Integer::sum);
 			}
-			int[] tm = Battle.beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs, lang);
+			int[] tm = Battle.beatTiming(timed.get(u), recordingStart.get(u), view.rows, names.get(u), beatMs, langOf(u));
 			if (tm != null) {
 				int on = 0, near = 0;
 				for (int x : tm) if (x == 2) on++; else if (x == 1) near++;
 				int d = on * 3 + near;
 				if (d > 0) {
-					r.hits.add(new BattleView.Hit(names.get(u), Lang.t(lang, "rapbattle.battle.hit_rhymes_on_beat", on, tm.length), d, u.equals(a), false));
+					for (Map.Entry<String, BattleView.Result> e : results.entrySet())
+						e.getValue().hits.add(new BattleView.Hit(names.get(u), Lang.t(e.getKey(), "rapbattle.battle.hit_rhymes_on_beat", on, tm.length), d, u.equals(a), false));
 					dealt.merge(u, d, Integer::sum);
 				}
 			}
 		}
-		for (BattleView.Hit h : r.hits) hit(h.toMob ? b : a, h.damage, false);
-		r.respectTeam = respectA;
-		r.respectMob = respectB;
-		r.knockout = respectA <= 0 || respectB <= 0;
+		BattleView.Result base = results.get(langOf(a));
+		for (BattleView.Hit h : base.hits) hit(h.toMob ? b : a, h.damage, false);
+		boolean ko = respectA <= 0 || respectB <= 0;
 		UUID winner = respectB <= 0 ? a : respectA <= 0 ? b : respectA >= respectB ? a : b;
-		r.winner = names.get(winner);
-		r.playersWin = winner.equals(a);
-		r.finalResult = true;
-		r.comment = v.comment();
-		r.teamLabel = names.get(a);
-		r.mobLabel = names.get(b);
-		r.dealt = dealt.getOrDefault(a, 0);
-		for (BattleView.PlayerScore ps : r.players) {
-			for (UUID u : List.of(a, b)) if (names.get(u).equals(ps.name)) ps.score = dealt.getOrDefault(u, 0);
+		for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
+			BattleView.Result r = e.getValue();
+			r.teamBefore = before0;
+			r.mobBefore = before1;
+			r.respectMax = 100;
+			r.respectTeam = respectA;
+			r.respectMob = respectB;
+			r.knockout = ko;
+			r.winner = names.get(winner);
+			r.playersWin = winner.equals(a);
+			r.finalResult = true;
+			r.comment = vs.get(e.getKey()).comment();
+			r.teamLabel = names.get(a);
+			r.mobLabel = names.get(b);
+			r.dealt = dealt.getOrDefault(a, 0);
+			for (BattleView.PlayerScore ps : r.players) {
+				for (UUID u : List.of(a, b)) if (names.get(u).equals(ps.name)) ps.score = dealt.getOrDefault(u, 0);
+			}
 		}
+		view.result = base;
 		phase = Phase.RESULT;
 		phaseStart = now;
 		broadcast();
@@ -454,11 +479,31 @@ public final class PvpBattle {
 		v.respectMob = respectB;
 		v.combo = 0;
 		v.beatElapsedMs = System.currentTimeMillis() - beatZero;
-		v.team = new ArrayList<>();
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
-			Outfit.Score s = p == null ? new Outfit.Score(0, "") : Outfit.of(p, lang);
-			BattleView.Member mm = new BattleView.Member(names.get(u), s.label(lang), s.level(), p == null ? -1 : p.getId());
+			if (p != null) ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, langOf(u), false).toJson()));
+		}
+		double r2 = RapConfig.get().spectatorRadius * RapConfig.get().spectatorRadius;
+		for (ServerPlayerEntity p : world.getPlayers()) {
+			if (p.getUuid().equals(a) || p.getUuid().equals(b)) continue;
+			if (p.squaredDistanceTo(stage) <= r2) {
+				spectators.add(p.getUuid());
+				ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, Lang.of(p), true).toJson()));
+			}
+		}
+	}
+
+	/** The battle as one viewer sees it: labels, outfit, titles and the judge's breakdown in his language. */
+	private BattleView localized(BattleView v, String l, boolean spectator) {
+		BattleView c = v.copy();
+		c.spectator = spectator;
+		c.rankArmor = Lang.t(l, "rapbattle.pvp.rank_armor");
+		c.rankStreet = Lang.t(l, "rapbattle.pvp.rank_street");
+		c.team = new ArrayList<>();
+		for (UUID u : List.of(a, b)) {
+			ServerPlayerEntity p = player(u);
+			Outfit.Score s = p == null ? new Outfit.Score(0, "") : Outfit.of(p, l);
+			BattleView.Member mm = new BattleView.Member(names.get(u), s.label(l), s.level(), p == null ? -1 : p.getId());
 			// Their records for the intro cards and the scoreboard.
 			Stats.Player st = Stats.of(world.getServer()).player(u);
 			mm.wins = st.wins;
@@ -466,24 +511,11 @@ public final class PvpBattle {
 			mm.streak = st.streak;
 			mm.mvp = st.mvp;
 			mm.best = st.best;
-			mm.title = st.title(lang);
-			v.team.add(mm);
+			mm.title = st.title(l);
+			c.team.add(mm);
 		}
-		v.spectator = false;
-		for (UUID u : List.of(a, b)) {
-			ServerPlayerEntity p = player(u);
-			if (p != null) ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
-		}
-		BattleView sv = v.copy();
-		sv.spectator = true;
-		double r2 = RapConfig.get().spectatorRadius * RapConfig.get().spectatorRadius;
-		for (ServerPlayerEntity p : world.getPlayers()) {
-			if (p.getUuid().equals(a) || p.getUuid().equals(b)) continue;
-			if (p.squaredDistanceTo(stage) <= r2) {
-				spectators.add(p.getUuid());
-				ServerPlayNetworking.send(p, new Payloads.StateS2C(sv.toJson()));
-			}
-		}
+		if (v.result != null) c.result = results.getOrDefault(l, v.result);
+		return c;
 	}
 
 	private void broadcastChat(Text t) {
