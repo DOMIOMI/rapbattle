@@ -493,6 +493,7 @@ public final class BroadcastHud {
 		// How it was won, a slanted strip under the scoreboard, once the breakdown has run.
 		if (allIn && !roundOnly) {
 			String how = r.knockout ? I18n.translate("rapbattle.broadcast.knockout")
+				: v.rounds > 1 ? I18n.translate("rapbattle.hud.sub_rounds", v.roundWinsPlayers, v.roundWinsMob).toUpperCase(Locale.ROOT)
 				: I18n.translate("rapbattle.broadcast.by_points", r.respectTeam, r.respectMob);
 			Text ht = bold(how);
 			int col = r.knockout ? ORANGE : (won ? YELLOW : LOSS);

@@ -1115,13 +1115,19 @@ public class Battle {
 		result.respectTeam = respectTeam;
 		result.respectMob = respectMob;
 		boolean ko = respectMob <= 0 || respectTeam <= 0;
-		boolean roundPlayers = roundToMob > roundToTeam;
+		boolean roundPlayers = respectMob <= 0 || (respectTeam > 0 && roundToMob > roundToTeam);
 		if (roundPlayers) winsPlayers++;
 		else winsMob++;
-		boolean done = ko || round >= rounds;
+		boolean done = ko || winsPlayers >= winsNeeded || winsMob >= winsNeeded || round >= rounds;
 		result.knockout = ko;
 		result.finalResult = done;
-		result.playersWin = done ? (respectMob <= 0 || (respectTeam > 0 && respectTeam > respectMob)) : roundPlayers;
+		if (boss) {
+			result.playersWin = done
+				? (respectMob <= 0 ? true : respectTeam <= 0 ? false : winsPlayers > winsMob)
+				: roundPlayers;
+		} else {
+			result.playersWin = done ? (respectMob <= 0 || (respectTeam > 0 && respectTeam > respectMob)) : roundPlayers;
+		}
 		result.comment = v.comment();
 		result.mvp = players.size() > 1 ? battleDealt.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("") : "";
 		result.outfitBonus = outfitBonus;
@@ -1336,9 +1342,11 @@ public class Battle {
 					? Text.translatable("rapbattle.battle.win_ko", team, verb, opp.name())
 					: Text.translatable("rapbattle.battle.win_ko_mvp", team, verb, opp.name(), result.mvp);
 			} else {
+				int sWin = boss ? winsPlayers : respectTeam;
+				int sLose = boss ? winsMob : respectMob;
 				msg = result.mvp.isEmpty()
-					? Text.translatable("rapbattle.battle.win_pts", team, verb, opp.name(), respectTeam, respectMob)
-					: Text.translatable("rapbattle.battle.win_pts_mvp", team, verb, opp.name(), respectTeam, respectMob, result.mvp);
+					? Text.translatable("rapbattle.battle.win_pts", team, verb, opp.name(), sWin, sLose)
+					: Text.translatable("rapbattle.battle.win_pts_mvp", team, verb, opp.name(), sWin, sLose, result.mvp);
 			}
 			broadcastChat(msg.copy().formatted(Formatting.GREEN));
 			ServerPlayerEntity killer = mvpPlayer;
@@ -1398,7 +1406,7 @@ public class Battle {
 			Text verb = Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
 			Text msg = result.knockout
 				? Text.translatable("rapbattle.battle.win_ko", opp.name(), verb, team)
-				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, respectMob, respectTeam);
+				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, boss ? winsMob : respectMob, boss ? winsPlayers : respectTeam);
 			broadcastChat(msg.copy().formatted(Formatting.RED));
 			punishPlayers();
 			if (!boss) {
