@@ -103,4 +103,4 @@ author's paid plan.
 MIT — see the [LICENSE](LICENSE) file. The sounds and beats in `assets/rapbattle/sounds` were generated with ElevenLabs.
 
 In plain words: take the mod, put it in your modpacks, change it, publish your own versions. No need to ask for
-permission, just keep the LICENSE file with the author credit (DOMI).
+permission. The license only asks you not to delete the LICENSE file if you pass the code on.
