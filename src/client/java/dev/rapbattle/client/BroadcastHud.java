@@ -442,6 +442,8 @@ public final class BroadcastHud {
 
 	/** The rhyme as the mob's tricks let you see it. */
 	private static String shownWord(BattleView.Row r, int k) {
+		BattleView v = ClientBattle.view;
+		if (!r.mob && v != null && v.revealBeats > 0 && r.startBeat - ClientBattle.beat() > v.revealBeats) return "???";
 		if (r.effect == null || r.mob) return r.word;
 		return switch (r.effect) {
 			case "hidden" -> "???";

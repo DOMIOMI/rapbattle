@@ -12,8 +12,8 @@ public enum Rank {
 	CHAIN    ("КОЛЬЧУЖНЫЙ",  "Шпана",      "CHAIN",     "Punk",      0x9AA3AD,  88, 4,    8,   4,   4,     1,     2,      4,     8,   2,      2),
 	IRON     ("ЖЕЛЕЗНЫЙ",    "Уличный",    "IRON",      "Street",    0xD8D8D8,  94, 6,    8,   4,   4,     2,     3,      6,    15,   3,      3),
 	GOLD     ("ЗОЛОТОЙ",     "Авторитет",  "GOLD",      "Big Shot",  0xF2C94C, 100, 8,   12,   4,   4,     3,     4,      7,    25,   4,      4),
-	DIAMOND  ("АЛМАЗНЫЙ",    "Легенда",    "DIAMOND",   "Legend",    0x5EE0E6, 108, 8,   12,   4,   2,     3,     6,      8,    40,   4,      5),
-	NETHERITE("НЕЗЕРИТОВЫЙ", "Босс",       "NETHERITE", "Boss",      0x8B5CF6, 116, 6,    8,   4,   2,     4,     8,     10,   100,   5,      5);
+	DIAMOND  ("АЛМАЗНЫЙ",    "Легенда",    "DIAMOND",   "Legend",    0x5EE0E6, 108, 8,   12,   4,   4,     3,     6,      8,    40,   4,      5),
+	NETHERITE("НЕЗЕРИТОВЫЙ", "Босс",       "NETHERITE", "Boss",      0x8B5CF6, 116, 6,    8,   4,   4,     4,     8,     10,   100,   5,      5);
 
 	public final String armor, street;
 	private final String armorEn, streetEn;
@@ -74,7 +74,7 @@ public enum Rank {
 
 	/** How many beats ahead the rhyme word is shown: the stronger the mob, the less time to think (0 = all at once). */
 	public int revealBeats() {
-		return switch (this) { case LEATHER, CHAIN -> 0; case IRON -> 8; case GOLD, DIAMOND -> 4; case NETHERITE -> 2; };
+		return switch (this) { case LEATHER, CHAIN -> 0; case IRON -> 12; case GOLD -> 8; case DIAMOND -> 6; case NETHERITE -> 4; };
 	}
 
 	public static Rank ofLevel(int level) {
