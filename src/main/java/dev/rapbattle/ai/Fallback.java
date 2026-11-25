@@ -201,8 +201,9 @@ public final class Fallback {
 		int hits = 0, targets = 0, sum = 0;
 		for (Llm.PlayerVerse p : players) {
 			List<Boolean> loud = loudBars == null ? List.of() : loudBars.getOrDefault(p.name(), List.of());
-			String t = ru ? p.transcript().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(p.transcript());
-			Set<String> enWords = ru ? Set.of() : wordsEn(t);
+			List<Llm.BarPrompt> bars = p.bars() != null && !p.bars().isEmpty() ? p.bars() : null;
+			String fullT = ru ? p.transcript().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(p.transcript());
+			Set<String> fullEnWords = ru ? Set.of() : wordsEn(fullT);
 			List<Llm.LineScore> ls = new java.util.ArrayList<>();
 			for (int i = 0; i < p.rhymeWords().size(); i++) {
 				String w = p.rhymeWords().get(i);
@@ -211,26 +212,34 @@ public final class Fallback {
 					boolean heard = i < loud.size() && Boolean.TRUE.equals(loud.get(i));
 					if (heard) {
 						int sc = 5 + rnd.nextInt(3);
-						s = new Llm.LineScore(sc, false, ru ? "рифма в точку" : "on the rhyme");
+						s = new Llm.LineScore(sc, 2, 1, false, false, ru ? "рифма в точку" : "on the rhyme");
 						hits++;
 					} else {
-						s = new Llm.LineScore(0, false, ru ? "тишина" : "silence");
+						s = Llm.LineScore.silent(lang);
 					}
+				} else if (bars != null && i < bars.size() && bars.get(i).silent()) {
+					s = Llm.LineScore.silent(lang);
 				} else {
+					String barText = bars != null && i < bars.size()
+						? (ru ? bars.get(i).text().toLowerCase(Locale.ROOT).replace('ё', 'е') : normalizeEn(bars.get(i).text()))
+						: fullT;
+					Set<String> enWords = bars != null && i < bars.size() ? (ru ? Set.of() : wordsEn(barText)) : fullEnWords;
 					boolean matched;
 					if (ru) {
 						String last = lastWord(w).toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}]", "");
 						String stem = last.length() > 4 ? last.substring(0, last.length() - 2) : last;
-						matched = !t.isBlank() && !stem.isEmpty() && t.contains(stem);
+						matched = !barText.isBlank() && !stem.isEmpty() && barText.contains(stem);
 					} else {
-						matched = !t.isBlank() && matchesEn(t, enWords, w);
+						matched = !barText.isBlank() && matchesEn(barText, enWords, w);
 					}
-					if (t.isBlank()) s = new Llm.LineScore(0, false, ru ? "тишина" : "silence");
+					if (barText.isBlank()) s = Llm.LineScore.silent(lang);
 					else if (matched) {
-						int sc = 5 + rnd.nextInt(4);
-						s = new Llm.LineScore(sc, sc >= 8 && rnd.nextBoolean(), ru ? "рифма в точку" : "on the rhyme");
+						int meaning = 1 + rnd.nextInt(2) + (rnd.nextInt(5) == 0 ? 1 : 0);
+						s = Llm.LineScore.fromRubric(2, Math.min(3, meaning), false, ru ? "рифма в точку" : "on the rhyme");
 						hits++;
-					} else s = new Llm.LineScore(1 + rnd.nextInt(2), false, ru ? "мимо рифмы" : "missed the rhyme");
+					} else {
+						s = Llm.LineScore.fromRubric(0, 1, false, ru ? "мимо рифмы" : "missed the rhyme");
+					}
 				}
 				ls.add(s);
 				sum += s.score();
