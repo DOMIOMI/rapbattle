@@ -1203,6 +1203,7 @@ public class Battle {
 				Llm.Verdict v = noStt ? null : Llm.judge(opp.name(), opp.profile().species(lang), rank.label(lang), expectation,
 					rank.verseLo, rank.verseHi, mobCopy, verses, lang);
 				if (v == null) {
+					if (!noStt) RapBattle.LOG.warn("LLM judge returned null in battle {}, falling back to offline judge", id);
 					v = Fallback.judge(rank.verseLo, rank.verseHi, verses, loudSnapshot, noStt, roundTargets, rnd, lang);
 					if (noStt) v = new Llm.Verdict(v.mobVerse(), v.playerLines(),
 						Lang.t(lang, "rapbattle.battle.no_stt_prefix") + v.comment());
@@ -1255,7 +1256,7 @@ public class Battle {
 
 				boolean sttSilent = sb != null && sb.silent();
 				boolean micSilent = idx < silents.size() && Boolean.TRUE.equals(silents.get(idx));
-				boolean barSilent = sttMissing ? micSilent : (sttSilent && micSilent);
+				boolean barSilent = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
 				int deltaMs = idx < deltas.size() ? deltas.get(idx) : (idx < louds.size() && Boolean.TRUE.equals(louds.get(idx)) ? 0 : -1);
 				int beatState = barSilent ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
 					l.rhyme(), sttMissing, deltaMs, beatMs, whisperOnWin, micOnWin);

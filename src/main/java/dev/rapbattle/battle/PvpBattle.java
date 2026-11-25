@@ -444,7 +444,7 @@ public final class PvpBattle {
 				Scoring.SlicedBar sb = i < sbs.size() ? sbs.get(i) : null;
 				boolean sttSilent = sb != null && sb.silent();
 				boolean micSilent = i < silents.size() && Boolean.TRUE.equals(silents.get(i));
-				boolean barSilentFlag = sttMissing ? micSilent : (sttSilent && micSilent);
+				boolean barSilentFlag = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
 				int deltaMs = i < deltas.size() ? deltas.get(i) : (i < louds.size() && Boolean.TRUE.equals(louds.get(i)) ? 0 : -1);
 				int beatState = barSilentFlag ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
 					l.rhyme(), sttMissing, deltaMs, beatMs);
