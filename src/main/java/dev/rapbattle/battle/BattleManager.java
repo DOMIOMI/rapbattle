@@ -168,6 +168,12 @@ public final class BattleManager {
 		return false;
 	}
 
+	private static boolean inAnyCrowd(Entity e) {
+		if (e == null) return false;
+		for (Battle b : BATTLES) if (!b.finished && b.inCrowd(e)) return true;
+		return false;
+	}
+
 	public static Battle byId(int id) {
 		for (Battle b : BATTLES) if (!b.finished && b.id == id) return b;
 		return null;
@@ -329,7 +335,9 @@ public final class BattleManager {
 
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) ->
 			!(entity instanceof ServerPlayerEntity p && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null))
-				&& byMob(entity) == null);
+				&& byMob(entity) == null
+				// The crowd is a truce zone: no zombie turning its neighbour villager into a zombie villager mid-show.
+				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker()));
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (Battle b : new ArrayList<>(BATTLES)) {

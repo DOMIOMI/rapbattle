@@ -272,6 +272,45 @@ public class Battle {
 		}
 	}
 
+	/**
+	 * The crew stands with its leader: shoulder to shoulder in one line facing the challenger, alternating right and
+	 * left of the main mob and half a step back, so everyone who reads is on stage and in the spotlights.
+	 */
+	private void placeCrew() {
+		ServerPlayerEntity c = challenger();
+		if (c == null || boss || mobTeam.size() < 2) return;
+		Vec3d p = new Vec3d(c.getX(), c.getY(), c.getZ());
+		Vec3d m = new Vec3d(mob.getX(), mob.getY(), mob.getZ());
+		Vec3d dir = m.subtract(p).multiply(1, 0, 1);
+		if (dir.lengthSquared() < 1e-4) return;
+		dir = dir.normalize();
+		Vec3d side = new Vec3d(-dir.z, 0, dir.x);
+		int k = 0;
+		double reachRight = mob.getWidth() / 2, reachLeft = mob.getWidth() / 2;
+		for (MobEntity e : mobTeam) {
+			if (e == mob) continue;
+			boolean right = k++ % 2 == 0;
+			double gap = 0.35 + e.getWidth() / 2;
+			double off = (right ? reachRight : reachLeft) + gap;
+			if (right) reachRight = off + e.getWidth() / 2; else reachLeft = off + e.getWidth() / 2;
+			Vec3d target = m.add(side.multiply(right ? off : -off)).add(dir.multiply(0.5));
+			Vec3d look = p.subtract(target);
+			float yaw = (float) (Math.toDegrees(Math.atan2(look.z, look.x)) - 90);
+			Vec3d cur = new Vec3d(e.getX(), e.getY(), e.getZ());
+			for (double y : new double[]{0, 1, -1}) {
+				Vec3d at = new Vec3d(target.x, Math.floor(m.y) + y, target.z);
+				var box = e.getBoundingBox().offset(at.subtract(cur));
+				if (world.isSpaceEmpty(e, box) && !world.isSpaceEmpty(e, box.offset(0, -0.2, 0))) {
+					e.refreshPositionAndAngles(at.x, at.y, at.z, yaw, 0);
+					e.setHeadYaw(yaw);
+					e.setBodyYaw(yaw);
+					world.spawnParticles(net.minecraft.particle.ParticleTypes.CLOUD, at.x, at.y + 0.2, at.z, 6, 0.3, 0.1, 0.3, 0.01);
+					break;
+				}
+			}
+		}
+	}
+
 	private void closeLobby() {
 		setStage();
 		for (UUID u : new ArrayList<>(invited)) {
@@ -293,6 +332,7 @@ public class Battle {
 				if (mobNames.containsValue(n)) n = n + " " + (mobTeam.size() + 1);
 				addMob(m, n);
 			}
+			placeCrew();
 			if (mobTeam.size() > 1) {
 				broadcastChat(Text.literal(opp.name() + " позвал своих: " + String.join(", ", mobTeamNames())).formatted(Formatting.GOLD));
 			}
@@ -533,6 +573,7 @@ public class Battle {
 		if (finished || phase == Phase.RESULT) return;
 		broadcastChat(Text.literal(p.getName().getString() + " полез в драку посреди баттла. Закон улиц нарушен!").formatted(Formatting.DARK_RED));
 		Speech.bubble(mob, "На баттле не бьют! Пацаны, его!", 0xFF4040, 3500);
+		streetLaw = true;
 		if (crowd != null) for (MobEntity m : crowd.fighters(Crowd.Side.MOB)) m.setTarget(p);
 		forfeit(p.getName().getString() + " нарушил закон улиц: на баттле не дерутся.");
 	}
@@ -563,6 +604,28 @@ public class Battle {
 
 	// ------------------------------------------------------------------ tick
 
+	/**
+	 * Nobody near the stage goes for the battlers until the battle is over: a zombie that walks up (or a villager the
+	 * crowd turned into a zombie villager) drops its target instead of swinging at someone who is busy rapping.
+	 */
+	private boolean streetLaw;
+
+	private void keepThePeace() {
+		if (streetLaw) return; // someone threw a punch: the mob's people are allowed to come for him
+		var box = mob.getBoundingBox().expand(24, 8, 24);
+		for (MobEntity m : world.getEntitiesByClass(MobEntity.class, box, m -> m.getTarget() instanceof ServerPlayerEntity)) {
+			if (players.contains(m.getTarget().getUuid())) {
+				m.setTarget(null);
+				m.getNavigation().stop();
+			}
+		}
+	}
+
+	/** A crowd member of this battle (they neither hurt nor get hurt while the show is on). */
+	boolean inCrowd(Entity e) {
+		return crowd != null && e instanceof MobEntity m && crowd.members.containsKey(m);
+	}
+
 	public void tick() {
 		if (finished) return;
 		long now = System.currentTimeMillis();
@@ -572,6 +635,7 @@ public class Battle {
 			return;
 		}
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
+		keepThePeace();
 		for (UUID u : players) {
 			ServerPlayerEntity p = player(u);
 			if (p == null || !p.isAlive()) continue;
