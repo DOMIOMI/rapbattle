@@ -4,6 +4,7 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.resource.language.I18n;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.text.Text;
@@ -95,11 +96,11 @@ final class FighterCard {
 		ctx.fill(0, H - 2, W, H, a(alphaOf(accent, 0.7f)));
 
 		// Banner text: the corner, and a boss badge on the portrait side.
-		Text corner = Text.translatable(f.red ? "rapbattle.hud.red_corner" : "rapbattle.hud.blue_corner").formatted(Formatting.BOLD);
+		Text corner = Ui.bold(I18n.translate(f.red ? "rapbattle.hud.red_corner" : "rapbattle.hud.blue_corner"));
 		float ba = appear(age, 120);
 		text(ctx, tr, corner, tx + 2 + (1 - ba) * 14 * dir, 3, 1f, WHITE, ba);
 		if (f.boss) {
-			Text boss = Text.translatable("rapbattle.hud.card.boss").formatted(Formatting.BOLD);
+			Text boss = Ui.bold(I18n.translate("rapbattle.hud.card.boss"));
 			int bw = tr.getWidth(boss) + 8;
 			int bx = f.red ? W - 6 - bw : 6;
 			ctx.fill(bx, 2, bx + bw, 12, a(0xFF1A0E2A));
@@ -202,7 +203,7 @@ final class FighterCard {
 		if (f.debut) {
 			float st = clamp01((age - 560) / 160f);
 			if (st > 0) {
-				Text stamp = Text.translatable("rapbattle.hud.first_battle").formatted(Formatting.BOLD);
+				Text stamp = Ui.bold(I18n.translate("rapbattle.hud.first_battle"));
 				int sw = tr.getWidth(stamp) + 10;
 				ctx.getMatrices().pushMatrix();
 				ctx.getMatrices().translate(tx + tw / 2f, by + 10);
