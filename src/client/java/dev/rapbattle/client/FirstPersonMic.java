@@ -2,11 +2,7 @@ package dev.rapbattle.client;
 
 import dev.rapbattle.battle.Trophies;
 import dev.rapbattle.net.BattleView;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.component.DataComponentTypes;
@@ -21,7 +17,7 @@ import net.minecraft.util.math.RotationAxis;
 /**
  * First-person microphone & left-hand reactions during the TIMELINE phase:
  * <ul>
- *   <li>Right arm (empty): positions the fist and draws the mic inside it (with trophy mic colour & glow from off-hand).</li>
+ *   <li>Right hand (empty): raises the fist above the battle table and draws the detailed mic in camera space.</li>
  *   <li>Mob's turn: slightly lower, swaying to the beat; own turn: closer to center-bottom, bouncing with voice level.</li>
  *   <li>Silence &gt; 2 beats on own turn: mic hand lowers.</li>
  *   <li>Left hand: forward jab on loud on-beat rhyme; DJ scratch gesture on rhyme reroll (R).</li>
@@ -30,17 +26,16 @@ import net.minecraft.util.math.RotationAxis;
 public final class FirstPersonMic {
 	private FirstPersonMic() {}
 
-	public static boolean activeRightArm(Arm arm) {
-		if (arm != Arm.RIGHT) return false;
+	public static boolean shouldRenderRight(AbstractClientPlayerEntity player, Hand hand, ItemStack item) {
 		BattleView v = ClientBattle.view;
-		return v != null && !v.spectator && "TIMELINE".equals(v.phase) && ClientBattle.onStage();
+		if (v == null || v.spectator || !"TIMELINE".equals(v.phase) || !ClientBattle.onStage()) return false;
+		Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
+		return arm == Arm.RIGHT && item.isEmpty();
 	}
 
-	public static void applyArmTransform(MatrixStack m, Arm arm) {
-		if (!activeRightArm(arm)) return;
-		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.player == null) return;
-		boolean myTurn = ClientBattle.readerId() == mc.player.getId();
+	/** Camera-space offset so the fist + mic sit cleanly above the bottom HUD table. */
+	public static void applyFistOffset(AbstractClientPlayerEntity player, MatrixStack m) {
+		boolean myTurn = ClientBattle.readerId() == player.getId();
 		float beatFrac = ClientBattle.beatFrac();
 		float pu = BattleDance.onBeat() ? MobMoves.pulse(beatFrac) : 0f;
 		float wave = (float) Math.sin(Math.PI * (ClientBattle.beat() + beatFrac) / 2.0);
@@ -48,43 +43,43 @@ public final class FirstPersonMic {
 		boolean silentDrop = myTurn && ClientBattle.silentBeats() > 2f;
 
 		if (silentDrop) {
-			m.translate(0.05f, -0.22f, 0.02f);
+			m.translate(0.05f, -0.05f, 0.0f);
 			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-20f));
 		} else if (myTurn) {
-			float bounce = 0.045f * voice + 0.015f * pu;
-			m.translate(-0.14f, 0.06f + bounce, 0.12f);
+			float bounce = 0.04f * voice + 0.015f * pu;
+			m.translate(-0.16f, 0.24f + bounce, 0.0f);
 		} else {
-			m.translate(0.02f, -0.08f - 0.02f * pu, 0.0f);
+			m.translate(-0.02f, 0.14f - 0.02f * pu, 0.0f);
 			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(5f * wave));
 		}
 	}
 
-	public static void renderMicInArm(MatrixStack m, OrderedRenderCommandQueue q, int light, Arm arm) {
-		if (!activeRightArm(arm)) return;
-		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.player == null) return;
-
-		Trophies.TrophyPerk perk = offhandPerk(mc.player.getOffHandStack());
-		BlockState grip = Blocks.BLACK_CONCRETE.getDefaultState();
-		BlockState head = Blocks.GRAY_CONCRETE.getDefaultState();
-		int useLight = light;
-		if (perk != null) {
-			useLight = 0xF000F0;
-			head = switch (perk) {
-				case WARDEN -> Blocks.CYAN_CONCRETE.getDefaultState();
-				case ENDER_DRAGON -> Blocks.PURPLE_CONCRETE.getDefaultState();
-				case WITHER -> Blocks.SOUL_SOIL.getDefaultState();
-				case ELDER_GUARDIAN -> Blocks.PRISMARINE_BRICKS.getDefaultState();
-				case DEFAULT -> Blocks.GOLD_BLOCK.getDefaultState();
-			};
-		}
+	/** Renders the detailed mic in camera space aligned with the raised fist. */
+	public static void renderMicCameraSpace(AbstractClientPlayerEntity player, MatrixStack m, OrderedRenderCommandQueue q, int light) {
+		boolean myTurn = ClientBattle.readerId() == player.getId();
+		float beatFrac = ClientBattle.beatFrac();
+		float pu = BattleDance.onBeat() ? MobMoves.pulse(beatFrac) : 0f;
+		float wave = (float) Math.sin(Math.PI * (ClientBattle.beat() + beatFrac) / 2.0);
+		float voice = ClientBattle.smoothMicLevel();
+		boolean silentDrop = myTurn && ClientBattle.silentBeats() > 2f;
 
 		m.push();
-		m.translate(0.14f, -0.20f, -0.20f);
-		m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-35f));
-		m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-15f));
-		block(m, q, useLight, grip, 0f, -0.08f, 0f, 0.065f, 0.24f, 0.065f);
-		block(m, q, useLight, head, 0f, 0.06f, 0f, 0.115f, 0.115f, 0.115f);
+		if (silentDrop) {
+			m.translate(0.46f, -0.44f, -0.68f);
+			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(15f));
+		} else if (myTurn) {
+			float bounce = 0.04f * voice + 0.015f * pu;
+			m.translate(0.28f, -0.15f + bounce, -0.64f);
+			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(20f));
+			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(68f - 6f * voice));
+		} else {
+			m.translate(0.42f, -0.25f - 0.02f * pu, -0.68f);
+			m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(5f * wave));
+			m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(14f));
+			m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(62f));
+		}
+		Trophies.TrophyPerk perk = offhandPerk(player.getOffHandStack());
+		MicModel.render(m, q, light, 0.055f, perk);
 		m.pop();
 	}
 
@@ -121,14 +116,5 @@ public final class FirstPersonMic {
 			return Trophies.TrophyPerk.DEFAULT;
 		}
 		return null;
-	}
-
-	private static void block(MatrixStack m, OrderedRenderCommandQueue q, int light, BlockState b,
-							  float x, float y, float z, float sx, float sy, float sz) {
-		m.push();
-		m.translate(x - sx / 2f, y - sy / 2f, z - sz / 2f);
-		m.scale(sx, sy, sz);
-		q.submitBlock(m, b, light, OverlayTexture.DEFAULT_UV, 0);
-		m.pop();
 	}
 }
