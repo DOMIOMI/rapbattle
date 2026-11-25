@@ -471,5 +471,10 @@
   "rapbattle.trophies.triggered.ender_dragon": "Dragon Mic: rhymes +2 beats earlier",
   "rapbattle.trophies.triggered.wither": "Wither Mic: silence forgiven",
   "rapbattle.trophies.triggered.elder_guardian": "Elder Guardian Mic: +0.05 beat window",
-  "rapbattle.trophies.triggered.default": "Trophy Mic: +1 style bonus"
+  "rapbattle.trophies.triggered.default": "Trophy Mic: +1 style bonus",
+  "rapbattle.trophies.mic.homemade": "Homemade Mic",
+  "rapbattle.trophies.perk.homemade": "Perk (off-hand): exact-beat flash on the rhyme board",
+  "rapbattle.act1.night_hunt": "Night hunt: loot ×2",
+  "rapbattle.act1.style_unlocked": "Unlocked MC Style \"%s\" (%s Respect)! %s",
+  "rapbattle.act1.style_btn": "[Choose style]"
 }

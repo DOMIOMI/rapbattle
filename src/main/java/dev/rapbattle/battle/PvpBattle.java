@@ -556,7 +556,12 @@ public final class PvpBattle {
 	}
 
 	private void recordStats(UUID winner) {
-		Stats.of(world.getServer()).recordPvp(winner, other(winner), dealt.getOrDefault(winner, 0), dealt.getOrDefault(other(winner), 0));
+		Stats stats = Stats.of(world.getServer());
+		stats.recordPvp(winner, other(winner), dealt.getOrDefault(winner, 0), dealt.getOrDefault(other(winner), 0));
+		for (UUID u : List.of(a, b)) {
+			ServerPlayerEntity p = player(u);
+			if (p != null) Battle.notifyStyleUnlock(stats, u, p);
+		}
 	}
 
 	private void end(Text reason) {

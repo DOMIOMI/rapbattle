@@ -471,5 +471,10 @@
   "rapbattle.trophies.triggered.ender_dragon": "Микрофон Дракона: рифмы +2 доли раньше",
   "rapbattle.trophies.triggered.wither": "Микрофон Иссушителя: тишина прощена",
   "rapbattle.trophies.triggered.elder_guardian": "Микрофон Древнего стража: окно бита +0.05",
-  "rapbattle.trophies.triggered.default": "Трофейный микрофон: +1 к стилю"
+  "rapbattle.trophies.triggered.default": "Трофейный микрофон: +1 к стилю",
+  "rapbattle.trophies.mic.homemade": "Самодельный микрофон",
+  "rapbattle.trophies.perk.homemade": "Перк (в левой руке): вспышка точной доли на таблице рифм",
+  "rapbattle.act1.night_hunt": "Ночная охота: лут ×2",
+  "rapbattle.act1.style_unlocked": "Открыт новый почерк «%s» (%s Респекта)! %s",
+  "rapbattle.act1.style_btn": "[Выбрать почерк]"
 }
