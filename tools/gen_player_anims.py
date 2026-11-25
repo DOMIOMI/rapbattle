@@ -6,8 +6,8 @@ Poses are written in a readable convention, in degrees:
   yaw    > 0  head / torso: turns to the character's left; arm: turns inward, across the body
   roll   > 0  for an arm: swings it outward, away from the body
 Arms are mirrored, so the same numbers mean the same move for either arm.
-The constants below turn that into the file's axes; they were calibrated in game
-(file X+ lifts an arm forward, file Y+ turns the head left, file Z+ swings the right arm out).
+The constants below turn that into the file's axes. Checked in game: file X- lifts an arm forward
+(X+ sent the arms behind the back), file Y+ turns the head left, file Z+ swings the right arm out.
 
 All battle animations are made at 120 bpm (one beat = 0.5 s, a bar = 2 s) and looped;
 the game scales their speed to the battle's tempo.
@@ -17,7 +17,7 @@ Run: python tools/gen_player_anims.py
 import json
 import os
 
-SX, SY, SZ = -1, 1, 1  # readable -> file axes (pitch, yaw, roll)
+SX, SY, SZ = 1, 1, 1  # readable -> file axes (pitch, yaw, roll)
 OUT = os.path.join(os.path.dirname(__file__), '..', 'src', 'client', 'resources', 'assets', 'rapbattle',
                    'player_animations', 'battle.json')
 
@@ -68,8 +68,9 @@ beats = [i * B for i in range(4)]
 A = {}
 
 # ------------------------------------------------------------------ rapping: mic at the mouth, free hand tells the story
-mic = [(0, -112, 28, 0), (B * 0.5, -108, 26, 0), (B, -112, 28, 0), (B * 1.5, -108, 26, 0),
-       (2 * B, -112, 28, 0), (2.5 * B, -108, 26, 0), (3 * B, -112, 28, 0), (3.5 * B, -108, 26, 0)]
+# Mic hand in front of the mouth: the arm forward and a bit up, turned in towards the chin.
+mic = [(0, -100, 32, 0), (B * 0.5, -96, 30, 0), (B, -100, 32, 0), (B * 1.5, -96, 30, 0),
+       (2 * B, -100, 32, 0), (2.5 * B, -96, 30, 0), (3 * B, -100, 32, 0), (3.5 * B, -96, 30, 0)]
 A['rap_a'] = anim(2.0, {
     'right_arm': mic,
     # point, chop, up high, open palm: one gesture per beat

@@ -36,11 +36,12 @@ public class BlingFeature extends FeatureRenderer<LivingEntityRenderState, Entit
 		// The queue renders the model later; pose it now for this entity so the parts are where this entity has them.
 		model.setAngles(s);
 		RapDancer.after(model, s);
-		Part[] found = new Part[3]; // head, real head fallback, body
+		Part[] found = new Part[4]; // head, real head fallback, body, right arm
 		model.getRootPart().forEachCuboid(m, (entry, path, index, cuboid) -> {
 			if (index != 0) return;
 			String last = lastSegment(path);
-			int slot = last.equals("head") ? 0 : last.contains("head") && !last.contains("wear") ? 1 : last.equals("body") ? 2 : -1;
+			int slot = last.equals("head") ? 0 : last.contains("head") && !last.contains("wear") ? 1 : last.equals("body") ? 2
+				: last.equals("right_arm") ? 3 : -1;
 			if (slot >= 0 && found[slot] == null)
 				found[slot] = new Part(new Matrix4f(entry.getPositionMatrix()), new Matrix3f(entry.getNormalMatrix()), cuboid);
 		});
@@ -79,6 +80,14 @@ public class BlingFeature extends FeatureRenderer<LivingEntityRenderState, Entit
 			float d = c.maxZ - c.minZ, top = c.minY - fur;
 			draw(m, head, q, light, kit.cap(), cx, top - 1.0f, cz, w + 2 * fur, 2.0f, d + 2 * fur);
 			draw(m, head, q, light, kit.cap(), cx, top + 0.3f, c.maxZ + fur + 1.6f, w * 0.85f, 0.5f, 3.2f);
+		}
+		if (found[3] != null && type.equals("player") && BattleDance.mode(((RapRenderState) s).rapbattle$entityId()) == BattleDance.Mode.READ) {
+			// The mic in the fist while he reads: black grip, grey mesh head towards the mouth.
+			Part arm = found[3];
+			ModelPart.Cuboid a = arm.c();
+			float ax = (a.minX + a.maxX) / 2, ay = a.maxY - 1.2f, az = (a.minZ + a.maxZ) / 2;
+			draw(m, arm, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), ax, ay, az - 2.6f, 1.3f, 1.3f, 4.2f);
+			draw(m, arm, q, light, Blocks.GRAY_CONCRETE.getDefaultState(), ax, ay, az - 5.4f, 2.1f, 2.1f, 2.1f);
 		}
 		if (kit.chain() != null) {
 			if (biped) {
