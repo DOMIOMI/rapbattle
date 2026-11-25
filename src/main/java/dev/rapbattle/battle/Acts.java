@@ -58,4 +58,18 @@ public final class Acts {
 	public static int enderPearls(boolean knockout, java.util.Random rnd) {
 		return knockout ? 2 + rnd.nextInt(3) : 1 + rnd.nextInt(2);
 	}
+
+	private static final java.util.Map<String, String> GANG_RIVALS = java.util.Map.of(
+		"illager", "villager",
+		"villager", "illager",
+		"zombie", "skeleton",
+		"skeleton", "zombie",
+		"piglin", "hoglin",
+		"hoglin", "piglin"
+	);
+
+	/** Gang War: symmetric rival gang kin mapping. */
+	public static String rivalOf(String kin) {
+		return kin == null ? null : GANG_RIVALS.get(kin);
+	}
 }

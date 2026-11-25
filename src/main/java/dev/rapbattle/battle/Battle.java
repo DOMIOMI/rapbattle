@@ -88,6 +88,7 @@ public class Battle {
 	/** Mobs around the stage watching and reacting. */
 	Crowd crowd;
 	private final net.minecraft.village.raid.Raid raid;
+	private final boolean gangRival;
 	private final Set<Integer> punchesFired = new HashSet<>();
 	private Entity currentReader;
 
@@ -149,6 +150,8 @@ public class Battle {
 		Rank r = opp.rank();
 		this.raid = RaidBattle.activeRaidFor(mob);
 		if (this.raid != null && r.level() < 4) r = Rank.GOLD;
+		this.gangRival = Gangs.isRival(challenger, opp.profile());
+		if (this.gangRival && r.level() < 5) r = Rank.ofLevel(r.level() + 1);
 		String mobId = opp.profile().id();
 		if (challenger != null && (mobId.equals("villager") || mobId.equals("wandering_trader")
 			|| mobId.equals("pillager") || mobId.equals("vindicator"))
@@ -805,6 +808,11 @@ public class Battle {
 		}
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
 		for (MobEntity m : mobTeam) if (m.isOnFire()) m.extinguish();
+		if (crowd != null) for (MobEntity m : crowd.members.keySet()) if (m.isOnFire()) m.extinguish();
+		for (UUID u : players) {
+			ServerPlayerEntity p = player(u);
+			if (p != null && p.isOnFire()) p.extinguish();
+		}
 		if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
 			DragonBattle.holdHover(dragon);
 		}
@@ -1363,6 +1371,9 @@ public class Battle {
 		if (noise > 0) {
 			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.battle.hit_warden_noise", noise), wardenNoise, false, false));
 			noise = 0;
+		}
+		if (gangRival) {
+			hits.add(new BattleView.Hit(opp.name(), Lang.t(lang, "rapbattle.act6.gang_rival"), 0, false, false));
 		}
 		for (UUID u : players) {
 			Trophies.TrophyPerk perk = playerPerks.get(u);

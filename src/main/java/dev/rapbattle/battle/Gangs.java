@@ -113,6 +113,17 @@ public final class Gangs {
 		return wearing(player, of(mob)) >= 2;
 	}
 
+	public static String rivalOf(String kin) {
+		return Acts.rivalOf(kin);
+	}
+
+	/** Two pieces or more of an enemy gang's gear: hostile crews spot you from 1.5x distance and step up +1 rank. */
+	public static boolean isRival(LivingEntity player, MobProfiles.Profile mob) {
+		if (player == null || mob == null) return false;
+		String rivalKin = rivalOf(mob.kin());
+		return rivalKin != null && wearing(player, BY_KIN.get(rivalKin)) >= 2;
+	}
+
 	/** Mobs whose models render a helmet: they wear their crew bandana on stage. */
 	private static final Set<String> SHOWS_HELMET = Set.of("zombie", "husk", "drowned", "zombie_villager", "skeleton", "stray",
 		"bogged", "parched", "wither_skeleton", "piglin", "piglin_brute", "zombified_piglin");

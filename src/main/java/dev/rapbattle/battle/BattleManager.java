@@ -160,11 +160,12 @@ public final class BattleManager {
 			if (now - LAST_COMBAT.getOrDefault(u, 0L) < COMBAT_QUIET_MS) continue;
 			Refused fight = BRAWLS.get(u);
 			if (fight != null && now < fight.until()) continue;
-			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(12),
+			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(18),
 				m -> {
 					if (!m.isAlive() || m.getTarget() != p || !(m instanceof net.minecraft.entity.mob.Monster)) return false;
 					if (Opponent.isBoss(m) || byMob(m) != null || inAnyCrowd(m) || Crowd.inTruce(m) || ASKED.containsKey(m.getUuid())) return false;
 					double r = isRangedChallenger(m) ? 12.0 : 7.0;
+					if (Gangs.isRival(p, MobProfiles.of(m.getType()))) r *= 1.5;
 					return m.squaredDistanceTo(p) <= r * r;
 				});
 			if (near.isEmpty()) continue;
@@ -517,6 +518,7 @@ public final class BattleManager {
 			RaidBattle.tick(server);
 			BastionBattle.tick(server);
 			PlayerStatus.tick(server);
+			tickChampions(server);
 			PvpBattle.tickAll();
 			tickStares(server);
 		});
@@ -658,6 +660,40 @@ public final class BattleManager {
 			PvpBattle pvp = PvpBattle.byId(payload.battleId());
 			if (pvp != null) pvp.onAudio(ctx.player(), payload);
 		});
+	}
+
+	private static final Map<UUID, Long> CHAMPION_COOLDOWN = new HashMap<>();
+
+	private static void tickChampions(net.minecraft.server.MinecraftServer server) {
+		long now = System.currentTimeMillis();
+		if (server.getTicks() % 5 == 0) {
+			for (var w : server.getWorlds()) {
+				for (ServerPlayerEntity p : w.getPlayers()) {
+					for (MobEntity m : w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(48),
+						e -> e.isAlive() && e.isOnFire() && MobRecord.of(e).wins() > 0)) {
+						m.extinguish();
+					}
+				}
+			}
+		}
+		if (server.getTicks() % 20 != 0) return;
+		CHAMPION_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
+		Stats stats = Stats.of(server);
+		for (var w : server.getWorlds()) {
+			for (ServerPlayerEntity p : w.getPlayers()) {
+				if (p.isSpectator() || byPlayer(p.getUuid()) != null || PENDING.containsKey(p.getUuid())) continue;
+				if (stats.player(p.getUuid()).streak < 3) continue;
+				List<MobEntity> champs = w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(24),
+					m -> m.isAlive() && !Opponent.isBoss(m) && byMob(m) == null && !inAnyCrowd(m)
+						&& MobRecord.of(m).wins() > 0 && !CHAMPION_COOLDOWN.containsKey(m.getUuid()));
+				if (champs.isEmpty()) continue;
+				champs.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
+				MobEntity champ = champs.get(0);
+				CHAMPION_COOLDOWN.put(champ.getUuid(), now + 5 * 60_000L);
+				Speech.bubble(champ, Lang.t(Lang.of(p), "rapbattle.act6.champion_callout"), 0xF2C94C, 4000);
+				challengeFrom(p, champ);
+			}
+		}
 	}
 
 	private static void sendStyleStatus(ServerPlayerEntity p) {

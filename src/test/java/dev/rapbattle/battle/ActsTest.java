@@ -73,4 +73,15 @@ class ActsTest {
 			assertTrue(reg >= 1 && reg <= 2);
 		}
 	}
+
+	@Test
+	void gangRivalsAreSymmetricPairs() {
+		assertEquals("villager", Acts.rivalOf("illager"));
+		assertEquals("illager", Acts.rivalOf("villager"));
+		assertEquals("skeleton", Acts.rivalOf("zombie"));
+		assertEquals("zombie", Acts.rivalOf("skeleton"));
+		assertEquals("hoglin", Acts.rivalOf("piglin"));
+		assertEquals("piglin", Acts.rivalOf("hoglin"));
+		assertNull(Acts.rivalOf("sheep"));
+	}
 }
