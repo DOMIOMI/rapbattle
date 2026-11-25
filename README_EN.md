@@ -7,12 +7,12 @@ by an AI), then it's your turn: rap **with your voice into the microphone**, end
 coloured cell. An AI judge breaks down every line, the Respect bars tick away, and the crowd around you yells,
 whistles and boos.
 
-![Battle at night](docs/screenshots/01-hero-wide.png)
+![Battle at night](docs/screenshots/en/01-hero-wide.png)
 
 | | |
 |---|---|
-| ![Mob verse](docs/screenshots/02-hud-mob-verse.png) | ![Mob with a chain and a cigarette](docs/screenshots/03-mob-close.png) |
-| ![Your turn](docs/screenshots/06-hud-player-verse.png) | ![Judge breakdown](docs/screenshots/10-hud-result.png) |
+| ![Mob verse](docs/screenshots/en/02-hud-mob-verse.png) | ![Mob with a chain and a cigarette](docs/screenshots/en/03-mob-close.png) |
+| ![Your turn](docs/screenshots/en/06-hud-player-verse.png) | ![Judge breakdown](docs/screenshots/en/10-hud-result.png) |
 
 > ⚠️ **Online play is not fully tested yet.** Singleplayer is tested. Multiplayer (two real players over the
 > network, players with different game languages, on-beat detection with Groq speech recognition) will be
