@@ -171,6 +171,7 @@ public class ActsGameTest implements FabricClientGameTest {
 					.with(net.minecraft.block.BedBlock.PART, net.minecraft.block.enums.BedPart.HEAD));
 				VillagerEntity v = EntityType.VILLAGER.create(w, SpawnReason.COMMAND);
 				v.refreshPositionAndAngles(bp.getX() + 0.5, bp.getY(), bp.getZ() + 2.0, 0, 0);
+				v.setInvulnerable(true);
 				w.spawnEntity(v);
 			}
 		});
