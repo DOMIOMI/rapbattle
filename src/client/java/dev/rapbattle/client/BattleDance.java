@@ -169,10 +169,15 @@ public final class BattleDance {
 				m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(12 * wave * amp));
 			}
 			case "spider", "cave_spider" -> m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-6 * hit * amp));
+			case "villager", "wandering_trader", "pillager", "vindicator", "evoker", "illusioner", "witch" -> {
+				// Nose humanoids: limbs and head do the dancing (Villager/Witch/IllagerModelMixin), no side-to-side body sway.
+			}
 			default -> {
-				// Everyone else: the limbs do the dancing (MobMoves). The whole body only dips on the beat;
-				// the old side-to-side roll on top of it made zombies look like jelly.
-				if (mode == Mode.CROWD || mode == Mode.WIN) m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(2f * wave * amp));
+				// Everyone else: limbs do the dancing (MobMoves), body roll capped strictly within ±2 degrees.
+				if (mode == Mode.CROWD || mode == Mode.WIN) {
+					float roll = Math.max(-2f, Math.min(2f, 1.4f * wave * amp));
+					m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(roll));
+				}
 			}
 		}
 	}
