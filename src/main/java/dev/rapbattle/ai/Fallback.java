@@ -194,19 +194,27 @@ public final class Fallback {
 	}
 
 	public static List<String> extractTargets(List<Llm.MobLine> lines, String lang, int maxTargets) {
-		boolean ru = Lang.isRu(lang);
 		int limit = Math.max(1, maxTargets);
 		List<String> out = new ArrayList<>();
-		java.util.Set<String> stop = ru
-			? Set.of("это", "как", "что", "для", "про", "тебя", "меня", "тебе", "мне", "тут", "здесь", "даже", "просто", "если", "только")
-			: Set.of("this", "that", "with", "your", "from", "just", "even", "here", "there", "into", "about", "like", "you", "the");
+		List<String> shortFallback = new ArrayList<>();
 		for (Llm.MobLine ml : lines) {
 			for (String raw : ml.text().split("\\s+")) {
-				String w = raw.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}]", "");
-				if (w.length() >= (ru ? 4 : 4) && !stop.contains(w) && !out.contains(w)) {
-					out.add(w);
-					if (out.size() >= limit) return out;
+				String w = Llm.cleanTarget(raw);
+				if (w.isEmpty()) continue;
+				if (w.length() >= 4) {
+					if (!out.contains(w)) {
+						out.add(w);
+						if (out.size() >= limit) return out;
+					}
+				} else if (!shortFallback.contains(w)) {
+					shortFallback.add(w);
 				}
+			}
+		}
+		for (String w : shortFallback) {
+			if (!out.contains(w)) {
+				out.add(w);
+				if (out.size() >= limit) break;
 			}
 		}
 		return out;

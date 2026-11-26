@@ -129,7 +129,7 @@ public final class Llm {
 				(например: «кирками, руками, врагами, веками» или «сгорел, умел, задел, пропел»).
 				Каждый раз новый куплет: не повторяй типовые фразы, придумывай свежие образы.
 				Также укажи targets: ровно """ + targetLimit + """
-				 коротких опорных слова (существительных или ярких образа) прямо из твоего куплета мобов, которые игрок может обыграть в ответ.
+				 существительных или ярких образов прямо из твоего куплета мобов, которые игрок может обыграть в ответ. НЕ выбирай местоимения и служебные слова (запрещены «я, ты, твой, мой, этот, как, быть» и т. п.).
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "простые, короткие, бытовые (кот/рот/живот/компот)";
@@ -178,7 +178,7 @@ public final class Llm {
 				(for example: "mining, shining, whining, dining" or "burned, turned, learned, earned").
 				Fresh verse every time: do not recycle generic lines, invent new imagery.
 				Also return targets: exactly """ + targetLimit + """
-				 short anchor words (nouns/images) from the mob's verse that the player can flip in a rebuttal.
+				 concrete nouns or vivid images from the mob's verse that the player can flip in a rebuttal. NEVER pick pronouns or function words (never "I/you/your/my/this/that/is/the").
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "simple, short, everyday words (cat/hat/bat/flat)";
@@ -250,18 +250,63 @@ public final class Llm {
 		}
 	}
 
-	/** Extracts one clean anchor word from a target string without gluing multi-word phrases together. */
+	private static final java.util.Set<String> TARGET_STOP_RU = java.util.Set.copyOf(java.util.Arrays.asList(
+		"я", "ты", "он", "она", "оно", "мы", "вы", "они",
+		"меня", "мне", "мной", "мною", "тебя", "тебе", "тобой", "тобою",
+		"его", "ему", "им", "нём", "нем", "её", "ее", "ей", "ею", "ней",
+		"нас", "нам", "нами", "вас", "вам", "вами", "их", "ими", "ними",
+		"себя", "себе", "собой", "собою",
+		"мой", "моя", "моё", "мое", "мои", "моего", "моей", "моих", "моему", "моим", "мою", "моими", "моём", "моем",
+		"твой", "твоя", "твоё", "твое", "твои", "твоего", "твоей", "твоих", "твоему", "твоим", "твою", "твоими", "твоём", "твоем",
+		"свой", "своя", "своё", "свое", "свои", "своего", "своей", "своих", "своему", "своим", "свою", "своими", "своём", "своем",
+		"наш", "наша", "наше", "наши", "нашего", "нашей", "наших", "нашему", "нашим", "нашу", "нашими", "нашем",
+		"ваш", "ваша", "ваше", "ваши", "вашего", "вашей", "ваших", "вашему", "вашим", "вашу", "вашими", "вашем",
+		"этот", "эта", "это", "эти", "этого", "этой", "этих", "этому", "этим", "эту", "этими", "этом",
+		"тот", "та", "то", "те", "того", "той", "тех", "тому", "тем", "ту", "теми", "том",
+		"такой", "такая", "такое", "такие", "такого", "такой", "таких", "такому", "таким", "такую", "такими", "таком",
+		"сам", "сама", "само", "сами", "самого", "самой", "самих", "самому", "самим", "саму", "самими", "самом",
+		"весь", "вся", "всё", "все", "всего", "всей", "всех", "всему", "всем", "всю", "всеми", "всём",
+		"кто", "что", "кого", "чего", "кому", "чему", "кем", "чем", "ком", "чём",
+		"в", "во", "на", "с", "со", "по", "за", "под", "подо", "над", "надо", "из", "изо", "к", "ко", "от", "ото", "до", "для", "про", "без", "при", "об", "обо", "о", "у",
+		"и", "а", "но", "да", "или", "либо", "же", "ж", "ли", "ль", "бы", "б", "не", "ни",
+		"как", "так", "вот", "вон", "тут", "там", "здесь", "уже", "уж", "ещё", "еще", "только", "лишь", "даже", "просто", "если", "ведь", "хоть", "хотя", "чтобы", "чтоб",
+		"есть", "был", "была", "было", "были", "быть", "будет", "будут", "буду", "будем", "будете", "будешь", "стал", "стала", "стало", "стали", "стать", "станет"
+	));
+
+	private static final java.util.Set<String> TARGET_STOP_EN = java.util.Set.copyOf(java.util.Arrays.asList(
+		"i", "you", "he", "she", "it", "we", "they",
+		"me", "him", "her", "us", "them",
+		"my", "your", "his", "its", "our", "their", "mine", "yours", "hers", "ours", "theirs",
+		"this", "that", "these", "those", "the", "a", "an",
+		"and", "or", "but", "in", "on", "at", "to", "of", "for", "with", "from", "by", "into", "about", "like", "as",
+		"is", "are", "was", "were", "be", "been", "being", "am", "have", "has", "had", "do", "does", "did",
+		"will", "would", "could", "should", "can", "may", "might", "must",
+		"just", "so", "too", "very", "here", "there", "now", "then", "even", "not", "no", "all", "own"
+	));
+
+	public static boolean isTargetStopWord(String word) {
+		if (word == null || word.isBlank()) return true;
+		String w = word.toLowerCase(Locale.ROOT);
+		return TARGET_STOP_RU.contains(w) || TARGET_STOP_EN.contains(w);
+	}
+
+	/** Extracts one clean, significant anchor word from a target string, rejecting pronouns and function words. */
 	public static String cleanTarget(String raw) {
 		if (raw == null) return "";
 		String norm = raw.trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\s-]", " ").trim();
 		if (norm.isEmpty()) return "";
 		String[] parts = norm.split("\\s+");
-		if (parts.length == 1) return parts[0];
-		String best = "";
+		String bestLong = "";
+		String bestShort = "";
 		for (String p : parts) {
-			if (p.length() > best.length()) best = p;
+			if (p.isEmpty() || isTargetStopWord(p)) continue;
+			if (p.length() >= 4) {
+				if (p.length() > bestLong.length()) bestLong = p;
+			} else if (p.length() >= 3) {
+				if (p.length() > bestShort.length()) bestShort = p;
+			}
 		}
-		return best;
+		return !bestLong.isEmpty() ? bestLong : bestShort;
 	}
 
 	@Deprecated
