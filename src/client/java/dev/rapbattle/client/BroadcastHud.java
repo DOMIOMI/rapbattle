@@ -644,17 +644,20 @@ public final class BroadcastHud {
 			if ((i & 1) == 0) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, 0x0CFFFFFF);
 			String target = !v.pvp ? I18n.translate(hit.toMob ? "rapbattle.broadcast.target_mob" : "rapbattle.broadcast.target_team")
 				: hit.toMob ? v.mobName : (v.team.isEmpty() ? "" : v.team.get(0).name);
+			boolean showDmg = hit.damage > 0 || hit.toMob;
 			String dmg = hit.damage == 0 ? "0" : target + " -" + hit.damage;
-			int dw = tr.getWidth(dmg);
+			int dw = showDmg ? tr.getWidth(dmg) : 0;
 			String who = hit.who.isEmpty() ? "" : hit.who + " ";
-			String text = BattleHud.fit(tr, who + hit.note, cw - 26 - dw);
+			String text = BattleHud.fit(tr, who + hit.note, showDmg ? cw - 26 - dw : cw - 16);
 			int col = !hit.toMob ? 0xFFFF8A8A : hit.damage == 0 ? DIM : hit.punch ? ORANGE : TEXT;
 			int dcol = hit.toMob ? (hit.damage == 0 ? DIM : YELLOW) : RED;
 			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry, cx + 6, ry + 8, alphaOf(ORANGE, a));
 			text(ctx, tr, text, cx + 9 + off, ry, 1f, col, a, false);
-			int px = cx + cw - 8 - dw;
-			ctx.fill(px - 3, ry, cx + cw - 4, ry + 8, alphaOf(mix(dcol, BG, 0.8f), a));
-			text(ctx, tr, dmg, px, ry, 1f, dcol, a, false);
+			if (showDmg) {
+				int px = cx + cw - 8 - dw;
+				ctx.fill(px - 3, ry, cx + cw - 4, ry + 8, alphaOf(mix(dcol, BG, 0.8f), a));
+				text(ctx, tr, dmg, px, ry, 1f, dcol, a, false);
+			}
 			// A fresh line flashes once.
 			if (since >= 0 && since < 200) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, alphaOf(WHITE, 0.25f * (1 - since / 200f)));
 			ry += rowH;
