@@ -1386,7 +1386,7 @@ public class Battle {
 				case ELDER_GUARDIAN -> guardianUsed.contains(u);
 				case DEFAULT -> extraStyleBonus > 0;
 			};
-			if (triggered) hits.add(new BattleView.Hit(names.get(u), perk.triggeredNote(lang), 0, true, false));
+			if (triggered) hits.add(new BattleView.Hit(names.get(u), perk.triggeredNote(lang), 0, false, false, true));
 		}
 
 		// Apply only the post-judging delta to live respect bars (live mob hits were already applied during TIMELINE).

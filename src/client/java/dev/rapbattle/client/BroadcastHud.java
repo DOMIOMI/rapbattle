@@ -583,7 +583,7 @@ public final class BroadcastHud {
 			List<BattleView.Hit> compacted = new java.util.ArrayList<>();
 			for (int i = 0; i < n; i++) {
 				BattleView.Hit hit = r.hits.get(i);
-				if (hit.toMob && hit.damage == 0 && collapsedSilent < n - maxRows + 1) {
+				if (!hit.system && hit.toMob && hit.damage == 0 && collapsedSilent < n - maxRows + 1) {
 					collapsedSilent++;
 				} else {
 					compacted.add(hit);
@@ -644,12 +644,12 @@ public final class BroadcastHud {
 			if ((i & 1) == 0) ctx.fill(cx + 4, ry, cx + cw - 2, ry + 8, 0x0CFFFFFF);
 			String target = !v.pvp ? I18n.translate(hit.toMob ? "rapbattle.broadcast.target_mob" : "rapbattle.broadcast.target_team")
 				: hit.toMob ? v.mobName : (v.team.isEmpty() ? "" : v.team.get(0).name);
-			boolean showDmg = hit.damage > 0 || hit.toMob;
+			boolean showDmg = !hit.system && (hit.damage > 0 || hit.toMob);
 			String dmg = hit.damage == 0 ? "0" : target + " -" + hit.damage;
 			int dw = showDmg ? tr.getWidth(dmg) : 0;
 			String who = hit.who.isEmpty() ? "" : hit.who + " ";
 			String text = BattleHud.fit(tr, who + hit.note, showDmg ? cw - 26 - dw : cw - 16);
-			int col = !hit.toMob ? 0xFFFF8A8A : hit.damage == 0 ? DIM : hit.punch ? ORANGE : TEXT;
+			int col = hit.system ? GOLD : !hit.toMob ? 0xFFFF8A8A : hit.damage == 0 ? DIM : hit.punch ? ORANGE : TEXT;
 			int dcol = hit.toMob ? (hit.damage == 0 ? DIM : YELLOW) : RED;
 			if (hit.punch && hit.toMob) ctx.fill(cx + 4, ry, cx + 6, ry + 8, alphaOf(ORANGE, a));
 			text(ctx, tr, text, cx + 9 + off, ry, 1f, col, a, false);

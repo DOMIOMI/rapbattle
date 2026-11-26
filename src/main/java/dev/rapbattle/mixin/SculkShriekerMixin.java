@@ -15,7 +15,7 @@ public class SculkShriekerMixin {
 	@Inject(method = "shriek(Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/server/network/ServerPlayerEntity;)V",
 		at = @At("HEAD"), cancellable = true)
 	private void rapbattle$wardenQuiet(ServerWorld world, ServerPlayerEntity player, CallbackInfo ci) {
-		if (player != null && PlayerStatus.hasInRadius(player.getUuid(), PlayerStatus.WARDEN_QUIET,
+		if (player != null && PlayerStatus.hasInRadius(player.getUuid(), PlayerStatus.WARDEN_QUIET, world,
 			((SculkShriekerBlockEntity) (Object) this).getPos())) {
 			ci.cancel();
 		}

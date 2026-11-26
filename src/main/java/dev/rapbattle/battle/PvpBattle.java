@@ -324,6 +324,8 @@ public final class PvpBattle {
 		end((Text) null);
 	}
 
+	private int truceTick = 0;
+
 	private void tick(long now) {
 		if (finished) return;
 		ServerPlayerEntity pa = player(a), pb = player(b);
@@ -339,7 +341,7 @@ public final class PvpBattle {
 				p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
 			}
 		}
-		holdMobTruce(now);
+		if ((truceTick++ % 5) == 0) holdMobTruce(now);
 		int beat = (int) Math.floorDiv(now - beatZero, beatMs);
 		glow(beat);
 		switch (phase) {
@@ -538,7 +540,7 @@ public final class PvpBattle {
 				};
 				if (triggered) {
 					for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
-						e.getValue().hits.add(new BattleView.Hit(pName, perk.triggeredNote(e.getKey()), 0, u.equals(a), false));
+						e.getValue().hits.add(new BattleView.Hit(pName, perk.triggeredNote(e.getKey()), 0, false, false, true));
 					}
 				}
 			}

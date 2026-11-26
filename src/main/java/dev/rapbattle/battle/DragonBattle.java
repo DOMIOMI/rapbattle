@@ -51,4 +51,8 @@ public final class DragonBattle {
 			dragon.getPhaseManager().setPhase(PhaseType.HOLDING_PATTERN);
 		}
 	}
+
+	static void clear() {
+		cooldownUntil = 0L;
+	}
 }

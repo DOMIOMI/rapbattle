@@ -194,15 +194,21 @@ public class BattleView {
 		public int damage;
 		public boolean toMob;
 		public boolean punch;
+		public boolean system;
 
 		public Hit() {}
 
 		public Hit(String who, String note, int damage, boolean toMob, boolean punch) {
+			this(who, note, damage, toMob, punch, false);
+		}
+
+		public Hit(String who, String note, int damage, boolean toMob, boolean punch, boolean system) {
 			this.who = who;
 			this.note = note;
 			this.damage = damage;
 			this.toMob = toMob;
 			this.punch = punch;
+			this.system = system;
 		}
 	}
 
