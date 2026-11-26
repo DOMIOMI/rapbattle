@@ -3,5 +3,5 @@
   "id": "rapbattle-test",
   "version": "1.0.0",
   "environment": "*",
-  "entrypoints": { "fabric-client-gametest": ["dev.rapbattle.test.ShowcaseTest", "dev.rapbattle.test.ActsGameTest", "dev.rapbattle.test.GangsGameTest", "dev.rapbattle.test.PvpGameTest", "dev.rapbattle.test.GuideBookGameTest", "dev.rapbattle.test.CrowdGameTest"] }
+  "entrypoints": { "fabric-client-gametest": ["dev.rapbattle.test.ShowcaseTest", "dev.rapbattle.test.ActsGameTest", "dev.rapbattle.test.GangsGameTest", "dev.rapbattle.test.PvpGameTest", "dev.rapbattle.test.GuideBookGameTest", "dev.rapbattle.test.CrowdGameTest", "dev.rapbattle.test.ReputationGameTest"] }
 }
