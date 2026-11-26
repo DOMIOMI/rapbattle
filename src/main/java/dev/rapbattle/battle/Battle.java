@@ -243,7 +243,7 @@ public class Battle {
 
 	public ServerPlayerEntity challenger() { return player(players.get(0)); }
 
-	private ServerPlayerEntity player(UUID uuid) { return world.getServer().getPlayerManager().getPlayer(uuid); }
+	private ServerPlayerEntity player(UUID uuid) { return BattleManager.findPlayer(world.getServer(), uuid); }
 
 	private List<String> namesList() {
 		List<String> out = new ArrayList<>();
@@ -753,15 +753,6 @@ public class Battle {
 	}
 
 	/** A participant threw a punch during the battle: street law broken, the mob wins and its people come for him. */
-	public void violation(ServerPlayerEntity p) {
-		if (finished || phase == Phase.RESULT) return;
-		broadcastChat(Text.translatable("rapbattle.battle.street_law_chat", p.getName().getString()).formatted(Formatting.DARK_RED));
-		Speech.bubble(mob, Lang.t(lang, "rapbattle.battle.street_law_bubble"), 0xFF4040, 3500);
-		streetLaw = true;
-		if (crowd != null) for (MobEntity m : crowd.fighters(Crowd.Side.MOB)) m.setTarget(p);
-		forfeit(Lang.t(lang, "rapbattle.battle.street_law_comment", p.getName().getString()));
-	}
-
 	/** Breaking the rules ends the battle in the mob's favour. */
 	public void forfeit(String comment) {
 		if (finished || view == null) {
@@ -792,10 +783,7 @@ public class Battle {
 	 * Nobody near the stage goes for the battlers until the battle is over: a zombie that walks up (or a villager the
 	 * crowd turned into a zombie villager) drops its target instead of swinging at someone who is busy rapping.
 	 */
-	private boolean streetLaw;
-
 	private void keepThePeace() {
-		if (streetLaw) return; // someone threw a punch: the mob's people are allowed to come for him
 		var box = mob.getBoundingBox().expand(24, 8, 24);
 		for (MobEntity m : world.getEntitiesByClass(MobEntity.class, box, m -> m.getTarget() instanceof ServerPlayerEntity)) {
 			if (players.contains(m.getTarget().getUuid())) {
@@ -1657,6 +1645,11 @@ public class Battle {
 		jumpToForTest(target, true, true, 90, 0);
 	}
 
+	/** Test-only helper to set a participant's round/battle dealt score before jumping to RESULT. */
+	public void setPlayerScoreForTest(String name, int dealt) {
+		battleDealt.put(name, dealt);
+	}
+
 	/** Test-only entry point to jump to a target phase with explicit outcome/scores (used for RESULT). */
 	public void jumpToForTest(Phase target, boolean playersWin, boolean knockout, int teamRespect, int mobRespect) {
 		if (finished) return;
@@ -1691,12 +1684,20 @@ public class Battle {
 				this.respectTeam = teamRespect;
 				this.respectMob = mobRespect;
 				if (playersWin) this.bestLine = "test golden line";
+				String bestName = "";
+				int bestScore = -1;
 				for (UUID u : players) {
 					BattleView.PlayerScore ps = new BattleView.PlayerScore();
 					ps.name = names.getOrDefault(u, "Player");
+					ps.score = battleDealt.getOrDefault(ps.name, 0);
 					ps.transcript = playersWin ? "test golden line" : "";
 					this.result.players.add(ps);
+					if (ps.score > bestScore) {
+						bestScore = ps.score;
+						bestName = ps.name;
+					}
 				}
+				if (playersWin && bestScore > 0) this.result.mvp = bestName;
 				finish();
 			}
 			default -> throw new IllegalArgumentException("Unsupported jumpToForTest phase: " + target);

@@ -77,7 +77,7 @@ public final class GolemDefender {
 
 	/** The player didn't answer the golem's call: a normal fight, and everyone hears about it. */
 	public static void chickenedOut(ServerPlayerEntity p, IronGolemEntity g) {
-		g.setTarget(p);
+		BattleManager.forceMobTarget(g, p);
 		for (ServerPlayerEntity near : ((ServerWorld) g.getEntityWorld()).getPlayers()) {
 			if (near.squaredDistanceTo(g) < 48 * 48) {
 				near.sendMessage(Text.translatable("rapbattle.golem.chickened", p.getName().getString(),

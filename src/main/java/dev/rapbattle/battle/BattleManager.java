@@ -42,6 +42,44 @@ public final class BattleManager {
 	private record Stage(MobEntity mob, Crowd crowd, long until, Set<UUID> attackers, Set<MobEntity> engaged) {}
 
 	private static final List<Stage> RECENT = new ArrayList<>();
+	private static final Map<UUID, Long> MIC_HINT_CD = new HashMap<>();
+	private static final long MIC_HINT_MS = 3_000L;
+	private static final Map<UUID, ServerPlayerEntity> TEST_PLAYERS = new HashMap<>();
+	private static final ThreadLocal<Boolean> MOD_FORCED_TARGET = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+	public static boolean isModForcedTarget() {
+		return Boolean.TRUE.equals(MOD_FORCED_TARGET.get());
+	}
+
+	/** Explicit mod-initiated target assignment that bypasses truce/respect checks in MobEntityTargetMixin. */
+	public static void forceMobTarget(MobEntity mob, net.minecraft.entity.LivingEntity target) {
+		if (mob == null) return;
+		boolean prev = isModForcedTarget();
+		MOD_FORCED_TARGET.set(Boolean.TRUE);
+		try {
+			mob.setTarget(target);
+		} finally {
+			MOD_FORCED_TARGET.set(prev);
+		}
+	}
+
+	/** Test-only helper so FakePlayers are resolved by Battle.player(UUID) during coop e2e tests. */
+	public static void registerTestPlayer(ServerPlayerEntity p) {
+		if (p != null) TEST_PLAYERS.put(p.getUuid(), p);
+	}
+
+	static ServerPlayerEntity findPlayer(net.minecraft.server.MinecraftServer server, UUID uuid) {
+		ServerPlayerEntity tp = TEST_PLAYERS.get(uuid);
+		return tp != null ? tp : server.getPlayerManager().getPlayer(uuid);
+	}
+
+	private static void micOnlyHint(ServerPlayerEntity sp) {
+		long now = dev.rapbattle.Clock.now();
+		Long until = MIC_HINT_CD.get(sp.getUuid());
+		if (until != null && now < until) return;
+		MIC_HINT_CD.put(sp.getUuid(), now + MIC_HINT_MS);
+		sp.sendMessage(Text.translatable("rapbattle.battle.mic_only").formatted(Formatting.YELLOW), true);
+	}
 
 	static void recent(Battle b) {
 		if (b.crowd != null) RECENT.add(new Stage(b.mob, b.crowd, dev.rapbattle.Clock.now() + 30_000, new LinkedHashSet<>(), new HashSet<>()));
@@ -53,6 +91,7 @@ public final class BattleManager {
 		RECENT.removeIf(s -> now > s.until() || !s.mob().isAlive());
 		for (Stage s : RECENT) {
 			if (s.mob() != mob) continue;
+			Crowd.breakTruceFor(mob, p.getUuid());
 			s.attackers().add(p.getUuid());
 			int needed = s.attackers().size() - 1;
 			if (needed <= 0) return;
@@ -60,10 +99,11 @@ public final class BattleManager {
 			for (MobEntity fan : s.crowd().fighters(Crowd.Side.MOB)) {
 				if (s.engaged().size() >= needed) break;
 				if (s.engaged().contains(fan)) continue;
-				ServerPlayerEntity target = p.getEntityWorld().getServer().getPlayerManager()
-					.getPlayer(attackers.get(1 + s.engaged().size() % Math.max(1, attackers.size() - 1)));
+				ServerPlayerEntity target = findPlayer(p.getEntityWorld().getServer(),
+					attackers.get(1 + s.engaged().size() % Math.max(1, attackers.size() - 1)));
 				if (target == null) continue;
-				fan.setTarget(target);
+				Crowd.breakTruceFor(fan, target.getUuid());
+				forceMobTarget(fan, target);
 				s.engaged().add(fan);
 				Speech.bubble(fan, Lang.t(Lang.of(target), "rapbattle.manager.two_on_one"), 0xFF8080, 2500);
 			}
@@ -424,30 +464,27 @@ public final class BattleManager {
 		AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			// Only decide on the server; the client must still send the attack packet.
 			if (world.isClient() || !(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
+			// Participants cannot hit anyone during a rap battle or PvP duel.
+			if (byPlayer(sp.getUuid()) != null || PvpBattle.byPlayer(sp.getUuid()) != null) {
+				micOnlyHint(sp);
+				return ActionResult.FAIL;
+			}
 			// An empty-hand hit on another player: a call-out to a player battle.
 			if (entity instanceof ServerPlayerEntity other && other != sp && sp.getMainHandStack().isEmpty() && !sp.isSpectator()) {
-				PvpBattle running = PvpBattle.byPlayer(sp.getUuid());
-				if (running != null || PvpBattle.byPlayer(other.getUuid()) != null) return ActionResult.FAIL;
-				if (byPlayer(sp.getUuid()) == null && PvpBattle.challenge(sp, other)) return ActionResult.FAIL;
+				if (PvpBattle.byPlayer(other.getUuid()) != null) return ActionResult.FAIL;
+				if (PvpBattle.challenge(sp, other)) return ActionResult.FAIL;
 				return ActionResult.PASS;
 			}
 			// The dragon is hit through its body parts.
 			Entity target = entity instanceof EnderDragonPart part ? part.owner : entity;
 			if (!(target instanceof MobEntity mob) || !mob.isAlive() || sp.isSpectator()) return ActionResult.PASS;
 
-			Battle own = byPlayer(sp.getUuid());
-			if (own != null && !sp.getMainHandStack().isEmpty()) {
-				// A participant swinging a weapon mid-battle breaks the street law.
-				own.violation(sp);
-				return ActionResult.FAIL;
-			}
 			Battle existing = byMob(mob);
 			if (existing != null) {
 				// Hitting a mob that is already battling: join if invited, otherwise just don't hurt it.
 				if (existing.invited.contains(sp.getUuid())) existing.answerInvite(sp, true);
 				return ActionResult.FAIL;
 			}
-			if (byPlayer(sp.getUuid()) != null) return ActionResult.FAIL;
 			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon && sp.getMainHandStack().isEmpty()) {
 				if (!DragonBattle.canChallenge(sp, dragon)) return ActionResult.FAIL;
 			}
@@ -522,6 +559,7 @@ public final class BattleManager {
 
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
 			boolean allowed = !(entity instanceof ServerPlayerEntity p && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null))
+				&& !(source.getAttacker() instanceof ServerPlayerEntity sp && (byPlayer(sp.getUuid()) != null || PvpBattle.byPlayer(sp.getUuid()) != null))
 				&& byMob(entity) == null
 				// The crowd is a truce zone: no zombie turning its neighbour villager into a zombie villager mid-show.
 				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker());
@@ -606,6 +644,8 @@ public final class BattleManager {
 			GolemDefender.clear();
 			Crowd.clear();
 			RECENT.clear();
+			MIC_HINT_CD.clear();
+			TEST_PLAYERS.clear();
 			BATTLES.clear();
 			PENDING.clear();
 			REFUSED.clear();
@@ -776,6 +816,8 @@ public final class BattleManager {
 		GolemDefender.clear();
 		Crowd.clear();
 		RECENT.clear();
+		MIC_HINT_CD.clear();
+		TEST_PLAYERS.clear();
 		BATTLES.clear();
 		PENDING.clear();
 		REFUSED.clear();

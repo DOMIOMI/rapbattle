@@ -202,7 +202,7 @@ public final class SoreLosers {
 		}
 		mob.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 20 * 30, 0));
 		mob.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 20 * 30, 0));
-		mob.setTarget(mvp);
+		BattleManager.forceMobTarget(mob, mvp);
 		if (!(mob instanceof HostileEntity)) mob.setAttacker(mvp);
 		return true;
 	}

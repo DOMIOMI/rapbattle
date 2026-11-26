@@ -240,6 +240,9 @@ public final class Reputation {
 		}
 		if (!(mob instanceof HostileEntity) && !(mob instanceof Angerable)) return;
 		if (SoreLosers.isRaged(mob)) return;
+		for (Map<UUID, Long> wm : WITNESSES.values()) {
+			wm.remove(u);
+		}
 		CredState st = CRED.get(u);
 		if (st != null && dev.rapbattle.Clock.now() < st.until()) {
 			revokeCred(u);

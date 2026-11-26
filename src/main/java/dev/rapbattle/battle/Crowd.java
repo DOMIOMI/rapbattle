@@ -27,6 +27,7 @@ public final class Crowd {
 	private static final int RADIUS = 16, MAX = 20;
 	/** After the battle the truce holds a little longer, then everyone is free to fight. */
 	private static final Map<MobEntity, Long> TRUCE = new IdentityHashMap<>();
+	private static final Map<MobEntity, Set<UUID>> TRUCE_EXCEPTIONS = new IdentityHashMap<>();
 	private static final Set<MobEntity> ALL_PLACED = Collections.newSetFromMap(new IdentityHashMap<>());
 	private record Retreat(MobEntity mob, Vec3d awayFrom, long until) {}
 	private static final List<Retreat> RETREATING = new ArrayList<>();
@@ -500,6 +501,21 @@ public final class Crowd {
 		return until != null && dev.rapbattle.Clock.now() <= until;
 	}
 
+	public static boolean inTruce(MobEntity m, UUID playerId) {
+		if (!inTruce(m)) return false;
+		if (playerId != null) {
+			Set<UUID> ex = TRUCE_EXCEPTIONS.get(m);
+			if (ex != null && ex.contains(playerId)) return false;
+		}
+		return true;
+	}
+
+	public static void breakTruceFor(MobEntity m, UUID playerId) {
+		if (m != null && playerId != null) {
+			TRUCE_EXCEPTIONS.computeIfAbsent(m, k -> new HashSet<>()).add(playerId);
+		}
+	}
+
 	/** Keeps a mob in truce until {@code untilMs} (e.g. during a PvP battle near the stage). */
 	public static void holdTruce(MobEntity m, long untilMs) {
 		if (m == null || !m.isAlive()) return;
@@ -510,8 +526,14 @@ public final class Crowd {
 	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
 		long now = dev.rapbattle.Clock.now();
-		TRUCE.entrySet().removeIf(e -> now > e.getValue() || !e.getKey().isAlive());
+		TRUCE.entrySet().removeIf(e -> {
+			boolean drop = now > e.getValue() || !e.getKey().isAlive();
+			if (drop) TRUCE_EXCEPTIONS.remove(e.getKey());
+			return drop;
+		});
 		for (MobEntity m : TRUCE.keySet()) {
+			net.minecraft.entity.LivingEntity cur = m.getTarget();
+			if (cur instanceof net.minecraft.entity.player.PlayerEntity p && !inTruce(m, p.getUuid())) continue;
 			m.setTarget(null);
 			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
 			if (m.isOnFire()) m.extinguish();
@@ -525,6 +547,7 @@ public final class Crowd {
 
 	static void clear() {
 		TRUCE.clear();
+		TRUCE_EXCEPTIONS.clear();
 		RETREATING.clear();
 		ALL_PLACED.clear();
 	}
