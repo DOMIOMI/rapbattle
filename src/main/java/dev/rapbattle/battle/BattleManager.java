@@ -96,6 +96,10 @@ public final class BattleManager {
 		v.allowed = true;
 		v.challengeFrom = Lang.t(lang, titleKey);
 		v.choiceMs = 15_000;
+		ProgressionRules.GateCheck gate = Progression.check(p, mob, o);
+		if (!gate.bonusesAllowed() && !gate.messageKey().isEmpty()) {
+			v.gateWarning = Lang.t(lang, gate.messageKey(), gate.args());
+		}
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 	}
 
@@ -186,9 +190,9 @@ public final class BattleManager {
 			Outfit.Score score = Outfit.of(p, lang);
 			for (MobEntity mob : near) {
 				Opponent o = Opponent.of(mob, rnd, p, lang);
-				boolean allowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
-					|| Gangs.isOwn(p, o.profile());
-				// If the mob walked up on its own and the player fails dress code, do not stop the mob at all.
+				boolean allowed = (!RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
+					|| Gangs.isOwn(p, o.profile())) && Progression.check(p, mob, o).allowed();
+				// If the mob walked up on its own and the player fails dress code or strict progression gate, do not stop the mob at all.
 				if (!allowed) continue;
 				ASKED.put(mob.getUuid(), now + ASK_AGAIN_MS);
 				mob.setTarget(null);
@@ -328,8 +332,10 @@ public final class BattleManager {
 		Random rnd = new Random();
 		Opponent o = Opponent.of(mob, rnd, p, lang);
 		Outfit.Score score = Outfit.of(p, lang);
-		boolean allowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
+		boolean dressAllowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
 			|| Gangs.isOwn(p, o.profile()); // crew colours: they never refuse their own
+		ProgressionRules.GateCheck gate = Progression.check(p, mob, o);
+		boolean allowed = dressAllowed && gate.allowed();
 		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false, fromApproach));
 		BattleView v = new BattleView();
 		v.type = "choice";
@@ -344,9 +350,15 @@ public final class BattleManager {
 		v.tags = o.tags();
 		v.allowed = allowed;
 		v.yourOutfit = score.label(lang);
-		v.requiredOutfit = Battle.levelLabel(Outfit.required(o.rank()), lang);
+		v.requiredOutfit = !dressAllowed ? Battle.levelLabel(Outfit.required(o.rank()), lang) : "";
 		int refIdx = rnd.nextInt(REFUSALS.size());
-		if (!allowed) v.refusal = refusalLine(o, lang, refIdx);
+		if (!dressAllowed) {
+			v.refusal = refusalLine(o, lang, refIdx);
+		} else if (!gate.allowed() && !gate.messageKey().isEmpty()) {
+			v.refusal = Lang.t(lang, gate.messageKey(), gate.args());
+		} else if (!gate.bonusesAllowed() && !gate.messageKey().isEmpty()) {
+			v.gateWarning = Lang.t(lang, gate.messageKey(), gate.args());
+		}
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 		if (!allowed) {
 			REFUSED.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + REFUSED_MS));
@@ -356,7 +368,10 @@ public final class BattleManager {
 				if (near.squaredDistanceTo(mob) < 24 * 24) {
 					String nl = Lang.of(near);
 					String nm = nl.equals(lang) ? o.name() : Opponent.nameOf(mob, o.profile(), rnd, nl);
-					near.sendMessage(Text.literal("<" + nm + "> " + refusalLine(o, nl, refIdx)).formatted(Formatting.GOLD), false);
+					String nearMsg = !dressAllowed
+						? refusalLine(o, nl, refIdx)
+						: Lang.t(nl, gate.messageKey(), gate.args());
+					near.sendMessage(Text.literal("<" + nm + "> " + nearMsg).formatted(Formatting.GOLD), false);
 				}
 			}
 		}
@@ -785,10 +800,12 @@ public final class BattleManager {
 				if (!rivals.isEmpty()) {
 					rivals.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
 					MobEntity rival = rivals.get(0);
-					REMATCH_COOLDOWN.put(rival.getUuid(), now + 2 * 60_000L);
-					Speech.bubble(rival, Lang.t(Lang.of(p), "rapbattle.act6.rematch_callout"), 0xFF8A7A, 4000);
-					challengeFrom(p, rival, "rapbattle.manager.rematch_challenge");
-					continue;
+					if (Progression.canAutoChallengeMob(p, rival)) {
+						REMATCH_COOLDOWN.put(rival.getUuid(), now + 2 * 60_000L);
+						Speech.bubble(rival, Lang.t(Lang.of(p), "rapbattle.act6.rematch_callout"), 0xFF8A7A, 4000);
+						challengeFrom(p, rival, "rapbattle.manager.rematch_challenge");
+						continue;
+					}
 				}
 				// 2. Champion (wins > 0) calls out a player on a 3+ win streak.
 				if (stats.player(p.getUuid()).streak < 3) continue;
@@ -798,6 +815,7 @@ public final class BattleManager {
 				if (champs.isEmpty()) continue;
 				champs.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
 				MobEntity champ = champs.get(0);
+				if (!Progression.canAutoChallengeMob(p, champ)) continue;
 				CHAMPION_COOLDOWN.put(champ.getUuid(), now + 5 * 60_000L);
 				Speech.bubble(champ, Lang.t(Lang.of(p), "rapbattle.act6.champion_callout"), 0xF2C94C, 4000);
 				challengeFrom(p, champ, "rapbattle.manager.champion_challenge");
@@ -811,6 +829,7 @@ public final class BattleManager {
 		sv.type = "style_status";
 		sv.playerRespect = st.respect;
 		sv.playerStyle = st.mcStyle().id;
+		sv.playerGateSummary = Progression.styleSummary(p, Lang.of(p));
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(sv.toJson()));
 	}
 

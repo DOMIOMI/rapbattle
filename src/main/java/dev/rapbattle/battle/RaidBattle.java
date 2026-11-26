@@ -51,6 +51,7 @@ public final class RaidBattle {
 					continue;
 				}
 				if (captain.squaredDistanceTo(p) > 24 * 24 || BattleManager.byMob(captain) != null) continue;
+				if (!Progression.canAutoChallengeMob(p, captain)) continue;
 				CHALLENGED_RAIDS.add(raidKey);
 				FINAL_CAPTAINS.add(captain.getUuid());
 				captain.getNavigation().startMovingTo(p, 1.1);

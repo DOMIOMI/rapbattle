@@ -58,6 +58,7 @@ public final class BastionBattle {
 				if (brutes.isEmpty()) continue;
 				brutes.sort(Comparator.comparingDouble(b -> b.squaredDistanceTo(p)));
 				PiglinBruteEntity brute = brutes.get(0);
+				if (!Progression.canAutoChallengeMob(p, brute)) continue;
 				CHALLENGED_BRUTES.put(brute.getUuid(), now + 120_000L);
 				brute.setTarget(null);
 				BattleManager.challengeFrom(p, brute, "rapbattle.manager.brute_challenge");

@@ -20,6 +20,8 @@ public final class Trophies {
 	private Trophies() {}
 
 	public static final String NBT_KEY = "rapbattle_trophy";
+	public static final String NBT_TIER_KEY = "rapbattle_trophy_tier";
+	public static final String TIER_HIGH = "high";
 
 	public enum TrophyPerk {
 		HOMEMADE("homemade"),
@@ -69,6 +71,34 @@ public final class Trophies {
 		return null;
 	}
 
+	/** Returns true if the player holds any microphone (including homemade) in the off-hand. */
+	public static boolean hasAnyMic(ServerPlayerEntity player) {
+		return equippedPerk(player) != null;
+	}
+
+	/** Returns true if the player holds a non-homemade trophy microphone in the off-hand. */
+	public static boolean isTrophyMic(ServerPlayerEntity player) {
+		TrophyPerk perk = equippedPerk(player);
+		return perk != null && perk != TrophyPerk.HOMEMADE;
+	}
+
+	/**
+	 * Returns true if the player holds a high-tier trophy microphone (from a rank 5+ mob or boss)
+	 * in the off-hand. Legacy trophies created before 6.17 (without NBT_TIER_KEY) are treated as high-tier.
+	 */
+	public static boolean hasHighTierTrophyMic(ServerPlayerEntity player) {
+		if (!isTrophyMic(player)) return false;
+		ItemStack off = player.getOffHandStack();
+		NbtComponent custom = off.get(DataComponentTypes.CUSTOM_DATA);
+		if (custom != null) {
+			NbtCompound nbt = custom.copyNbt();
+			if (nbt.contains(NBT_TIER_KEY)) {
+				return TIER_HIGH.equals(nbt.getString(NBT_TIER_KEY).orElse(""));
+			}
+		}
+		return true;
+	}
+
 	@Deprecated
 	public static void give(ServerPlayerEntity mvp, Opponent opp) { give(mvp, opp, Lang.RU); }
 
@@ -91,6 +121,7 @@ public final class Trophies {
 		mic.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
 		NbtCompound tag = new NbtCompound();
 		tag.putString(NBT_KEY, micKey);
+		tag.putString(NBT_TIER_KEY, TIER_HIGH);
 		mic.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(tag));
 		mvp.giveItemStack(mic);
 		mvp.sendMessage(Text.translatable("rapbattle.trophies.got", name).formatted(Formatting.LIGHT_PURPLE), false);

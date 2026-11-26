@@ -55,6 +55,12 @@ public class RapConfig {
 	public boolean allowSwearing = true;
 	/** Multiplier for all rank tempos (1.0 = as designed). */
 	public double tempoScale = 1.0;
+	/** Progression gates mode: "soft" (default), "strict", or "off". */
+	public String progression = "soft";
+
+	public dev.rapbattle.battle.ProgressionRules.Mode progressionMode() {
+		return dev.rapbattle.battle.ProgressionRules.Mode.parse(progression);
+	}
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 	private static final Set<String> SERVER_FIELDS = Set.of(

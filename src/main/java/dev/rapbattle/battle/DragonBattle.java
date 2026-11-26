@@ -1,5 +1,6 @@
 package dev.rapbattle.battle;
 
+import dev.rapbattle.Lang;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.boss.dragon.phase.PhaseType;
@@ -8,6 +9,8 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+
+import java.util.Random;
 
 /**
  * Act 5: Ender Dragon battle rules (jammer crystal check, hover phase during battle, 60s loss cooldown).
@@ -34,6 +37,12 @@ public final class DragonBattle {
 				sp.sendMessage(Text.translatable("rapbattle.act5.jammers", crystals).formatted(Formatting.LIGHT_PURPLE), true);
 				return false;
 			}
+		}
+		Opponent opp = Opponent.of(dragon, new Random(), sp, Lang.of(sp));
+		ProgressionRules.GateCheck gate = Progression.check(sp, dragon, opp);
+		if (!gate.allowed()) {
+			sp.sendMessage(Text.translatable(gate.messageKey(), gate.args()).formatted(Formatting.RED), false);
+			return false;
 		}
 		return true;
 	}

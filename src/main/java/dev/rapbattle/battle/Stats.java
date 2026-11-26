@@ -36,8 +36,10 @@ public class Stats extends PersistentState {
 	public static final class Player {
 		public int wins, losses, streak, bestStreak, mvp, best, chickened, respect;
 		public String style = McStyle.PUNCHER.id;
-		public boolean hinted500, hinted1500, guideGiven;
+		public boolean hinted500, hinted1500, guideGiven, dragonWon;
+		public long dailyDay;
 		public Map<String, Integer> speciesWins = new HashMap<>();
+		public Map<String, Integer> dailySpeciesWins = new HashMap<>();
 		public List<String> titles = new ArrayList<>();
 
 		static final Codec<Player> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -53,18 +55,38 @@ public class Stats extends PersistentState {
 			Codec.BOOL.optionalFieldOf("hinted500", false).forGetter(p -> p.hinted500),
 			Codec.BOOL.optionalFieldOf("hinted1500", false).forGetter(p -> p.hinted1500),
 			Codec.BOOL.optionalFieldOf("guideGiven", false).forGetter(p -> p.guideGiven),
+			Codec.BOOL.optionalFieldOf("dragonWon", false).forGetter(p -> p.dragonWon),
 			Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("species", Map.of()).forGetter(p -> p.speciesWins),
-			Codec.STRING.listOf().optionalFieldOf("titles", List.of()).forGetter(p -> p.titles)
-		).apply(i, (w, l, s, bs, m, b, r, c, st, h500, h1500, gg, sp, t) -> {
+			Codec.STRING.listOf().optionalFieldOf("titles", List.of()).forGetter(p -> p.titles),
+			Codec.mapPair(
+				Codec.LONG.optionalFieldOf("dailyDay", 0L),
+				Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("dailySpeciesWins", Map.of())
+			).forGetter(p -> com.mojang.datafixers.util.Pair.of(p.dailyDay, p.dailySpeciesWins))
+		).apply(i, (w, l, s, bs, m, b, r, c, st, h500, h1500, gg, dw, sp, t, daily) -> {
 			Player p = new Player();
 			p.wins = w; p.losses = l; p.streak = s; p.bestStreak = bs; p.mvp = m; p.best = b; p.respect = r; p.chickened = c;
 			McStyle ms = McStyle.of(st);
 			p.style = ms.isUnlocked(r) ? ms.id : McStyle.PUNCHER.id;
-			p.hinted500 = h500; p.hinted1500 = h1500; p.guideGiven = gg;
+			p.hinted500 = h500; p.hinted1500 = h1500; p.guideGiven = gg; p.dragonWon = dw;
 			p.speciesWins = new HashMap<>(sp);
 			p.titles = new ArrayList<>(t);
+			p.dailyDay = daily.getFirst();
+			p.dailySpeciesWins = new HashMap<>(daily.getSecond());
 			return p;
 		}));
+
+		public int dailyWinsFor(String speciesId, long day) {
+			if (dailyDay != day) return 0;
+			return dailySpeciesWins.getOrDefault(speciesId, 0);
+		}
+
+		public void recordDailyWin(String speciesId, long day) {
+			if (dailyDay != day) {
+				dailyDay = day;
+				dailySpeciesWins.clear();
+			}
+			dailySpeciesWins.merge(speciesId, 1, Integer::sum);
+		}
 
 		public McStyle mcStyle() {
 			McStyle ms = McStyle.of(style);
@@ -133,10 +155,18 @@ public class Stats extends PersistentState {
 	/** Records one finished battle. Returns titles earned just now, per player name. */
 	public Map<UUID, List<String>> record(List<UUID> team, Map<UUID, Integer> scores, UUID mvp, boolean playersWin, Opponent opp,
 										  Map<UUID, Integer> outfitLevels) {
+		return record(team, scores, mvp, playersWin, opp, outfitLevels, -1L);
+	}
+
+	/** Records one finished battle with optional overworld day for daily farm cap tracking. */
+	public Map<UUID, List<String>> record(List<UUID> team, Map<UUID, Integer> scores, UUID mvp, boolean playersWin, Opponent opp,
+										  Map<UUID, Integer> outfitLevels, long overworldDay) {
 		Map<UUID, List<String>> earned = new HashMap<>();
 		String sp = opp.profile().id();
+		int oppRank = opp.rank().level();
 		List<Integer> s = species.computeIfAbsent(sp, k -> new ArrayList<>(List.of(0, 0)));
 		s.set(playersWin ? 1 : 0, s.get(playersWin ? 1 : 0) + 1);
+		UUID initiator = team.isEmpty() ? null : team.get(0);
 		for (UUID u : team) {
 			Player p = player(u);
 			List<String> before = new ArrayList<>(p.titles);
@@ -145,11 +175,17 @@ public class Stats extends PersistentState {
 				p.streak = Math.max(0, p.streak) + 1;
 				p.bestStreak = Math.max(p.bestStreak, p.streak);
 				p.speciesWins.merge(sp, 1, Integer::sum);
+				if (overworldDay >= 0 && u.equals(initiator)) {
+					p.recordDailyWin(sp, overworldDay);
+				}
 				if (p.speciesWins.getOrDefault("sheep", 0) >= 10) p.addTitle("Овцеубийца");
 				if (p.speciesWins.getOrDefault("zombie", 0) >= 10) p.addTitle("Гробовщик");
 				if (p.speciesWins.getOrDefault("creeper", 0) >= 5) p.addTitle("Сапёр");
-				if (opp.rank().level() >= 5 && outfitLevels.getOrDefault(u, 6) <= 1) p.addTitle("Кожаный король");
-				if (sp.equals("ender_dragon")) p.addTitle("Укротитель дракона");
+				if (oppRank >= 5 && outfitLevels.getOrDefault(u, 6) <= 1) p.addTitle("Кожаный король");
+				if (sp.equals("ender_dragon")) {
+					p.dragonWon = true;
+					p.addTitle("Укротитель дракона");
+				}
 				if (sp.equals("wither")) p.addTitle("Трёхголовый ноль");
 				if (sp.equals("warden")) p.addTitle("Громче Вардена");
 				if (opp.rank().isBoss()) p.addTitle("Босс-киллер");
@@ -161,7 +197,8 @@ public class Stats extends PersistentState {
 			if (u.equals(mvp)) p.mvp++;
 			Integer sc = scores.get(u);
 			if (sc != null) {
-				p.respect += Math.max(0, sc);
+				int gained = ProgressionRules.adjustRespectGain(p.respect, oppRank, sc);
+				p.respect += gained;
 				if (sc > p.best) p.best = sc;
 			}
 			List<String> fresh = new ArrayList<>(p.titles);

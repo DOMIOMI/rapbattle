@@ -107,6 +107,8 @@ public class Battle {
 	private final Map<UUID, List<String>> rhymeWords = new HashMap<>();
 	private int outfitBonus;
 	boolean overdressed;
+	final boolean actBonusesAllowed;
+	final double dailyBonusScale;
 
 	private final Map<UUID, ByteArrayOutputStream> audio = new HashMap<>();
 	private final Map<UUID, CompletableFuture<String>> transcripts = new HashMap<>();
@@ -164,6 +166,13 @@ public class Battle {
 		}
 		this.rank = r;
 		this.boss = rank.isBoss();
+		ProgressionRules.GateCheck gate = Progression.check(challenger, mob, opp);
+		this.actBonusesAllowed = gate.bonusesAllowed();
+		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
+		int prevToday = challenger != null
+			? Stats.of(world.getServer()).player(challenger.getUuid()).dailyWinsFor(opp.profile().id(), overworldDay)
+			: 0;
+		this.dailyBonusScale = ProgressionRules.dailyBonusScale(prevToday);
 		this.rounds = boss ? 3 : 1;
 		this.winsNeeded = boss ? 2 : 1;
 		this.respectMax = Scoring.RESPECT_MAX;
@@ -1694,7 +1703,12 @@ public class Battle {
 			ServerPlayerEntity killer = mvpPlayer;
 			Vec3d pos = new Vec3d(mob.getX(), mob.getY() + 0.5, mob.getZ());
 			int xp = overdressed ? rank.xp / 2 : rank.xp;
-			Trophies.give(killer, opp, lang);
+			boolean bonuses = actBonusesAllowed && dailyBonusScale > 0.0;
+			boolean fullBonuses = actBonusesAllowed && dailyBonusScale >= 1.0;
+			if (dailyBonusScale == 0.0) {
+				broadcastChat(Text.translatable("rapbattle.progression.daily_cap").formatted(Formatting.GRAY));
+			}
+			if (bonuses) Trophies.give(killer, opp, lang);
 			if (crowd != null) crowd.dropGift(killer);
 			if (mob instanceof net.minecraft.entity.passive.IronGolemEntity golem) {
 				// The village golem is a character: it accepts the defeat instead of dying.
@@ -1728,22 +1742,25 @@ public class Battle {
 					broadcastChat(Text.translatable("rapbattle.act2.village_defended").formatted(Formatting.GREEN));
 				}
 			}
-			if (mob instanceof net.minecraft.entity.mob.PiglinBruteEntity && BastionBattle.inBastion(world, mob.getBlockPos())) {
+			if (bonuses && mob instanceof net.minecraft.entity.mob.PiglinBruteEntity && BastionBattle.inBastion(world, mob.getBlockPos())) {
 				BastionBattle.onWin(world, players, mob.getBlockPos());
 			}
-			if (opp.profile().id().equals("warden")) {
+			if (bonuses && opp.profile().id().equals("warden")) {
 				for (UUID u : players) {
 					PlayerStatus.grant(u, PlayerStatus.WARDEN_QUIET, 15 * 60_000L, world.getRegistryKey(), mob.getBlockPos(), 48);
 					ServerPlayerEntity pl = player(u);
 					if (pl != null) pl.sendMessage(Text.translatable("rapbattle.act4.warden_quiet").formatted(Formatting.DARK_AQUA), false);
 				}
 			}
-			if (opp.profile().id().equals("enderman") && !overdressed) {
+			if (bonuses && opp.profile().id().equals("enderman") && !overdressed) {
 				int pearls = Acts.enderPearls(result.knockout, rnd);
-				var pearlDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
-					new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENDER_PEARL, pearls));
-				pearlDrop.setToDefaultPickupDelay();
-				world.spawnEntity(pearlDrop);
+				if (dailyBonusScale < 1.0) pearls = pearls / 2;
+				if (pearls > 0) {
+					var pearlDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENDER_PEARL, pearls));
+					pearlDrop.setToDefaultPickupDelay();
+					world.spawnEntity(pearlDrop);
+				}
 			}
 			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
 				if (!bestLine.isEmpty()) {
@@ -1766,15 +1783,19 @@ public class Battle {
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
 			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
-			if (opp.profile().id().equals("blaze") && !overdressed) {
+			if (bonuses && opp.profile().id().equals("blaze") && !overdressed) {
 				int extraRods = Acts.blazeExtraRods(lethal, rnd);
-				var rodDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
-					new net.minecraft.item.ItemStack(net.minecraft.item.Items.BLAZE_ROD, extraRods));
-				rodDrop.setToDefaultPickupDelay();
-				world.spawnEntity(rodDrop);
+				if (dailyBonusScale < 1.0) extraRods = extraRods / 2;
+				if (extraRods > 0) {
+					var rodDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.BLAZE_ROD, extraRods));
+					rodDrop.setToDefaultPickupDelay();
+					world.spawnEntity(rodDrop);
+				}
 			}
-			if (opp.profile().id().equals("wither_skeleton") && !overdressed) {
+			if (bonuses && opp.profile().id().equals("wither_skeleton") && !overdressed) {
 				double skullChance = Acts.witherSkullChance(result.knockout, margin);
+				if (dailyBonusScale < 1.0) skullChance /= 3.0;
 				if (skullChance > 0 && rnd.nextDouble() < skullChance) {
 					var skullDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
 						new net.minecraft.item.ItemStack(net.minecraft.item.Items.WITHER_SKELETON_SKULL));
@@ -1821,14 +1842,14 @@ public class Battle {
 				Vec3d at = new Vec3d(m.getX(), m.getY(), m.getZ());
 				m.damage(world, src, m.getMaxHealth() * 100f);
 				// Street level and up, or Act 1 Night Hunt (solo mob, ranks 1-2): the loot comes doubled.
-				if (((rank.level() >= 3 && !overdressed) || nightHunt) && !m.isAlive()) SoreLosers.doubleFreshDrops(world, at);
+				if (((rank.level() >= 3 && !overdressed && fullBonuses) || (nightHunt && bonuses)) && !m.isAlive()) SoreLosers.doubleFreshDrops(world, at);
 			}
 			int finalXp = Acts.applyNightHuntXp(xp, rank, isNight);
 			ExperienceOrbEntity.spawn(world, pos, finalXp * Math.max(1, players.size()));
 			if (nightHunt) broadcastChat(Text.translatable("rapbattle.act1.night_hunt").formatted(Formatting.AQUA));
 			// A piece of the crew's gear for the winner.
 			Gangs.Gang gang = Gangs.of(opp.profile());
-			if (gang != null && !overdressed && rnd.nextInt(100) < Gangs.dropChance(rank)) {
+			if (gang != null && !overdressed && bonuses && rnd.nextInt(100) < Gangs.dropChance(rank)) {
 				ItemStack gear = Gangs.randomPiece(gang, rnd);
 				net.minecraft.entity.ItemEntity drop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z, gear);
 				drop.setToDefaultPickupDelay();
@@ -1889,8 +1910,9 @@ public class Battle {
 			ServerPlayerEntity p = player(u);
 			if (p != null) outfits.put(u, Outfit.of(p, lang).level());
 		}
+		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
 		Map<UUID, List<String>> titles = stats.record(players, scores, mvpPlayer == null ? null : mvpPlayer.getUuid(),
-			result.playersWin, opp, outfits);
+			result.playersWin, opp, outfits, overworldDay);
 		titles.forEach((u, list) -> {
 			for (String t : list) {
 				for (ServerPlayerEntity p : world.getPlayers()) {

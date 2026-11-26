@@ -103,14 +103,16 @@ public final class Reputation {
 		MobEntity mob = battle.mob;
 		long now = System.currentTimeMillis();
 
-		// Piglin two-tier respect
-		if (mob instanceof PiglinEntity) {
-			for (UUID u : battle.players) {
-				PlayerStatus.grant(u, PlayerStatus.PIGLIN_PAL, PIGLIN_PAL_MS);
-			}
-		} else if (mob instanceof PiglinBruteEntity) {
-			for (UUID u : battle.players) {
-				PlayerStatus.grant(u, PlayerStatus.BASTION_GUEST, BASTION_GUEST_MS);
+		// Piglin two-tier respect (gated if act bonuses are closed in soft mode or daily farm cap hit)
+		if (battle.actBonusesAllowed && battle.dailyBonusScale > 0.0) {
+			if (mob instanceof PiglinEntity) {
+				for (UUID u : battle.players) {
+					PlayerStatus.grant(u, PlayerStatus.PIGLIN_PAL, PIGLIN_PAL_MS);
+				}
+			} else if (mob instanceof PiglinBruteEntity) {
+				for (UUID u : battle.players) {
+					PlayerStatus.grant(u, PlayerStatus.BASTION_GUEST, BASTION_GUEST_MS);
+				}
 			}
 		}
 
@@ -276,14 +278,17 @@ public final class Reputation {
 
 		// 2. Respecting mobs within 6 blocks turn & nod (no movement!) + rare bubble
 		Random rnd = new Random();
+		Stats stats = Stats.of(server);
 		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
 			if (p.isSpectator() || !p.isAlive()) continue;
 			if (BattleManager.byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null) continue;
+			boolean postDragonEnderman = stats.player(p.getUuid()).dragonWon && Trophies.isTrophyMic(p);
 			CredState st = CRED.get(p.getUuid());
-			if (st == null && !WITNESSES.values().stream().anyMatch(m -> m.getOrDefault(p.getUuid(), 0L) > now)) continue;
+			if (st == null && !postDragonEnderman && !WITNESSES.values().stream().anyMatch(m -> m.getOrDefault(p.getUuid(), 0L) > now)) continue;
 			ServerWorld w = p.getEntityWorld();
 			List<MobEntity> near = w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(NOD_RADIUS),
-				m -> m.isAlive() && BattleManager.byMob(m) == null && !BattleManager.inAnyCrowd(m) && respects(m, p));
+				m -> m.isAlive() && BattleManager.byMob(m) == null && !BattleManager.inAnyCrowd(m)
+					&& (respects(m, p) || (postDragonEnderman && m instanceof EndermanEntity && m.getTarget() == null)));
 			for (MobEntity m : near) {
 				m.getLookControl().lookAt(p, 30f, 30f);
 				if (!ACTIVE_NODS.containsKey(m)) {
@@ -295,8 +300,12 @@ public final class Reputation {
 				if (now >= pCd && now >= mCd && rnd.nextInt(100) < 25) {
 					PLAYER_BUBBLE_CD.put(p.getUuid(), now + BUBBLE_PLAYER_COOLDOWN_MS);
 					MOB_BUBBLE_CD.put(m.getUuid(), now + BUBBLE_MOB_COOLDOWN_MS);
-					List<String> pool = Lang.isRu(Lang.of(p)) ? CRED_LINES_RU : CRED_LINES_EN;
-					Speech.bubble(m, pool.get(rnd.nextInt(pool.size())), 0x80FFB0, 2200);
+					if (postDragonEnderman && m instanceof EndermanEntity && !respects(m, p)) {
+						Speech.bubble(m, Lang.t(Lang.of(p), "rapbattle.progression.enderman_gaze"), 0xC89BFF, 2400);
+					} else {
+						List<String> pool = Lang.isRu(Lang.of(p)) ? CRED_LINES_RU : CRED_LINES_EN;
+						Speech.bubble(m, pool.get(rnd.nextInt(pool.size())), 0x80FFB0, 2200);
+					}
 				}
 			}
 		}

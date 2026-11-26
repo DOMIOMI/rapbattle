@@ -286,6 +286,11 @@ public final class MobProfiles {
 
 	public static java.util.Collection<Profile> all() { return MAP.values(); }
 
+	public static int baseRankOf(String id) {
+		Profile p = MAP.get(id);
+		return p != null ? p.baseRank() : 2;
+	}
+
 	public static Profile of(EntityType<?> type) {
 		String id = Registries.ENTITY_TYPE.getId(type).getPath();
 		Profile p = MAP.get(id);
