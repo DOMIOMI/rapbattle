@@ -1728,7 +1728,7 @@ public class Battle {
 			}
 			if (opp.profile().id().equals("warden")) {
 				for (UUID u : players) {
-					PlayerStatus.grant(u, PlayerStatus.WARDEN_QUIET, 15 * 60_000L, mob.getBlockPos(), 48);
+					PlayerStatus.grant(u, PlayerStatus.WARDEN_QUIET, 15 * 60_000L, world.getRegistryKey(), mob.getBlockPos(), 48);
 					ServerPlayerEntity pl = player(u);
 					if (pl != null) pl.sendMessage(Text.translatable("rapbattle.act4.warden_quiet").formatted(Formatting.DARK_AQUA), false);
 				}
