@@ -44,6 +44,21 @@ public final class ProgressionRules {
 		public static final GateCheck OK = new GateCheck(true, true, "", new Object[0]);
 	}
 
+	/** Pure effective rank levels: raid captain boosts battleRank only; gangRival & bribe affect both. */
+	public record EffectiveRankLevels(int battleRank, int gateRank) {}
+
+	public static EffectiveRankLevels computeEffectiveRanks(int baseRank, boolean isRaidCaptain, boolean gangRival, boolean bribed) {
+		int gate = baseRank;
+		if (gangRival && gate < 5) gate++;
+		if (bribed && gate > 1) gate--;
+
+		int battle = baseRank;
+		if (isRaidCaptain && battle < 4) battle = 4;
+		if (gangRival && battle < 5) battle++;
+		if (bribed && battle > 1) battle--;
+		return new EffectiveRankLevels(battle, gate);
+	}
+
 	public static long currentDay(long overworldTime) {
 		return Math.max(0L, overworldTime / TICKS_PER_DAY);
 	}

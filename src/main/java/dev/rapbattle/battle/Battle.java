@@ -146,27 +146,28 @@ public class Battle {
 	BattleView.Result result;
 
 	public Battle(ServerPlayerEntity challenger, MobEntity mob) {
+		this(challenger, mob, null);
+	}
+
+	public Battle(ServerPlayerEntity challenger, MobEntity mob, ProgressionRules.GateCheck precheckedGate) {
 		this.lang = Lang.of(challenger);
 		this.world = (ServerWorld) mob.getEntityWorld();
 		this.mob = mob;
 		this.opp = Opponent.of(mob, rnd, challenger, lang);
-		Rank r = opp.rank();
-		this.raid = RaidBattle.activeRaidFor(mob);
-		if (this.raid != null && r.level() < 4) r = Rank.GOLD;
-		this.gangRival = Gangs.isRival(challenger, opp.profile());
-		if (this.gangRival && r.level() < 5) r = Rank.ofLevel(r.level() + 1);
-		String mobId = opp.profile().id();
-		if (challenger != null && (mobId.equals("villager") || mobId.equals("wandering_trader")
-			|| mobId.equals("pillager") || mobId.equals("vindicator"))
-			&& challenger.getOffHandStack().isOf(net.minecraft.item.Items.EMERALD) && r.level() > 1) {
+		Progression.EffectiveRanks ranks = Progression.computeRanks(challenger, mob, opp);
+		this.raid = ranks.raid();
+		this.gangRival = ranks.gangRival();
+		if (ranks.canBribe() && challenger != null) {
 			challenger.getOffHandStack().decrement(1);
-			r = Rank.ofLevel(r.level() - 1);
 			Speech.bubble(mob, Lang.t(lang, "rapbattle.trick.bribe_bubble"), 0x7CF0A0, 3000);
 			challenger.sendMessage(Text.translatable("rapbattle.trick.bribe_chat", opp.name()).formatted(net.minecraft.util.Formatting.GREEN), false);
 		}
-		this.rank = r;
+		this.rank = ranks.battleRank();
 		this.boss = rank.isBoss();
-		ProgressionRules.GateCheck gate = Progression.check(challenger, mob, opp);
+		ProgressionRules.GateCheck gate = precheckedGate != null
+			? precheckedGate
+			: Progression.check(challenger, mob, opp, ranks.gateRank(),
+				mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity d ? DragonBattle.countCrystals(d) : 0);
 		this.actBonusesAllowed = gate.bonusesAllowed();
 		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
 		int prevToday = challenger != null
@@ -1869,10 +1870,8 @@ public class Battle {
 			punishPlayers();
 			Reputation.onLoss(this);
 			if (!boss) {
-				int wins = MobRecord.of(mob).wins();
-				mob.setCustomName(Text.literal(opp.name() + " ♛" + (wins > 1 ? "×" + wins : "")).formatted(Formatting.GOLD));
-				mob.setCustomNameVisible(true);
 				mob.setPersistent();
+				Theft.refreshMobName(mob, opp.name());
 			}
 			ServerPlayerEntity worst = null;
 			int minScore = Integer.MAX_VALUE;
@@ -1912,7 +1911,7 @@ public class Battle {
 		}
 		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
 		Map<UUID, List<String>> titles = stats.record(players, scores, mvpPlayer == null ? null : mvpPlayer.getUuid(),
-			result.playersWin, opp, outfits, overworldDay);
+			result.playersWin, opp, this.rank, outfits, overworldDay);
 		titles.forEach((u, list) -> {
 			for (String t : list) {
 				for (ServerPlayerEntity p : world.getPlayers()) {

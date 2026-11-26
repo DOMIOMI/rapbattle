@@ -20,6 +20,13 @@ public final class DragonBattle {
 
 	private static long cooldownUntil = 0L;
 
+	public static int countCrystals(EnderDragonEntity dragon) {
+		if (dragon != null && dragon.getEntityWorld() instanceof ServerWorld sw) {
+			return sw.getEntitiesByClass(EndCrystalEntity.class, dragon.getBoundingBox().expand(192), Entity::isAlive).size();
+		}
+		return 0;
+	}
+
 	public static boolean canChallenge(ServerPlayerEntity sp, EnderDragonEntity dragon) {
 		if (!dragon.isAlive() || dragon.ticksSinceDeath > 0
 			|| dragon.getPhaseManager().getCurrent().getType() == PhaseType.DYING) {
@@ -31,15 +38,13 @@ public final class DragonBattle {
 			sp.sendMessage(Text.translatable("rapbattle.act5.cooldown", sec).formatted(Formatting.RED), true);
 			return false;
 		}
-		if (dragon.getEntityWorld() instanceof ServerWorld sw) {
-			int crystals = sw.getEntitiesByClass(EndCrystalEntity.class, dragon.getBoundingBox().expand(192), Entity::isAlive).size();
-			if (crystals > 0) {
-				sp.sendMessage(Text.translatable("rapbattle.act5.jammers", crystals).formatted(Formatting.LIGHT_PURPLE), true);
-				return false;
-			}
+		int crystals = countCrystals(dragon);
+		if (crystals > 0) {
+			sp.sendMessage(Text.translatable("rapbattle.act5.jammers", crystals).formatted(Formatting.LIGHT_PURPLE), true);
+			return false;
 		}
 		Opponent opp = Opponent.of(dragon, new Random(), sp, Lang.of(sp));
-		ProgressionRules.GateCheck gate = Progression.check(sp, dragon, opp);
+		ProgressionRules.GateCheck gate = Progression.check(sp, dragon, opp, opp.rank(), 0);
 		if (!gate.allowed()) {
 			sp.sendMessage(Text.translatable(gate.messageKey(), gate.args()).formatted(Formatting.RED), false);
 			return false;

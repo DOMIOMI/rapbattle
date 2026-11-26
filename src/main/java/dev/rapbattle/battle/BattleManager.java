@@ -35,7 +35,8 @@ public final class BattleManager {
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final long CHOICE_MS = 4000;
 
-	private record Pending(MobEntity mob, long until, boolean allowed, boolean golem, boolean fromApproach) {}
+	private record Pending(MobEntity mob, long until, boolean allowed, boolean golem, boolean fromApproach,
+						   ProgressionRules.GateCheck gate) {}
 
 	/** Recently finished battles: if a fight breaks out right after, the crowd keeps it fair. */
 	private record Stage(MobEntity mob, Crowd crowd, long until, Set<UUID> attackers, Set<MobEntity> engaged) {}
@@ -76,9 +77,11 @@ public final class BattleManager {
 
 	static void challengeFrom(ServerPlayerEntity p, MobEntity mob, String titleKey) {
 		String lang = Lang.of(p);
-		Opponent o = Opponent.of(mob, new Random(), p, lang);
+		Progression.StartCheck sc = Progression.canStart(p, mob, false, 0, new Random());
+		Opponent o = sc.opp();
+		Rank displayRank = sc.ranks().battleRank();
 		boolean isGolem = mob instanceof net.minecraft.entity.passive.IronGolemEntity;
-		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + 15_000, true, isGolem, !isGolem));
+		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + 15_000, true, isGolem, !isGolem, sc.gate()));
 		if (!isGolem) {
 			mob.setTarget(null);
 			mob.getNavigation().stop();
@@ -89,16 +92,15 @@ public final class BattleManager {
 		v.mobEntityId = mob.getId();
 		v.mobName = o.name();
 		v.mobSpecies = o.profile().species(lang);
-		v.rankArmor = o.rank().armor(lang);
-		v.rankStreet = o.rank().street(lang);
-		v.rankLevel = o.rank().level();
-		v.rankColor = o.rank().color;
+		v.rankArmor = displayRank.armor(lang);
+		v.rankStreet = displayRank.street(lang);
+		v.rankLevel = displayRank.level();
+		v.rankColor = displayRank.color;
 		v.allowed = true;
 		v.challengeFrom = Lang.t(lang, titleKey);
 		v.choiceMs = 15_000;
-		ProgressionRules.GateCheck gate = Progression.check(p, mob, o);
-		if (!gate.bonusesAllowed() && !gate.messageKey().isEmpty()) {
-			v.gateWarning = Lang.t(lang, gate.messageKey(), gate.args());
+		if (!sc.gate().bonusesAllowed() && !sc.gate().messageKey().isEmpty()) {
+			v.gateWarning = Lang.t(lang, sc.gate().messageKey(), sc.gate().args());
 		}
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 	}
@@ -185,19 +187,15 @@ public final class BattleManager {
 				});
 			if (near.isEmpty()) continue;
 			near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
-			String lang = Lang.of(p);
 			Random rnd = new Random();
-			Outfit.Score score = Outfit.of(p, lang);
 			for (MobEntity mob : near) {
-				Opponent o = Opponent.of(mob, rnd, p, lang);
-				boolean allowed = (!RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
-					|| Gangs.isOwn(p, o.profile())) && Progression.check(p, mob, o).allowed();
+				Progression.StartCheck sc = Progression.canStart(p, mob, true, 0, rnd);
 				// If the mob walked up on its own and the player fails dress code or strict progression gate, do not stop the mob at all.
-				if (!allowed) continue;
+				if (!sc.allowed()) continue;
 				ASKED.put(mob.getUuid(), now + ASK_AGAIN_MS);
 				mob.setTarget(null);
 				stareAt(mob, p, CHOICE_MS);
-				offerChoice(p, mob, true);
+				offerChoice(p, mob, true, sc);
 				break;
 			}
 		}
@@ -285,11 +283,8 @@ public final class BattleManager {
 	}
 
 	public static boolean isPlacedCrowd(MobEntity m) {
-		if (m == null) return false;
-		for (Battle b : BATTLES) {
-			if (!b.finished && b.crowd != null && b.crowd.placed.contains(m)) return true;
-		}
-		return false;
+		if (m == null || BATTLES.isEmpty()) return false;
+		return Crowd.isPlaced(m);
 	}
 
 	public static Battle byId(int id) {
@@ -299,7 +294,11 @@ public final class BattleManager {
 
 	/** Starts a battle and invites nearby free players into the challenger's team. */
 	public static Battle start(ServerPlayerEntity challenger, MobEntity mob) {
-		Battle b = new Battle(challenger, mob);
+		return start(challenger, mob, null);
+	}
+
+	public static Battle start(ServerPlayerEntity challenger, MobEntity mob, ProgressionRules.GateCheck precheckedGate) {
+		Battle b = new Battle(challenger, mob, precheckedGate);
 		BATTLES.add(b);
 		double r = mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity
 			? Math.max(RapConfig.get().inviteRadius, 48.0)
@@ -324,33 +323,34 @@ public final class BattleManager {
 
 	/** Empty-hand hit: ask the player whether to rap or to fight. */
 	private static void offerChoice(ServerPlayerEntity p, MobEntity mob) {
-		offerChoice(p, mob, false);
+		offerChoice(p, mob, false, null);
 	}
 
-	private static void offerChoice(ServerPlayerEntity p, MobEntity mob, boolean fromApproach) {
+	private static void offerChoice(ServerPlayerEntity p, MobEntity mob, boolean fromApproach, Progression.StartCheck prechecked) {
 		String lang = Lang.of(p);
 		Random rnd = new Random();
-		Opponent o = Opponent.of(mob, rnd, p, lang);
-		Outfit.Score score = Outfit.of(p, lang);
-		boolean dressAllowed = !RapConfig.get().dressCode || score.level() >= Outfit.required(o.rank())
-			|| Gangs.isOwn(p, o.profile()); // crew colours: they never refuse their own
-		ProgressionRules.GateCheck gate = Progression.check(p, mob, o);
-		boolean allowed = dressAllowed && gate.allowed();
-		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false, fromApproach));
+		Progression.StartCheck sc = prechecked != null ? prechecked : Progression.canStart(p, mob, true, 0, rnd);
+		Opponent o = sc.opp();
+		Rank displayRank = sc.ranks().battleRank();
+		Rank gateRank = sc.ranks().gateRank();
+		boolean dressAllowed = sc.dressAllowed();
+		ProgressionRules.GateCheck gate = sc.gate();
+		boolean allowed = sc.allowed();
+		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false, fromApproach, gate));
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.mobEntityId = mob.getId();
 		v.mobName = o.name();
 		v.mobSpecies = o.profile().species(lang);
-		v.rankArmor = o.rank().armor(lang);
-		v.rankStreet = o.rank().street(lang);
-		v.rankLevel = o.rank().level();
-		v.rankColor = o.rank().color;
-		v.boss = o.rank().isBoss();
+		v.rankArmor = displayRank.armor(lang);
+		v.rankStreet = displayRank.street(lang);
+		v.rankLevel = displayRank.level();
+		v.rankColor = displayRank.color;
+		v.boss = displayRank.isBoss();
 		v.tags = o.tags();
 		v.allowed = allowed;
-		v.yourOutfit = score.label(lang);
-		v.requiredOutfit = !dressAllowed ? Battle.levelLabel(Outfit.required(o.rank()), lang) : "";
+		v.yourOutfit = sc.score().label(lang);
+		v.requiredOutfit = !dressAllowed ? Battle.levelLabel(Outfit.required(gateRank), lang) : "";
 		int refIdx = rnd.nextInt(REFUSALS.size());
 		if (!dressAllowed) {
 			v.refusal = refusalLine(o, lang, refIdx);
@@ -361,18 +361,24 @@ public final class BattleManager {
 		}
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 		if (!allowed) {
-			REFUSED.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + REFUSED_MS));
-			stareAt(mob, p, 3500);
-			Speech.bubble(mob, v.refusal, 0xFF8080, 3500);
-			for (ServerPlayerEntity near : p.getEntityWorld().getPlayers()) {
-				if (near.squaredDistanceTo(mob) < 24 * 24) {
-					String nl = Lang.of(near);
-					String nm = nl.equals(lang) ? o.name() : Opponent.nameOf(mob, o.profile(), rnd, nl);
-					String nearMsg = !dressAllowed
-						? refusalLine(o, nl, refIdx)
-						: Lang.t(nl, gate.messageKey(), gate.args());
-					near.sendMessage(Text.literal("<" + nm + "> " + nearMsg).formatted(Formatting.GOLD), false);
-				}
+			broadcastRefusal(p, mob, o, dressAllowed, gate, v.refusal, refIdx, rnd);
+		}
+	}
+
+	private static void broadcastRefusal(ServerPlayerEntity p, MobEntity mob, Opponent o, boolean dressAllowed,
+										 ProgressionRules.GateCheck gate, String refusal, int refIdx, Random rnd) {
+		String lang = Lang.of(p);
+		REFUSED.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + REFUSED_MS));
+		stareAt(mob, p, 3500);
+		Speech.bubble(mob, refusal, 0xFF8080, 3500);
+		for (ServerPlayerEntity near : p.getEntityWorld().getPlayers()) {
+			if (near.squaredDistanceTo(mob) < 24 * 24) {
+				String nl = Lang.of(near);
+				String nm = nl.equals(lang) ? o.name() : Opponent.nameOf(mob, o.profile(), rnd, nl);
+				String nearMsg = !dressAllowed
+					? refusalLine(o, nl, refIdx)
+					: Lang.t(nl, gate.messageKey(), gate.args());
+				near.sendMessage(Text.literal("<" + nm + "> " + nearMsg).formatted(Formatting.GOLD), false);
 			}
 		}
 	}
@@ -497,7 +503,17 @@ public final class BattleManager {
 				return ActionResult.PASS;
 			}
 			if (RapConfig.get().skipChoice) {
-				start(sp, mob);
+				Random rnd = new Random();
+				Progression.StartCheck sc = Progression.canStart(sp, mob, true, 0, rnd);
+				if (!sc.allowed()) {
+					int refIdx = rnd.nextInt(REFUSALS.size());
+					String refusal = !sc.dressAllowed()
+						? refusalLine(sc.opp(), Lang.of(sp), refIdx)
+						: Lang.t(Lang.of(sp), sc.gate().messageKey(), sc.gate().args());
+					broadcastRefusal(sp, mob, sc.opp(), sc.dressAllowed(), sc.gate(), refusal, refIdx, rnd);
+					return ActionResult.FAIL;
+				}
+				start(sp, mob, sc.gate());
 				return ActionResult.FAIL;
 			}
 			offerChoice(sp, mob);
@@ -639,7 +655,7 @@ public final class BattleManager {
 						}
 						STARES.removeIf(s -> s.mob() == pending.mob);
 						closeChoice(p);
-						start(p, pending.mob);
+						start(p, pending.mob, pending.gate);
 					}
 					case "cancel" -> {
 						Pending pd = PENDING.remove(p.getUuid());
@@ -737,7 +753,7 @@ public final class BattleManager {
 	public static void expirePendingForTest(UUID playerId) {
 		Pending pd = PENDING.get(playerId);
 		if (pd != null) {
-			PENDING.put(playerId, new Pending(pd.mob, 0L, pd.allowed, pd.golem, pd.fromApproach));
+			PENDING.put(playerId, new Pending(pd.mob, 0L, pd.allowed, pd.golem, pd.fromApproach, pd.gate));
 		}
 	}
 
@@ -765,16 +781,20 @@ public final class BattleManager {
 			return null;
 		}
 		closeChoice(p);
-		return start(p, pending.mob);
+		return start(p, pending.mob, pending.gate);
 	}
 
 	/** True if this mob should not catch fire in daylight (champion, active battle participant/crowd, pending choice, or in truce). */
 	public static boolean isProtectedFromSun(MobEntity mob) {
 		if (mob == null) return false;
-		if (MobRecord.of(mob).wins() > 0) return true;
-		if (byMob(mob) != null || inAnyCrowd(mob) || Crowd.inTruce(mob)) return true;
-		for (Pending pd : PENDING.values()) {
-			if (pd.mob == mob) return true;
+		if (MobRecord.hasWins(mob) || Crowd.inTruce(mob)) return true;
+		if (!BATTLES.isEmpty()) {
+			if (Crowd.isPlaced(mob) || byMob(mob) != null || inAnyCrowd(mob)) return true;
+		}
+		if (!PENDING.isEmpty()) {
+			for (Pending pd : PENDING.values()) {
+				if (pd.mob == mob) return true;
+			}
 		}
 		return false;
 	}

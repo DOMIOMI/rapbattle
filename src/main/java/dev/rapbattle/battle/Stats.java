@@ -161,9 +161,15 @@ public class Stats extends PersistentState {
 	/** Records one finished battle with optional overworld day for daily farm cap tracking. */
 	public Map<UUID, List<String>> record(List<UUID> team, Map<UUID, Integer> scores, UUID mvp, boolean playersWin, Opponent opp,
 										  Map<UUID, Integer> outfitLevels, long overworldDay) {
+		return record(team, scores, mvp, playersWin, opp, opp.rank(), outfitLevels, overworldDay);
+	}
+
+	/** Records one finished battle using the effective battle rank. */
+	public Map<UUID, List<String>> record(List<UUID> team, Map<UUID, Integer> scores, UUID mvp, boolean playersWin, Opponent opp,
+										  Rank battleRank, Map<UUID, Integer> outfitLevels, long overworldDay) {
 		Map<UUID, List<String>> earned = new HashMap<>();
 		String sp = opp.profile().id();
-		int oppRank = opp.rank().level();
+		int oppRank = (battleRank != null ? battleRank : opp.rank()).level();
 		List<Integer> s = species.computeIfAbsent(sp, k -> new ArrayList<>(List.of(0, 0)));
 		s.set(playersWin ? 1 : 0, s.get(playersWin ? 1 : 0) + 1);
 		UUID initiator = team.isEmpty() ? null : team.get(0);
