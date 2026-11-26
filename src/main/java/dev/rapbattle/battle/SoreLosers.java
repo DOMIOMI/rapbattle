@@ -29,6 +29,17 @@ public final class SoreLosers {
 
 	/** Mob UUID → until when its death drops are doubled. */
 	private static final Map<UUID, Long> DOUBLE_DROP = new HashMap<>();
+	private static final Set<UUID> RAGED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	public static boolean isRaged(MobEntity m) {
+		return m != null && RAGED.contains(m.getUuid());
+	}
+
+	static void clear() {
+		DOUBLE_DROP.clear();
+		RAGED.clear();
+		BLASTS.clear();
+	}
 
 	private static final Map<String, Integer> CHANCE = new HashMap<>();
 	private static final Set<String> PETTY = Set.of("sheep", "chicken", "pig", "cow", "mooshroom", "rabbit");
@@ -170,6 +181,7 @@ public final class SoreLosers {
 		}
 		Speech.bubble(mob, Lang.pick(lang, "НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! ", "WON'T ACCEPT DEFEAT! ") + line, 0xFF4040, 4000);
 		DOUBLE_DROP.put(mob.getUuid(), System.currentTimeMillis() + 5 * 60_000);
+		RAGED.add(mob.getUuid());
 		mob.setHealth(Math.max(1, mob.getMaxHealth() / 2));
 
 		if (mob instanceof CreeperEntity) {

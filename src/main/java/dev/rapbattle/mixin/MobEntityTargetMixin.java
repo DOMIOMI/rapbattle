@@ -21,6 +21,10 @@ public abstract class MobEntityTargetMixin {
 			ci.cancel();
 			return;
 		}
+		if (target instanceof net.minecraft.entity.player.PlayerEntity p && dev.rapbattle.battle.Reputation.respects(self, p)) {
+			ci.cancel();
+			return;
+		}
 		if (!(target instanceof ServerPlayerEntity player) || self.getTarget() == target) return;
 		if (self instanceof HostileEntity || self instanceof Angerable) Speech.onAggro(self, player);
 	}

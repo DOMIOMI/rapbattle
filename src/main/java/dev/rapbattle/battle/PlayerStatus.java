@@ -21,6 +21,9 @@ public final class PlayerStatus {
 
 	public static final String BASTION_GUEST = "bastion_guest";
 	public static final String WARDEN_QUIET = "warden_quiet";
+	public static final String STREET_CRED = "street_cred";
+	public static final String RUN_AWAY = "run_away";
+	public static final String PIGLIN_PAL = "piglin_pal";
 
 	private record Entry(long until, RegistryKey<World> world, BlockPos center, double radiusSq) {}
 
@@ -28,6 +31,11 @@ public final class PlayerStatus {
 
 	static void clear() {
 		STATUSES.clear();
+	}
+
+	public static void revoke(UUID player, String key) {
+		Map<String, Entry> map = STATUSES.get(player);
+		if (map != null) map.remove(key);
 	}
 
 	public static void grant(UUID player, String key, long durationMs) {
@@ -89,10 +97,17 @@ public final class PlayerStatus {
 				String key = entry.getKey();
 				if (WARDEN_QUIET.equals(key) && !hasInRadius(p.getUuid(), WARDEN_QUIET, w, pos)) continue;
 				if (BASTION_GUEST.equals(key) && (w.getRegistryKey() != World.NETHER || !BastionBattle.inBastion(w, pos))) continue;
+				if (PIGLIN_PAL.equals(key) && w.getRegistryKey() != World.NETHER) continue;
 				long sec = Math.max(0, (entry.getValue().until() - now) / 1000L);
 				String timer = String.format("%d:%02d", sec / 60, sec % 60);
 				if (sb.length() > 0) sb.append(" · ");
-				sb.append(Lang.t(Lang.of(p), "rapbattle.status." + key, timer));
+				if (STREET_CRED.equals(key)) {
+					int lvl = Reputation.credLevel(p.getUuid());
+					if (lvl <= 0) continue;
+					sb.append(Lang.t(Lang.of(p), "rapbattle.status.street_cred", lvl, timer));
+				} else {
+					sb.append(Lang.t(Lang.of(p), "rapbattle.status." + key, timer));
+				}
 			}
 			if (sb.length() > 0) {
 				p.sendMessage(Text.literal(sb.toString()).formatted(Formatting.GOLD), true);
