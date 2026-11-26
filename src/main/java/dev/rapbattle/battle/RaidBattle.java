@@ -29,11 +29,16 @@ public final class RaidBattle {
 	private static final Set<Integer> CHALLENGED_RAIDS = new HashSet<>();
 	private static final Set<UUID> FINAL_CAPTAINS = new HashSet<>();
 
+	static void clear() {
+		CHALLENGED_RAIDS.clear();
+		FINAL_CAPTAINS.clear();
+	}
+
 	static void tick(MinecraftServer server) {
 		if (server.getTicks() % 20 != 0) return;
 		for (ServerWorld w : server.getWorlds()) {
 			for (ServerPlayerEntity p : w.getPlayers()) {
-				if (p.isSpectator() || BattleManager.byPlayer(p.getUuid()) != null) continue;
+				if (!BattleManager.canAutoChallenge(p)) continue;
 				Raid raid = w.getRaidAt(p.getBlockPos());
 				if (raid == null) continue;
 				int raidKey = System.identityHashCode(raid);

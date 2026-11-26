@@ -139,6 +139,11 @@ public final class PvpBattle {
 		return null;
 	}
 
+	static void clear() {
+		ALL.clear();
+		INVITES.clear();
+	}
+
 	/** Test-only helper to end a PvP battle cleanly. */
 	public void forceEndForTest() {
 		if (!finished) end(Text.literal("test cleanup"));

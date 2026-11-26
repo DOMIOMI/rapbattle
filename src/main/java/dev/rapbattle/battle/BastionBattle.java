@@ -29,6 +29,11 @@ public final class BastionBattle {
 		testBastionBox = box;
 	}
 
+	static void clear() {
+		CHALLENGED_BRUTES.clear();
+		testBastionBox = null;
+	}
+
 	public static boolean inBastion(ServerWorld world, BlockPos pos) {
 		if (testBastionBox != null && testBastionBox.contains(pos)) return true;
 		var reg = world.getRegistryManager().getOrThrow(RegistryKeys.STRUCTURE);
@@ -44,7 +49,7 @@ public final class BastionBattle {
 		CHALLENGED_BRUTES.entrySet().removeIf(e -> now > e.getValue());
 		for (ServerWorld w : server.getWorlds()) {
 			for (ServerPlayerEntity p : w.getPlayers()) {
-				if (p.isSpectator() || BattleManager.byPlayer(p.getUuid()) != null) continue;
+				if (!BattleManager.canAutoChallenge(p)) continue;
 				if (PlayerStatus.has(p.getUuid(), PlayerStatus.BASTION_GUEST)) continue;
 				if (!inBastion(w, p.getBlockPos())) continue;
 				List<PiglinBruteEntity> brutes = w.getEntitiesByClass(PiglinBruteEntity.class,
