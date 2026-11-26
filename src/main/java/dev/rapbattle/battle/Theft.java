@@ -129,15 +129,15 @@ public final class Theft {
 		if (stolen.isEmpty()) return;
 
 		boolean wasPers = mob.isPersistent();
-		String origName = mob.hasCustomName() && mob.getCustomName() != null ? mob.getCustomName().getString() : "";
+		// Capture only a true vanilla Name Tag (ignore mod-generated champion/thief labels).
+		String origName = "";
+		if (!MobRecord.hasWins(mob) && mob.hasCustomName() && mob.getCustomName() != null) {
+			origName = mob.getCustomName().getString();
+		}
 		mob.setAttached(STOLEN_ITEM, new StolenData(stolen.copy(), wasPers, origName));
 		mob.setPersistent();
 
-		// Visible item label above the mob without overwriting existing custom names
-		String itemLabel = stolen.getName().getString();
-		String tag = origName.isEmpty() ? ("[" + itemLabel + "]") : (origName + " [" + itemLabel + "]");
-		mob.setCustomName(Text.literal(tag).formatted(Formatting.GOLD));
-		mob.setCustomNameVisible(true);
+		refreshMobName(mob, battle.opp.name());
 
 		// Humanoids with an empty main hand can hold it visually with 0% vanilla drop chance
 		if (mob.getMainHandStack().isEmpty()) {
@@ -145,6 +145,7 @@ public final class Theft {
 			mob.setEquipmentDropChance(EquipmentSlot.MAINHAND, 0.0f);
 		}
 
+		String itemLabel = stolen.getName().getString();
 		victim.sendMessage(Text.translatable("rapbattle.theft.stole", battle.opp.name(), itemLabel).formatted(Formatting.GOLD), false);
 		Speech.bubble(mob, Lang.pick(battle.lang, "Это моё!", "Mine now!"), 0xF2C94C, 3000);
 
@@ -174,6 +175,9 @@ public final class Theft {
 		if (data == null || data.stack().isEmpty()) return;
 		ItemStack dropStack = data.stack().copy();
 		mob.removeAttached(STOLEN_ITEM);
+		if (!MobRecord.hasWins(mob)) {
+			((dev.rapbattle.mixin.MobGoalAccessor) mob).rapbattle$setPersistent(data.wasPersistent());
+		}
 		if (mob.getEntityWorld() instanceof ServerWorld sw) {
 			ItemEntity it = new ItemEntity(sw, mob.getX(), mob.getY() + 0.5, mob.getZ(), dropStack);
 			it.setToDefaultPickupDelay();
@@ -188,25 +192,76 @@ public final class Theft {
 		prev.removeAttached(STOLEN_ITEM);
 		next.setAttached(STOLEN_ITEM, data);
 		next.setPersistent();
-		String itemLabel = data.stack().getName().getString();
-		String tag = data.originalName().isEmpty() ? ("[" + itemLabel + "]") : (data.originalName() + " [" + itemLabel + "]");
-		next.setCustomName(Text.literal(tag).formatted(Formatting.GOLD));
-		next.setCustomNameVisible(true);
+		refreshMobName(next, "");
 		if (next.getMainHandStack().isEmpty()) {
 			next.equipStack(EquipmentSlot.MAINHAND, data.stack().copy());
 			next.setEquipmentDropChance(EquipmentSlot.MAINHAND, 0.0f);
 		}
 	}
 
+	/**
+	 * Single source of truth for a mob's display name: combines optional vanilla name tag,
+	 * golden champion crown ({@code ♛} / {@code ♛×N}), and stolen item tag ({@code [Item]}).
+	 */
+	public static void refreshMobName(MobEntity mob, String baseRapName) {
+		if (mob == null) return;
+		StolenData data = mob.getAttached(STOLEN_ITEM);
+		ItemStack stolen = data != null ? data.stack() : ItemStack.EMPTY;
+		int wins = MobRecord.hasWins(mob) ? MobRecord.of(mob).wins() : 0;
+
+		if (wins <= 0 && stolen.isEmpty()) {
+			if (data != null && !data.originalName().isEmpty()) {
+				mob.setCustomName(Text.literal(data.originalName()));
+				mob.setCustomNameVisible(true);
+			} else {
+				mob.setCustomName(null);
+				mob.setCustomNameVisible(false);
+			}
+			return;
+		}
+
+		String nameCore = "";
+		if (data != null && !data.originalName().isEmpty()) {
+			nameCore = data.originalName();
+		} else {
+			MobRecord rec = MobRecord.of(mob);
+			if (!rec.name(Lang.RU).isEmpty()) nameCore = rec.name(Lang.RU);
+			else if (!rec.name(Lang.EN).isEmpty()) nameCore = rec.name(Lang.EN);
+			else if (baseRapName != null && !baseRapName.isEmpty()) nameCore = baseRapName;
+			else nameCore = MobProfiles.of(mob.getType()).species(Lang.RU);
+		}
+
+		StringBuilder sb = new StringBuilder();
+		if (wins > 0) {
+			sb.append(nameCore).append(" ♛");
+			if (wins > 1) sb.append("×").append(wins);
+			if (!stolen.isEmpty()) sb.append(" [").append(stolen.getName().getString()).append("]");
+		} else {
+			if (!data.originalName().isEmpty()) sb.append(data.originalName()).append(" ");
+			sb.append("[").append(stolen.getName().getString()).append("]");
+		}
+		mob.setCustomName(Text.literal(sb.toString()).formatted(Formatting.GOLD));
+		mob.setCustomNameVisible(true);
+	}
+
 	private static void clearMobVisuals(MobEntity mob, StolenData data) {
 		if (ItemStack.areItemsAndComponentsEqual(mob.getMainHandStack(), data.stack())) {
 			mob.equipStack(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
 		}
-		if (data.originalName().isEmpty()) {
-			mob.setCustomName(null);
-			mob.setCustomNameVisible(false);
+		if (MobRecord.hasWins(mob)) {
+			mob.setPersistent();
 		} else {
-			mob.setCustomName(Text.literal(data.originalName()));
+			((dev.rapbattle.mixin.MobGoalAccessor) mob).rapbattle$setPersistent(data.wasPersistent());
+		}
+		if (!MobRecord.hasWins(mob)) {
+			if (data.originalName().isEmpty()) {
+				mob.setCustomName(null);
+				mob.setCustomNameVisible(false);
+			} else {
+				mob.setCustomName(Text.literal(data.originalName()));
+			}
+		} else {
+			refreshMobName(mob, "");
 		}
 	}
 }

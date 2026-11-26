@@ -11,8 +11,6 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.*;
@@ -29,6 +27,7 @@ public final class Crowd {
 	private static final int RADIUS = 16, MAX = 20;
 	/** After the battle the truce holds a little longer, then everyone is free to fight. */
 	private static final Map<MobEntity, Long> TRUCE = new IdentityHashMap<>();
+	private static final Set<MobEntity> ALL_PLACED = Collections.newSetFromMap(new IdentityHashMap<>());
 	private record Retreat(MobEntity mob, Vec3d awayFrom, long until) {}
 	private static final List<Retreat> RETREATING = new ArrayList<>();
 
@@ -173,6 +172,7 @@ public final class Crowd {
 					gs.disableControl(net.minecraft.entity.ai.goal.Goal.Control.JUMP);
 					lockedControls.add(m);
 					placed.add(m);
+					ALL_PLACED.add(m);
 				} else if (m.getNavigation().isIdle() || ticks % 20 == 0) {
 					m.getNavigation().startMovingTo(tx, m.getY(), tz, 1.1);
 				}
@@ -334,18 +334,15 @@ public final class Crowd {
 					if (m.isOnGround()) m.setVelocity(m.getVelocity().add(0, 0.42, 0));
 					m.velocityDirty = true;
 					particles(w, ParticleTypes.HAPPY_VILLAGER, x, y, z, 6);
-					voice(m, true);
 				}
 				case WOW -> {
 					if (m.isOnGround()) m.setVelocity(m.getVelocity().add(0, 0.25, 0));
 					m.velocityDirty = true;
 					particles(w, ParticleTypes.CRIT, x, y, z, 8);
-					voice(m, true);
 				}
 				case BOO -> {
 					particles(w, ParticleTypes.ANGRY_VILLAGER, x, y, z, 2);
 					m.setHeadYaw(m.getHeadYaw() + (rnd.nextBoolean() ? 40 : -40));
-					voice(m, false);
 				}
 				case FEAR -> {
 					particles(w, ParticleTypes.SMOKE, x, y - 0.3, z, 4);
@@ -369,19 +366,6 @@ public final class Crowd {
 			case WIN_MOB -> side == Side.PLAYERS ? Reaction.BOO : Reaction.CHEER;
 			case UPSET -> Reaction.CHEER;
 		};
-	}
-
-	private void voice(MobEntity m, boolean happy) {
-		// Animals stay silent during a battle: the hall sound carries the reaction.
-		if (true) return;
-		ServerWorld w = battle.world;
-		float pitch = (happy ? 1.15f : 0.75f) + rnd.nextFloat() * 0.3f;
-		if (m instanceof VillagerEntity) {
-			w.playSound(null, m.getBlockPos(), happy ? SoundEvents.ENTITY_VILLAGER_YES : SoundEvents.ENTITY_VILLAGER_NO,
-				SoundCategory.NEUTRAL, 0.9f, pitch);
-		} else {
-			m.playAmbientSound();
-		}
 	}
 
 	private void swaySides(Moment moment) {
@@ -473,6 +457,8 @@ public final class Crowd {
 		}
 		lockedControls.clear();
 		wasImmuneZombify.clear();
+		for (MobEntity m : placed) ALL_PLACED.remove(m);
+		placed.clear();
 	}
 
 	/** Escaped mob team: 15 s truce and actively walking away from {@code awayFrom}. */
@@ -480,6 +466,7 @@ public final class Crowd {
 		long until = System.currentTimeMillis() + durationMs;
 		for (MobEntity m : mobs) {
 			if (m == null || !m.isAlive()) continue;
+			ALL_PLACED.remove(m);
 			m.setTarget(null);
 			m.setAttacker(null);
 			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
@@ -503,7 +490,12 @@ public final class Crowd {
 		m.getNavigation().startMovingTo(m.getX() + dx * 12, m.getY(), m.getZ() + dz * 12, 1.2);
 	}
 
+	public static boolean isPlaced(MobEntity m) {
+		return m != null && !ALL_PLACED.isEmpty() && ALL_PLACED.contains(m);
+	}
+
 	public static boolean inTruce(MobEntity m) {
+		if (TRUCE.isEmpty() || m == null) return false;
 		Long until = TRUCE.get(m);
 		return until != null && System.currentTimeMillis() <= until;
 	}
@@ -539,6 +531,7 @@ public final class Crowd {
 	static void clear() {
 		TRUCE.clear();
 		RETREATING.clear();
+		ALL_PLACED.clear();
 	}
 
 	Side sideOf(MobEntity m) { return members.getOrDefault(m, null); }

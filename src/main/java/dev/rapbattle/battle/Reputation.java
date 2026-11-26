@@ -98,20 +98,40 @@ public final class Reputation {
 		PlayerStatus.revoke(player, PlayerStatus.STREET_CRED);
 	}
 
+	/** Test-only helper to advance all reputation & bubble cooldown timers. */
+	public static void advanceTimersForTest(long deltaMs) {
+		CRED.replaceAll((k, v) -> new CredState(v.level(), v.until() - deltaMs));
+		PLAYER_BUBBLE_CD.replaceAll((k, v) -> v - deltaMs);
+		MOB_BUBBLE_CD.replaceAll((k, v) -> v - deltaMs);
+		for (Map<UUID, Long> wm : WITNESSES.values()) {
+			wm.replaceAll((k, v) -> v - deltaMs);
+		}
+	}
+
+	/** Test-only helper returning total tracked entries across Reputation maps. */
+	public static int activeMapEntriesForTest() {
+		return CRED.size() + WITNESSES.size() + PLAYER_BUBBLE_CD.size() + MOB_BUBBLE_CD.size();
+	}
+
 	static void grantOnWin(Battle battle, ServerPlayerEntity mvpPlayer) {
 		if (battle == null || battle.boss) return;
 		MobEntity mob = battle.mob;
 		long now = System.currentTimeMillis();
 
 		// Piglin two-tier respect (gated if act bonuses are closed in soft mode or daily farm cap hit)
+		UUID mvpId = mvpPlayer != null ? mvpPlayer.getUuid() : null;
 		if (battle.actBonusesAllowed && battle.dailyBonusScale > 0.0) {
-			if (mob instanceof PiglinEntity) {
+			if (mob instanceof PiglinEntity || mob instanceof PiglinBruteEntity) {
+				boolean isBrute = mob instanceof PiglinBruteEntity;
+				String statusKey = isBrute ? PlayerStatus.BASTION_GUEST : PlayerStatus.PIGLIN_PAL;
+				long baseDur = isBrute ? BASTION_GUEST_MS : PIGLIN_PAL_MS;
 				for (UUID u : battle.players) {
-					PlayerStatus.grant(u, PlayerStatus.PIGLIN_PAL, PIGLIN_PAL_MS);
-				}
-			} else if (mob instanceof PiglinBruteEntity) {
-				for (UUID u : battle.players) {
-					PlayerStatus.grant(u, PlayerStatus.BASTION_GUEST, BASTION_GUEST_MS);
+					String name = battle.names.get(u);
+					int dealt = name != null ? battle.battleDealt.getOrDefault(name, 0) : 0;
+					boolean isMvp = u.equals(mvpId) || battle.players.size() == 1;
+					if (!isMvp && dealt <= 0) continue;
+					long dur = isMvp ? baseDur : baseDur / 2;
+					PlayerStatus.grant(u, statusKey, dur);
 				}
 			}
 		}
@@ -120,7 +140,6 @@ public final class Reputation {
 		if (!(mob instanceof HostileEntity) && !(mob instanceof Angerable)) return;
 
 		int rankLevel = battle.rank.level();
-		UUID mvpId = mvpPlayer != null ? mvpPlayer.getUuid() : null;
 		List<UUID> creditedPlayers = new ArrayList<>();
 
 		for (UUID u : battle.players) {
@@ -275,6 +294,18 @@ public final class Reputation {
 
 		if (server.getTicks() % 10 != 0) return;
 		CRED.entrySet().removeIf(e -> now >= e.getValue().until());
+		PLAYER_BUBBLE_CD.entrySet().removeIf(e -> now >= e.getValue());
+		MOB_BUBBLE_CD.entrySet().removeIf(e -> now >= e.getValue());
+		WITNESSES.entrySet().removeIf(e -> {
+			e.getValue().entrySet().removeIf(pe -> now >= pe.getValue());
+			if (e.getValue().isEmpty()) return true;
+			Entity ent = null;
+			for (ServerWorld sw : server.getWorlds()) {
+				ent = sw.getEntity(e.getKey());
+				if (ent != null) break;
+			}
+			return !(ent instanceof MobEntity m) || !m.isAlive();
+		});
 
 		// 2. Respecting mobs within 6 blocks turn & nod (no movement!) + rare bubble
 		Random rnd = new Random();

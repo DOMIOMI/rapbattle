@@ -9,4 +9,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface MobGoalAccessor {
 	@Accessor("goalSelector")
 	GoalSelector rapbattle$goalSelector();
+
+	@Accessor("persistent")
+	void rapbattle$setPersistent(boolean persistent);
 }

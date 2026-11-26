@@ -68,7 +68,6 @@ public final class BastionBattle {
 
 	static void onWin(ServerWorld world, List<UUID> players, BlockPos pos) {
 		for (UUID u : players) {
-			PlayerStatus.grant(u, PlayerStatus.BASTION_GUEST, 10 * 60_000L);
 			ServerPlayerEntity p = world.getServer().getPlayerManager().getPlayer(u);
 			if (p != null) {
 				p.sendMessage(Text.translatable("rapbattle.act3.bastion_guest").formatted(Formatting.GOLD), false);

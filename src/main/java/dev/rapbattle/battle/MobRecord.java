@@ -41,6 +41,13 @@ public record MobRecord(int wins, int losses, int streak, String name, String na
 		return r == null ? EMPTY : r;
 	}
 
+	/** Fast check for hot mixins: avoids reading/decoding attachment if none is attached. */
+	public static boolean hasWins(Entity e) {
+		if (e == null || !e.hasAttached(TYPE)) return false;
+		MobRecord r = e.getAttached(TYPE);
+		return r != null && r.wins > 0;
+	}
+
 	/** Saved rap name in the given language, or empty string if not assigned yet. */
 	public String name(String lang) {
 		return Lang.isRu(lang) ? name : nameEn;
