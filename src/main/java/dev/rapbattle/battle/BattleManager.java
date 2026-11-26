@@ -572,6 +572,7 @@ public final class BattleManager {
 			PlayerStatus.clear();
 			BastionBattle.clear();
 			RaidBattle.clear();
+			DragonBattle.clear();
 			PvpBattle.clear();
 		});
 
@@ -707,9 +708,14 @@ public final class BattleManager {
 		}
 	}
 
+	/** Returns true if a player currently has a pending approach/callout choice. */
+	public static boolean hasPending(UUID playerId) {
+		return PENDING.containsKey(playerId);
+	}
+
 	/** Test-only helper to check if a player has a pending approach/callout choice. */
 	public static boolean hasPendingForTest(UUID playerId) {
-		return PENDING.containsKey(playerId);
+		return hasPending(playerId);
 	}
 
 	/** Test-only helper to clear pending choices between test scenarios. */
@@ -729,17 +735,20 @@ public final class BattleManager {
 		return start(p, pending.mob);
 	}
 
-	private static void tickChampions(net.minecraft.server.MinecraftServer server) {
-		long now = System.currentTimeMillis();
-		for (var w : server.getWorlds()) {
-			for (ServerPlayerEntity p : w.getPlayers()) {
-				for (MobEntity m : w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(48),
-					e -> e.isAlive() && e.isOnFire() && MobRecord.of(e).wins() > 0)) {
-					m.extinguish();
-				}
-			}
+	/** True if this mob should not catch fire in daylight (champion, active battle participant/crowd, pending choice, or in truce). */
+	public static boolean isProtectedFromSun(MobEntity mob) {
+		if (mob == null) return false;
+		if (MobRecord.of(mob).wins() > 0) return true;
+		if (byMob(mob) != null || inAnyCrowd(mob) || Crowd.inTruce(mob)) return true;
+		for (Pending pd : PENDING.values()) {
+			if (pd.mob == mob) return true;
 		}
+		return false;
+	}
+
+	private static void tickChampions(net.minecraft.server.MinecraftServer server) {
 		if (server.getTicks() % 20 != 0) return;
+		long now = System.currentTimeMillis();
 		CHAMPION_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
 		REMATCH_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
 		Stats stats = Stats.of(server);
