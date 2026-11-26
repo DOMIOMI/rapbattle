@@ -22,8 +22,15 @@ public final class BastionBattle {
 	private BastionBattle() {}
 
 	private static final Map<UUID, Long> CHALLENGED_BRUTES = new HashMap<>();
+	private static net.minecraft.util.math.BlockBox testBastionBox;
+
+	/** Test-only helper to mark a bounding box as a bastion when structure generation is disabled. */
+	public static void setTestBastionBox(net.minecraft.util.math.BlockBox box) {
+		testBastionBox = box;
+	}
 
 	public static boolean inBastion(ServerWorld world, BlockPos pos) {
+		if (testBastionBox != null && testBastionBox.contains(pos)) return true;
 		var reg = world.getRegistryManager().getOrThrow(RegistryKeys.STRUCTURE);
 		Optional<Structure> bastion = reg.getOptionalValue(StructureKeys.BASTION_REMNANT);
 		if (bastion.isEmpty()) return false;

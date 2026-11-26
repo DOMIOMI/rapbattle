@@ -1635,6 +1635,18 @@ public class Battle {
 		abort(Text.literal(reason));
 	}
 
+	/** Test-only helper for client gametests to resolve a battle immediately with a chosen outcome. */
+	public void forceOutcomeForTest(boolean playersWin, boolean knockout) {
+		if (finished) return;
+		this.result = new BattleView.Result();
+		this.result.playersWin = playersWin;
+		this.result.knockout = knockout;
+		this.respectTeam = playersWin ? 90 : 30;
+		this.respectMob = playersWin ? (knockout ? 0 : 75) : 90;
+		if (playersWin) this.bestLine = "test golden line";
+		finish();
+	}
+
 	private void finish() {
 		finished = true;
 		sendEnd();
