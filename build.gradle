@@ -66,3 +66,25 @@ tasks.withType(JavaCompile).configureEach {
 java {
 	toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
+
+// Client game tests (real Minecraft client, takes screenshots): ./gradlew runClientGameTest
+// Needs RB_TEST_WAV = path to a WAV with a rap verse, and a project path without Cyrillic letters.
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "rapbattle-test"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+		clearRunDirectory = false
+	}
+}
+
+loom {
+	runs {
+		matching { it.name == 'clientGameTest' }.configureEach {
+			programArgs '--username', 'DOMI'
+			vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+		}
+	}
+}
