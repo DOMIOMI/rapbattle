@@ -23,8 +23,15 @@ public final class Llm {
 	public static final double VERSE_TEMPERATURE = 0.8;
 	public static final double JUDGE_TEMPERATURE = 0.15;
 
+	private static volatile boolean testOfflineStub;
+
+	/** Test-only: forces Llm.available() to false so tests never hit the network. */
+	public static void setOfflineStubForTest(boolean stub) {
+		testOfflineStub = stub;
+	}
+
 	public static boolean available() {
-		return !RapConfig.get().openRouterKey().isEmpty();
+		return !testOfflineStub && !RapConfig.get().openRouterKey().isEmpty();
 	}
 
 	/** Sends one request and returns the parsed JSON object, or null on any failure. */

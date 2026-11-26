@@ -89,7 +89,7 @@ public final class PvpBattle {
 	/** An empty-hand hit on another player: a call-out. Returns true if the hit was taken as a challenge. */
 	public static boolean challenge(ServerPlayerEntity from, ServerPlayerEntity to) {
 		if (busy(from) || busy(to)) return false;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		Invite pending = INVITES.get(to.getUuid());
 		if (pending != null && pending.from().equals(from.getUuid()) && now < pending.until()) return true; // already asked
 		int id = IDS.getAndIncrement();
@@ -119,7 +119,7 @@ public final class PvpBattle {
 		close.id = id;
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(close.toJson()));
 		ServerPlayerEntity from = p.getEntityWorld().getServer().getPlayerManager().getPlayer(inv.from());
-		if (from == null || System.currentTimeMillis() > inv.until()) return true;
+		if (from == null || dev.rapbattle.Clock.now() > inv.until()) return true;
 		if (!accept) {
 			from.sendMessage(Text.translatable("rapbattle.pvp.declined", p.getName().getString()).formatted(Formatting.GRAY), false);
 			return true;
@@ -161,7 +161,7 @@ public final class PvpBattle {
 	}
 
 	static void tickAll() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		INVITES.values().removeIf(i -> now > i.until());
 		for (PvpBattle pb : new ArrayList<>(ALL)) {
 			try {
@@ -193,8 +193,8 @@ public final class PvpBattle {
 		for (BeatTracks.Track t : BeatTracks.ALL) if (!t.id().equals("boss")) pool.add(t);
 		track = pool.isEmpty() ? null : pool.get(rnd.nextInt(pool.size()));
 		beatMs = track != null ? track.beatMs() : 650;
-		beatZero = System.currentTimeMillis() + INTRO_MS + 600;
-		phaseStart = System.currentTimeMillis();
+		beatZero = dev.rapbattle.Clock.now() + INTRO_MS + 600;
+		phaseStart = dev.rapbattle.Clock.now();
 		view = buildView();
 		broadcastChat(Text.translatable("rapbattle.pvp.started", names.get(a), names.get(b), names.get(a))
 			.formatted(Formatting.GOLD));
@@ -643,7 +643,7 @@ public final class PvpBattle {
 		v.respectTeam = respectA;
 		v.respectMob = respectB;
 		v.combo = 0;
-		v.beatElapsedMs = System.currentTimeMillis() - beatZero;
+		v.beatElapsedMs = dev.rapbattle.Clock.now() - beatZero;
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
 			if (p != null) ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, langOf(u), false).toJson()));

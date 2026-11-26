@@ -122,7 +122,7 @@ public final class Crowd {
 					&& (!isAquaticOnly(m) || stageInWater));
 			late.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(center)));
 			boolean added = false;
-			long now = System.currentTimeMillis();
+			long now = dev.rapbattle.Clock.now();
 			for (MobEntity m : late) {
 				if (members.size() < MAX) {
 					addMember(m, kin);
@@ -257,7 +257,7 @@ public final class Crowd {
 	private void shout(Moment moment) {
 		java.util.List<String> lines = (dev.rapbattle.Lang.isRu(battle.lang) ? Shouts.LINES : ShoutsEn.LINES).get(moment);
 		if (lines == null || members.isEmpty()) return;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		boolean big = moment == Moment.START || moment == Moment.WIN_PLAYERS || moment == Moment.WIN_MOB;
 		if (now - lastShout < 3500 || rnd.nextInt(100) >= (big ? 80 : 35)) return;
 		Side want = switch (moment) {
@@ -437,7 +437,7 @@ public final class Crowd {
 	}
 
 	void release(boolean playersWin) {
-		long until = System.currentTimeMillis() + 5000;
+		long until = dev.rapbattle.Clock.now() + 5000;
 		for (MobEntity m : members.keySet()) {
 			m.getNavigation().stop();
 			if (lockedControls.remove(m)) {
@@ -463,7 +463,7 @@ public final class Crowd {
 
 	/** Escaped mob team: 15 s truce and actively walking away from {@code awayFrom}. */
 	public static void retreat(Collection<MobEntity> mobs, Vec3d awayFrom, long durationMs) {
-		long until = System.currentTimeMillis() + durationMs;
+		long until = dev.rapbattle.Clock.now() + durationMs;
 		for (MobEntity m : mobs) {
 			if (m == null || !m.isAlive()) continue;
 			ALL_PLACED.remove(m);
@@ -497,12 +497,7 @@ public final class Crowd {
 	public static boolean inTruce(MobEntity m) {
 		if (TRUCE.isEmpty() || m == null) return false;
 		Long until = TRUCE.get(m);
-		return until != null && System.currentTimeMillis() <= until;
-	}
-
-	/** Test-only helper to clear active truces immediately. */
-	public static void expireTruceForTest() {
-		TRUCE.clear();
+		return until != null && dev.rapbattle.Clock.now() <= until;
 	}
 
 	/** Keeps a mob in truce until {@code untilMs} (e.g. during a PvP battle near the stage). */
@@ -514,7 +509,7 @@ public final class Crowd {
 
 	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		TRUCE.entrySet().removeIf(e -> now > e.getValue() || !e.getKey().isAlive());
 		for (MobEntity m : TRUCE.keySet()) {
 			m.setTarget(null);

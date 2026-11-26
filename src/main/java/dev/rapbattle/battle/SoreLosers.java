@@ -110,12 +110,12 @@ public final class SoreLosers {
 
 	/** Queues a non-destructive blast at the mob after {@code delayMs}. */
 	public static void blast(MobEntity m, long delayMs) {
-		BLASTS.add(new Blast(m, System.currentTimeMillis() + delayMs));
+		BLASTS.add(new Blast(m, dev.rapbattle.Clock.now() + delayMs));
 	}
 
 	/** Called every server tick. */
 	public static void tick() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		for (Blast b : new ArrayList<>(BLASTS)) {
 			if (now < b.at()) continue;
 			BLASTS.remove(b);
@@ -130,7 +130,7 @@ public final class SoreLosers {
 	public static void register() {
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
 			Long until = DOUBLE_DROP.remove(entity.getUuid());
-			if (until != null && System.currentTimeMillis() < until && entity.getEntityWorld() instanceof ServerWorld w) {
+			if (until != null && dev.rapbattle.Clock.now() < until && entity.getEntityWorld() instanceof ServerWorld w) {
 				doubleFreshDrops(w, new Vec3d(entity.getX(), entity.getY(), entity.getZ()));
 			}
 		});
@@ -180,7 +180,7 @@ public final class SoreLosers {
 			}
 		}
 		Speech.bubble(mob, Lang.pick(lang, "НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! ", "WON'T ACCEPT DEFEAT! ") + line, 0xFF4040, 4000);
-		DOUBLE_DROP.put(mob.getUuid(), System.currentTimeMillis() + 5 * 60_000);
+		DOUBLE_DROP.put(mob.getUuid(), dev.rapbattle.Clock.now() + 5 * 60_000);
 		RAGED.add(mob.getUuid());
 		mob.setHealth(Math.max(1, mob.getMaxHealth() / 2));
 
@@ -190,7 +190,7 @@ public final class SoreLosers {
 				if (p.squaredDistanceTo(mob) < 16 * 16) p.sendMessage(Text.translatable("rapbattle.sorelosers.run").formatted(Formatting.RED, Formatting.BOLD), true);
 			}
 			w.playSound(null, mob.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_CREEPER_PRIMED, net.minecraft.sound.SoundCategory.HOSTILE, 1f, 0.5f);
-			BLASTS.add(new Blast(mob, System.currentTimeMillis() + 1500));
+			BLASTS.add(new Blast(mob, dev.rapbattle.Clock.now() + 1500));
 			return true;
 		}
 		if (PETTY.contains(id)) {

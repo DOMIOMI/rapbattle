@@ -45,7 +45,7 @@ public final class BastionBattle {
 
 	static void tick(MinecraftServer server) {
 		if (server.getTicks() % 20 != 0) return;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		CHALLENGED_BRUTES.entrySet().removeIf(e -> now > e.getValue());
 		for (ServerWorld w : server.getWorlds()) {
 			for (ServerPlayerEntity p : w.getPlayers()) {

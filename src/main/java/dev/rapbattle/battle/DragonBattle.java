@@ -32,7 +32,7 @@ public final class DragonBattle {
 			|| dragon.getPhaseManager().getCurrent().getType() == PhaseType.DYING) {
 			return false;
 		}
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		if (now < cooldownUntil) {
 			long sec = Math.max(1, (cooldownUntil - now + 999) / 1000);
 			sp.sendMessage(Text.translatable("rapbattle.act5.cooldown", sec).formatted(Formatting.RED), true);
@@ -60,7 +60,7 @@ public final class DragonBattle {
 	}
 
 	static void onLoss(EnderDragonEntity dragon) {
-		cooldownUntil = System.currentTimeMillis() + 60_000L;
+		cooldownUntil = dev.rapbattle.Clock.now() + 60_000L;
 		if (dragon.isAlive() && dragon.ticksSinceDeath == 0) {
 			dragon.getPhaseManager().setPhase(PhaseType.HOLDING_PATTERN);
 		}

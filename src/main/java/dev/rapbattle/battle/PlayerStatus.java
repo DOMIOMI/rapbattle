@@ -48,7 +48,7 @@ public final class PlayerStatus {
 
 	public static void grant(UUID player, String key, long durationMs, RegistryKey<World> world, BlockPos center, int radius) {
 		STATUSES.computeIfAbsent(player, k -> new ConcurrentHashMap<>())
-			.put(key, new Entry(System.currentTimeMillis() + durationMs, world, center, (double) radius * radius));
+			.put(key, new Entry(dev.rapbattle.Clock.now() + durationMs, world, center, (double) radius * radius));
 	}
 
 	public static boolean has(UUID player, String key) {
@@ -72,7 +72,7 @@ public final class PlayerStatus {
 		if (map == null) return null;
 		Entry e = map.get(key);
 		if (e == null) return null;
-		if (System.currentTimeMillis() >= e.until()) {
+		if (dev.rapbattle.Clock.now() >= e.until()) {
 			map.remove(key);
 			return null;
 		}
@@ -81,7 +81,7 @@ public final class PlayerStatus {
 
 	static void tick(MinecraftServer server) {
 		if (server.getTicks() % 20 != 0) return;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
 			Map<String, Entry> map = STATUSES.get(p.getUuid());
 			if (map == null || map.isEmpty()) continue;

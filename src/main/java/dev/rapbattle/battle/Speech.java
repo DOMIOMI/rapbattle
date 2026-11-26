@@ -111,12 +111,12 @@ public final class Speech {
 		d.setLineWidth(170);
 		d.refreshPositionAndAngles(mob.getX(), mob.getY() + mob.getHeight() + 0.55, mob.getZ(), 0, 0);
 		w.spawnEntity(d);
-		BUBBLES.add(new Bubble(d, mob, System.currentTimeMillis() + ms));
+		BUBBLES.add(new Bubble(d, mob, dev.rapbattle.Clock.now() + ms));
 	}
 
 	/** Server tick: bubbles follow their mob and disappear in time. */
 	public static void tick() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		for (Bubble b : new ArrayList<>(BUBBLES)) {
 			if (now > b.until() || !b.mob().isAlive() || b.display().isRemoved()) {
 				b.display().discard();
@@ -141,7 +141,7 @@ public final class Speech {
 	public static void onAggro(MobEntity mob, ServerPlayerEntity player) {
 		if (!RapConfig.get().aggroLines || BattleManager.byMob(mob) != null || BattleManager.battleNear(mob, 32)) return;
 		for (Bubble b : BUBBLES) if (b.mob() == mob) return; // it's already saying something
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		Long m = MOB_COOLDOWN.get(mob.getUuid());
 		if (m != null && now - m < 60_000) return;
 		Long p = PLAYER_COOLDOWN.get(player.getUuid());
@@ -182,7 +182,7 @@ public final class Speech {
 	}
 
 	private static void refreshIfStale(String lang) {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		long at = generatedAt.getOrDefault(lang, 0L);
 		if (at == 0) {
 			loadCache(lang);
@@ -201,7 +201,7 @@ public final class Speech {
 				if (lines != null) out.put(kin, lines);
 			}
 			if (!out.isEmpty()) {
-				long ts = System.currentTimeMillis();
+				long ts = dev.rapbattle.Clock.now();
 				generated.put(lang, out);
 				generatedAt.put(lang, ts);
 				try {

@@ -135,7 +135,7 @@ public class Stats extends PersistentState {
 
 	public void recordLegend(String player, String line) {
 		if (line == null || line.isBlank()) return;
-		String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+		String date = dev.rapbattle.Clock.today().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
 		this.legend = new Legend(player == null ? "" : player, line.trim(), date);
 		markDirty();
 	}

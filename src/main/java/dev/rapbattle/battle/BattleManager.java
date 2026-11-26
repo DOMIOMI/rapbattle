@@ -44,12 +44,12 @@ public final class BattleManager {
 	private static final List<Stage> RECENT = new ArrayList<>();
 
 	static void recent(Battle b) {
-		if (b.crowd != null) RECENT.add(new Stage(b.mob, b.crowd, System.currentTimeMillis() + 30_000, new HashSet<>(), new HashSet<>()));
+		if (b.crowd != null) RECENT.add(new Stage(b.mob, b.crowd, dev.rapbattle.Clock.now() + 30_000, new LinkedHashSet<>(), new HashSet<>()));
 	}
 
 	/** Someone hit the mob of a finished battle. 1 on 1 the crowd watches; 2 on 1 its fans even the odds. */
 	private static void fightAfterBattle(ServerPlayerEntity p, MobEntity mob) {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		RECENT.removeIf(s -> now > s.until() || !s.mob().isAlive());
 		for (Stage s : RECENT) {
 			if (s.mob() != mob) continue;
@@ -81,7 +81,7 @@ public final class BattleManager {
 		Opponent o = sc.opp();
 		Rank displayRank = sc.ranks().battleRank();
 		boolean isGolem = mob instanceof net.minecraft.entity.passive.IronGolemEntity;
-		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + 15_000, true, isGolem, !isGolem, sc.gate()));
+		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + 15_000, true, isGolem, !isGolem, sc.gate()));
 		if (!isGolem) {
 			mob.setTarget(null);
 			mob.getNavigation().stop();
@@ -167,7 +167,7 @@ public final class BattleManager {
 
 	/** A hostile mob walking up to a player gives him the same choice as an empty-hand hit: rap or fight. */
 	private static void offerOnApproach(net.minecraft.server.MinecraftServer server) {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		ASKED.values().removeIf(t -> now > t);
 		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
 			if (p.isSpectator() || p.isCreative() || !p.isAlive()) continue;
@@ -212,7 +212,7 @@ public final class BattleManager {
 	}
 
 	private static void brawl(ServerPlayerEntity p, MobEntity mob) {
-		BRAWLS.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + BRAWL_MS));
+		BRAWLS.put(p.getUuid(), new Refused(mob, dev.rapbattle.Clock.now() + BRAWL_MS));
 	}
 	/** Mobs turning to look at someone while they talk to him. */
 	private record Stare(MobEntity mob, UUID player, long until) {}
@@ -221,7 +221,7 @@ public final class BattleManager {
 	/** The mob turns to the player and keeps looking at him for {@code ms}. */
 	static void stareAt(MobEntity mob, ServerPlayerEntity p, long ms) {
 		STARES.removeIf(s -> s.mob() == mob);
-		STARES.add(new Stare(mob, p.getUuid(), System.currentTimeMillis() + ms));
+		STARES.add(new Stare(mob, p.getUuid(), dev.rapbattle.Clock.now() + ms));
 		faceNow(mob, p);
 	}
 
@@ -236,7 +236,7 @@ public final class BattleManager {
 	}
 
 	private static void tickStares(net.minecraft.server.MinecraftServer server) {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		STARES.removeIf(s -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayer(s.player());
 			if (now > s.until() || p == null || !s.mob().isAlive() || byMob(s.mob()) != null) return true;
@@ -336,7 +336,7 @@ public final class BattleManager {
 		boolean dressAllowed = sc.dressAllowed();
 		ProgressionRules.GateCheck gate = sc.gate();
 		boolean allowed = sc.allowed();
-		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + CHOICE_MS, allowed, false, fromApproach, gate));
+		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + CHOICE_MS, allowed, false, fromApproach, gate));
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.mobEntityId = mob.getId();
@@ -368,7 +368,7 @@ public final class BattleManager {
 	private static void broadcastRefusal(ServerPlayerEntity p, MobEntity mob, Opponent o, boolean dressAllowed,
 										 ProgressionRules.GateCheck gate, String refusal, int refIdx, Random rnd) {
 		String lang = Lang.of(p);
-		REFUSED.put(p.getUuid(), new Refused(mob, System.currentTimeMillis() + REFUSED_MS));
+		REFUSED.put(p.getUuid(), new Refused(mob, dev.rapbattle.Clock.now() + REFUSED_MS));
 		stareAt(mob, p, 3500);
 		Speech.bubble(mob, refusal, 0xFF8080, 3500);
 		for (ServerPlayerEntity near : p.getEntityWorld().getPlayers()) {
@@ -452,7 +452,7 @@ public final class BattleManager {
 				if (!DragonBattle.canChallenge(sp, dragon)) return ActionResult.FAIL;
 			}
 
-			long now = System.currentTimeMillis();
+			long now = dev.rapbattle.Clock.now();
 			Refused fight = BRAWLS.get(sp.getUuid());
 			if (fight != null && fight.mob() == mob && now < fight.until()) {
 				brawl(sp, mob); // keep the fight going while he keeps swinging
@@ -526,7 +526,7 @@ public final class BattleManager {
 				// The crowd is a truce zone: no zombie turning its neighbour villager into a zombie villager mid-show.
 				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker());
 			if (allowed && amount > 0) {
-				long now = System.currentTimeMillis();
+				long now = dev.rapbattle.Clock.now();
 				if (entity instanceof ServerPlayerEntity sp) LAST_COMBAT.put(sp.getUuid(), now);
 				if (entity instanceof MobEntity && source.getAttacker() instanceof ServerPlayerEntity sp) LAST_COMBAT.put(sp.getUuid(), now);
 			}
@@ -547,7 +547,7 @@ public final class BattleManager {
 			Speech.tick();
 			DamagePop.tick();
 			Crowd.tickTruce();
-			long now = System.currentTimeMillis();
+			long now = dev.rapbattle.Clock.now();
 			for (Map.Entry<UUID, Pending> e : new ArrayList<>(PENDING.entrySet())) {
 				Pending pd = e.getValue();
 				ServerPlayerEntity pl = server.getPlayerManager().getPlayer(e.getKey());
@@ -736,12 +736,6 @@ public final class BattleManager {
 	private static final Map<UUID, Long> CHAMPION_COOLDOWN = new HashMap<>();
 	private static final Map<UUID, Long> REMATCH_COOLDOWN = new HashMap<>();
 
-	/** Test-only helper to advance champion/rematch cooldowns without waiting real minutes. */
-	public static void advanceCooldownsForTest(long deltaMs) {
-		CHAMPION_COOLDOWN.replaceAll((k, v) -> v - deltaMs);
-		REMATCH_COOLDOWN.replaceAll((k, v) -> v - deltaMs);
-	}
-
 	/** Shared eligibility check for all automatic mob callouts (champions, rematches, raid captains, bastion brutes). */
 	public static boolean canAutoChallenge(ServerPlayerEntity p) {
 		if (p == null || p.isSpectator() || !p.isAlive()) return false;
@@ -773,6 +767,34 @@ public final class BattleManager {
 		ASKED.clear();
 	}
 
+	/** Test-only helper: resets all mod runtime state (same clears as SERVER_STOPPING) and test clock. */
+	public static void clearAllForTest() {
+		for (Battle b : new ArrayList<>(BATTLES)) b.abort("test reset");
+		Speech.clearAll();
+		DamagePop.clearAll();
+		Later.clear();
+		GolemDefender.clear();
+		Crowd.clear();
+		RECENT.clear();
+		BATTLES.clear();
+		PENDING.clear();
+		REFUSED.clear();
+		BRAWLS.clear();
+		STARES.clear();
+		LAST_COMBAT.clear();
+		ASKED.clear();
+		CHAMPION_COOLDOWN.clear();
+		REMATCH_COOLDOWN.clear();
+		PlayerStatus.clear();
+		Reputation.clear();
+		SoreLosers.clear();
+		BastionBattle.clear();
+		RaidBattle.clear();
+		DragonBattle.clear();
+		PvpBattle.clear();
+		dev.rapbattle.Clock.resetForTest();
+	}
+
 	/** Test-only helper to accept a pending choice/callout as if the player pressed R. */
 	public static Battle acceptPendingForTest(ServerPlayerEntity p) {
 		Pending pending = PENDING.remove(p.getUuid());
@@ -801,7 +823,7 @@ public final class BattleManager {
 
 	private static void tickChampions(net.minecraft.server.MinecraftServer server) {
 		if (server.getTicks() % 20 != 0) return;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		CHAMPION_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
 		REMATCH_COOLDOWN.entrySet().removeIf(e -> now > e.getValue());
 		Stats stats = Stats.of(server);

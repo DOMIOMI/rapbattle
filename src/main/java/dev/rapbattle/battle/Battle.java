@@ -94,7 +94,7 @@ public class Battle {
 	private Entity currentReader;
 
 	private Phase phase = Phase.LOBBY;
-	private long phaseStart = System.currentTimeMillis();
+	private long phaseStart = dev.rapbattle.Clock.now();
 	private long lobbyEnd;
 	private long beatZero;
 	boolean finished;
@@ -291,7 +291,7 @@ public class Battle {
 
 	/** Challenger pressed "go" before the lobby timer ran out. */
 	public void startEarly(ServerPlayerEntity p) {
-		if (phase == Phase.LOBBY && p.getUuid().equals(players.get(0))) lobbyEnd = System.currentTimeMillis();
+		if (phase == Phase.LOBBY && p.getUuid().equals(players.get(0))) lobbyEnd = dev.rapbattle.Clock.now();
 	}
 
 	/** Challenger picks a battle topic in the lobby (1..3). */
@@ -504,7 +504,7 @@ public class Battle {
 		if (Trophies.equippedPerk(p) == Trophies.TrophyPerk.WARDEN && wardenTriggered.add(u)) return;
 		if (!gazedPlayers.add(u)) return;
 		String name = names.get(u);
-		int curBeat = (int) Math.floorDiv(System.currentTimeMillis() - beatZero, Math.max(1, beatMs));
+		int curBeat = (int) Math.floorDiv(dev.rapbattle.Clock.now() - beatZero, Math.max(1, beatMs));
 		List<BattleView.Row> upcoming = new ArrayList<>();
 		for (BattleView.Row r : view.rows) {
 			if (!r.mob && name.equals(r.reader) && r.startBeat > curBeat) upcoming.add(r);
@@ -530,7 +530,7 @@ public class Battle {
 		UUID u = p.getUuid();
 		if (phase != Phase.TIMELINE || view == null || !hasPlayer(u) || rerolledPlayers.contains(u)) return;
 		String name = names.get(u);
-		int curBeat = (int) Math.floorDiv(System.currentTimeMillis() - beatZero, Math.max(1, beatMs));
+		int curBeat = (int) Math.floorDiv(dev.rapbattle.Clock.now() - beatZero, Math.max(1, beatMs));
 		BattleView.Row targetRow = null;
 		for (BattleView.Row r : view.rows) {
 			if (!r.mob && name.equals(r.reader) && !r.freestyle && r.startBeat + 2 >= curBeat) {
@@ -783,7 +783,7 @@ public class Battle {
 		for (UUID u : players) result.players.add(new BattleView.PlayerScore(names.get(u), 0, Lang.t(lang, "rapbattle.battle.forfeit_status")));
 		winsMob = winsNeeded;
 		view.result = result;
-		setPhase(Phase.RESULT, System.currentTimeMillis());
+		setPhase(Phase.RESULT, dev.rapbattle.Clock.now());
 	}
 
 	// ------------------------------------------------------------------ tick
@@ -812,7 +812,7 @@ public class Battle {
 
 	public void tick() {
 		if (finished) return;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 
 		if (!mob.isAlive() || mob.isRemoved()) {
 			abort(Text.translatable("rapbattle.battle.abort_mob_gone"));
@@ -1555,8 +1555,8 @@ public class Battle {
 		v.respectMax = respectMax;
 		v.combo = combo;
 		v.hype = Math.max(-100, Math.min(100, (barsHit - barsMissed) * 18 - punchesFired.size() * 8));
-		v.lobbyMsLeft = phase == Phase.LOBBY ? Math.max(0, lobbyEnd - System.currentTimeMillis()) : 0;
-		v.beatElapsedMs = timeline ? System.currentTimeMillis() - beatZero : -1;
+		v.lobbyMsLeft = phase == Phase.LOBBY ? Math.max(0, lobbyEnd - dev.rapbattle.Clock.now()) : 0;
+		v.beatElapsedMs = timeline ? dev.rapbattle.Clock.now() - beatZero : -1;
 		v.topic = chosenTopic;
 		v.targets = new ArrayList<>(targets);
 		v.spectator = false;
@@ -1648,27 +1648,59 @@ public class Battle {
 		abort(Text.literal(reason));
 	}
 
-	/** Test-only helper for client gametests to resolve a battle immediately with a chosen outcome. */
-	public void forceOutcomeForTest(boolean playersWin, boolean knockout) {
-		forceOutcomeForTest(playersWin, knockout, playersWin ? 90 : 30, playersWin ? (knockout ? 0 : 75) : 90);
+	/**
+	 * Test-only unified entry point to jump straight to a target phase without waiting for lobbies or full rounds.
+	 * Supported phases: TIMELINE (starts timeline immediately with fallback content), JUDGING (moves into judging),
+	 * RESULT (resolves the battle immediately with default win/loss scores).
+	 */
+	public void jumpToForTest(Phase target) {
+		jumpToForTest(target, true, true, 90, 0);
 	}
 
-	/** Test-only helper for client gametests to resolve a battle with explicit respect scores. */
-	public void forceOutcomeForTest(boolean playersWin, boolean knockout, int teamRespect, int mobRespect) {
+	/** Test-only entry point to jump to a target phase with explicit outcome/scores (used for RESULT). */
+	public void jumpToForTest(Phase target, boolean playersWin, boolean knockout, int teamRespect, int mobRespect) {
 		if (finished) return;
-		this.result = new BattleView.Result();
-		this.result.playersWin = playersWin;
-		this.result.knockout = knockout;
-		this.respectTeam = teamRespect;
-		this.respectMob = mobRespect;
-		if (playersWin) this.bestLine = "test golden line";
-		for (UUID u : players) {
-			BattleView.PlayerScore ps = new BattleView.PlayerScore();
-			ps.name = names.getOrDefault(u, "Player");
-			ps.transcript = playersWin ? "test golden line" : "";
-			this.result.players.add(ps);
+		long now = dev.rapbattle.Clock.now();
+		switch (target) {
+			case TIMELINE -> {
+				if (phase == Phase.LOBBY) {
+					closeLobby();
+					beginRoundContent(now);
+				}
+				Llm.Content c = contentFuture != null ? contentFuture.getNow(null) : null;
+				buildTimeline(c, now);
+				setPhase(Phase.TIMELINE, now);
+			}
+			case JUDGING -> {
+				if (phase == Phase.LOBBY) {
+					closeLobby();
+					beginRoundContent(now);
+				}
+				if (phase == Phase.PREP) {
+					Llm.Content c = contentFuture != null ? contentFuture.getNow(null) : null;
+					buildTimeline(c, now);
+				}
+				clearGlow();
+				judgingStart = now;
+				setPhase(Phase.JUDGING, now);
+			}
+			case RESULT -> {
+				this.result = new BattleView.Result();
+				this.result.playersWin = playersWin;
+				this.result.knockout = knockout;
+				this.respectTeam = teamRespect;
+				this.respectMob = mobRespect;
+				if (playersWin) this.bestLine = "test golden line";
+				for (UUID u : players) {
+					BattleView.PlayerScore ps = new BattleView.PlayerScore();
+					ps.name = names.getOrDefault(u, "Player");
+					ps.transcript = playersWin ? "test golden line" : "";
+					this.result.players.add(ps);
+				}
+				finish();
+			}
+			default -> throw new IllegalArgumentException("Unsupported jumpToForTest phase: " + target);
 		}
-		finish();
 	}
 
 	private void finish() {

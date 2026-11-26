@@ -38,12 +38,12 @@ public final class GolemDefender {
 		if (golems.isEmpty()) return;
 		golems.sort(Comparator.comparingDouble(g -> g.squaredDistanceTo(player)));
 		IronGolemEntity g = golems.get(0);
-		HUNTS.add(new Hunt(g, player.getUuid(), System.currentTimeMillis() + 30_000));
+		HUNTS.add(new Hunt(g, player.getUuid(), dev.rapbattle.Clock.now() + 30_000));
 	}
 
 	/** Server tick: walk to the offender, then call them out. */
 	static void tick() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		for (Hunt h : new ArrayList<>(HUNTS)) {
 			IronGolemEntity g = h.golem();
 			ServerPlayerEntity p = g.getEntityWorld().getServer() == null ? null

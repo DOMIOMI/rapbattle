@@ -29,12 +29,12 @@ public final class DamagePop {
 		double side = (w.random.nextDouble() - 0.5) * 0.8;
 		d.refreshPositionAndAngles(target.getX() + side, target.getY() + target.getHeight() + 0.3, target.getZ() + side * 0.5, 0, 0);
 		w.spawnEntity(d);
-		POPS.add(new Pop(d, System.currentTimeMillis() + 1100));
+		POPS.add(new Pop(d, dev.rapbattle.Clock.now() + 1100));
 	}
 
 	/** Server tick: float up, then vanish. */
 	static void tick() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		POPS.removeIf(p -> {
 			if (now > p.until() || p.display().isRemoved()) {
 				p.display().discard();

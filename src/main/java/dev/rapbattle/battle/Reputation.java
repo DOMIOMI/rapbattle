@@ -89,23 +89,13 @@ public final class Reputation {
 
 	public static int credLevel(UUID player) {
 		CredState st = CRED.get(player);
-		if (st == null || System.currentTimeMillis() >= st.until()) return 0;
+		if (st == null || dev.rapbattle.Clock.now() >= st.until()) return 0;
 		return st.level();
 	}
 
 	public static void revokeCred(UUID player) {
 		CRED.remove(player);
 		PlayerStatus.revoke(player, PlayerStatus.STREET_CRED);
-	}
-
-	/** Test-only helper to advance all reputation & bubble cooldown timers. */
-	public static void advanceTimersForTest(long deltaMs) {
-		CRED.replaceAll((k, v) -> new CredState(v.level(), v.until() - deltaMs));
-		PLAYER_BUBBLE_CD.replaceAll((k, v) -> v - deltaMs);
-		MOB_BUBBLE_CD.replaceAll((k, v) -> v - deltaMs);
-		for (Map<UUID, Long> wm : WITNESSES.values()) {
-			wm.replaceAll((k, v) -> v - deltaMs);
-		}
 	}
 
 	/** Test-only helper returning total tracked entries across Reputation maps. */
@@ -116,7 +106,7 @@ public final class Reputation {
 	static void grantOnWin(Battle battle, ServerPlayerEntity mvpPlayer) {
 		if (battle == null || battle.boss) return;
 		MobEntity mob = battle.mob;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 
 		// Piglin two-tier respect (gated if act bonuses are closed in soft mode or daily farm cap hit)
 		UUID mvpId = mvpPlayer != null ? mvpPlayer.getUuid() : null;
@@ -171,7 +161,7 @@ public final class Reputation {
 
 	static void onLoss(Battle battle) {
 		if (battle == null) return;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		long truceUntil = now + RUN_TRUCE_MS;
 
 		for (UUID u : battle.players) {
@@ -229,7 +219,7 @@ public final class Reputation {
 
 	public static boolean respects(MobEntity m, PlayerEntity p) {
 		if (m == null || p == null || isNeverRespecting(m)) return false;
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		Map<UUID, Long> wm = WITNESSES.get(m.getUuid());
 		if (wm != null) {
 			Long wu = wm.get(p.getUuid());
@@ -251,14 +241,14 @@ public final class Reputation {
 		if (!(mob instanceof HostileEntity) && !(mob instanceof Angerable)) return;
 		if (SoreLosers.isRaged(mob)) return;
 		CredState st = CRED.get(u);
-		if (st != null && System.currentTimeMillis() < st.until()) {
+		if (st != null && dev.rapbattle.Clock.now() < st.until()) {
 			revokeCred(u);
 			p.sendMessage(Text.translatable("rapbattle.reputation.lost_brawl").formatted(Formatting.RED), false);
 		}
 	}
 
 	static void tick(MinecraftServer server) {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		// 1. Run! laugh & hops for the first 4 seconds
 		Iterator<RunLaugh> it = LAUGHS.iterator();
 		while (it.hasNext()) {

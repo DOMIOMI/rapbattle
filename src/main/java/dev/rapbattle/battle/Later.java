@@ -11,11 +11,11 @@ public final class Later {
 
 	private static final List<Task> TASKS = new ArrayList<>();
 
-	public static void run(long delayMs, Runnable r) { TASKS.add(new Task(System.currentTimeMillis() + delayMs, r)); }
+	public static void run(long delayMs, Runnable r) { TASKS.add(new Task(dev.rapbattle.Clock.now() + delayMs, r)); }
 
 	/** Server tick. */
 	static void tick() {
-		long now = System.currentTimeMillis();
+		long now = dev.rapbattle.Clock.now();
 		for (Task t : new ArrayList<>(TASKS)) {
 			if (now < t.at()) continue;
 			TASKS.remove(t);
