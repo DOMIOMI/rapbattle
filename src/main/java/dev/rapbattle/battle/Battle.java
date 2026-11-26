@@ -1637,13 +1637,24 @@ public class Battle {
 
 	/** Test-only helper for client gametests to resolve a battle immediately with a chosen outcome. */
 	public void forceOutcomeForTest(boolean playersWin, boolean knockout) {
+		forceOutcomeForTest(playersWin, knockout, playersWin ? 90 : 30, playersWin ? (knockout ? 0 : 75) : 90);
+	}
+
+	/** Test-only helper for client gametests to resolve a battle with explicit respect scores. */
+	public void forceOutcomeForTest(boolean playersWin, boolean knockout, int teamRespect, int mobRespect) {
 		if (finished) return;
 		this.result = new BattleView.Result();
 		this.result.playersWin = playersWin;
 		this.result.knockout = knockout;
-		this.respectTeam = playersWin ? 90 : 30;
-		this.respectMob = playersWin ? (knockout ? 0 : 75) : 90;
+		this.respectTeam = teamRespect;
+		this.respectMob = mobRespect;
 		if (playersWin) this.bestLine = "test golden line";
+		for (UUID u : players) {
+			BattleView.PlayerScore ps = new BattleView.PlayerScore();
+			ps.name = names.getOrDefault(u, "Player");
+			ps.transcript = playersWin ? "test golden line" : "";
+			this.result.players.add(ps);
+		}
 		finish();
 	}
 

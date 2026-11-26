@@ -44,19 +44,24 @@ public class ActsGameTest implements FabricClientGameTest {
 
 	@Override
 	public void runTest(ClientGameTestContext ctx) {
+		GameTestSupport.installKeyAudit();
 		ctx.getInput().resizeWindow(1280, 720);
 		ctx.waitTicks(5);
 		try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
 			sp.getClientWorld().waitForChunksRender();
+			GameTestSupport.applyLang(ctx);
 			sp.getServer().runCommand("gamerule doMobSpawning false");
 			sp.getServer().runCommand("gamerule doDaylightCycle false");
 			sp.getServer().runCommand("gamerule doWeatherCycle false");
 
 			testAct1NightHuntAndHomemadeMic(ctx, sp);
 			testAct2VillagerAndRaidRules(ctx, sp);
+			testRealRaidWaves(ctx, sp);
 			testAct3BastionGuest(ctx, sp);
 			testAct4WardenQuiet(ctx, sp);
 			testAct5Dragon(ctx, sp);
+
+			GameTestSupport.assertNoRawKeys("ActsGameTest");
 		}
 	}
 
@@ -84,6 +89,28 @@ public class ActsGameTest implements FabricClientGameTest {
 		ctx.waitFor(c -> ClientBattle.timeline() && ClientBattle.beat() >= ClientBattle.view.mobEndBeat + 2, 1200);
 		ctx.waitTicks(3);
 		ctx.takeScreenshot("act1-homemade-mic");
+		// First-person view during player's turn: empty main hand + homemade mic (orange button) + beat flash.
+		ctx.runOnClient(c -> c.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON));
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			p.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, ItemStack.EMPTY);
+		});
+		ctx.waitFor(c -> ClientBattle.timeline()
+			&& ClientBattle.readerId() == c.player.getId()
+			&& dev.rapbattle.client.BattleDance.onBeat(), 1200);
+		ctx.takeScreenshot("act1-first-person-homemade-mic");
+		// Compare with trophy mic in offhand.
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ItemStack trophy = new ItemStack(Items.LIGHTNING_ROD);
+			NbtCompound tag = new NbtCompound();
+			tag.putString(Trophies.NBT_KEY, "ender_dragon");
+			trophy.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(tag));
+			p.setStackInHand(net.minecraft.util.Hand.OFF_HAND, trophy);
+		});
+		ctx.waitTicks(2);
+		ctx.waitFor(c -> ClientBattle.timeline() && dev.rapbattle.client.BattleDance.onBeat(), 400);
+		ctx.takeScreenshot("act1-first-person-trophy-mic");
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
@@ -125,6 +152,126 @@ public class ActsGameTest implements FabricClientGameTest {
 		sp.getServer().runOnServer(server -> {
 			if (vRef[0] != null) vRef[0].discard();
 		});
+	}
+
+	private void testRealRaidWaves(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			server.setDifficulty(net.minecraft.world.Difficulty.EASY, true);
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+			BlockPos base = p.getBlockPos();
+			w.setBlockState(base.add(0, 0, 2), Blocks.BELL.getDefaultState());
+			// Create a minimal village (2 complete beds + 2 villagers) so a real Raid starts.
+			for (int i = 0; i < 2; i++) {
+				BlockPos bp = base.add(i * 3 + 2, 0, 2);
+				w.setBlockState(bp, Blocks.RED_BED.getDefaultState()
+					.with(net.minecraft.block.BedBlock.PART, net.minecraft.block.enums.BedPart.FOOT));
+				w.setBlockState(bp.south(), Blocks.RED_BED.getDefaultState()
+					.with(net.minecraft.block.BedBlock.PART, net.minecraft.block.enums.BedPart.HEAD));
+				VillagerEntity v = EntityType.VILLAGER.create(w, SpawnReason.COMMAND);
+				v.refreshPositionAndAngles(bp.getX() + 0.5, bp.getY(), bp.getZ() + 2.0, 0, 0);
+				w.spawnEntity(v);
+			}
+		});
+		boolean[] poiReady = new boolean[1];
+		for (int i = 0; i < 25 && !poiReady[0]; i++) {
+			ctx.waitTicks(10);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				poiReady[0] = p.getEntityWorld().isNearOccupiedPointOfInterest(p.getBlockPos());
+			});
+		}
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.RAID_OMEN, 5, 0));
+			if (w.getRaidAt(p.getBlockPos()) == null) {
+				w.getRaidManager().startRaid(p, p.getBlockPos());
+			}
+		});
+		boolean[] ready = new boolean[1];
+		for (int i = 0; i < 60 && !ready[0]; i++) {
+			ctx.waitTicks(10);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				var raid = p.getEntityWorld().getRaidAt(p.getBlockPos());
+				ready[0] = raid != null && raid.getGroupsSpawned() >= 1 && !raid.getAllRaiders().isEmpty();
+			});
+		}
+		assertTrue(ready[0], "Raid should start and spawn wave 1");
+		// Wave 1: regular raider must NOT trigger raid mode (no Hero of the Village, no Totem).
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			var raid = w.getRaidAt(p.getBlockPos());
+			assertTrue(raid != null && raid.getGroupsSpawned() == 1, "Raid should be on wave 1");
+			net.minecraft.entity.raid.RaiderEntity regular = null;
+			for (var r : raid.getAllRaiders()) {
+				if (r.isAlive() && !r.isPatrolLeader()) { regular = r; break; }
+			}
+			if (regular != null) {
+				Battle b = BattleManager.start(p, regular);
+				b.forceOutcomeForTest(true, true);
+				assertTrue(!p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE),
+					"Wave 1 regular raider must NOT grant Hero of the Village");
+			}
+			// Clear remaining wave 1 raiders to advance to wave 2.
+			for (var r : new java.util.ArrayList<>(raid.getAllRaiders())) {
+				if (r.isAlive()) r.kill(w);
+			}
+		});
+		// Wait for final wave (Easy = 3 waves).
+		boolean[] finalWave = new boolean[1];
+		for (int i = 0; i < 120 && !finalWave[0]; i++) {
+			ctx.waitTicks(10);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				ServerWorld w = p.getEntityWorld();
+				var raid = w.getRaidAt(p.getBlockPos());
+				if (raid == null) return;
+				int max = raid.getMaxWaves(w.getDifficulty());
+				if (raid.getGroupsSpawned() < max) {
+					for (var r : new java.util.ArrayList<>(raid.getAllRaiders())) {
+						if (r.isAlive()) r.kill(w);
+					}
+				} else if (!raid.getAllRaiders().isEmpty()) {
+					finalWave[0] = true;
+				}
+			});
+		}
+		assertTrue(finalWave[0], "Raid should reach final wave");
+		// Final wave: captain challenges player and winning grants Hero of the Village + Totem.
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			var raid = w.getRaidAt(p.getBlockPos());
+			assertTrue(raid != null && raid.getGroupsSpawned() >= raid.getMaxWaves(w.getDifficulty()), "Raid must reach final wave");
+			net.minecraft.entity.raid.RaiderEntity cap = raid.getCaptain(raid.getGroupsSpawned());
+			if (cap == null || !cap.isAlive()) {
+				for (var r : raid.getAllRaiders()) if (r.isAlive() && r.isPatrolLeader()) { cap = r; break; }
+			}
+			assertTrue(cap != null && cap.isAlive(), "Final wave must have a live raid captain");
+			cap.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+		});
+		ctx.waitTicks(25);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "Final wave captain must auto-challenge player");
+			Battle b = BattleManager.acceptPendingForTest(p);
+			assertTrue(b != null, "Accepting final wave captain challenge must start battle");
+			b.forceOutcomeForTest(true, true);
+			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.HERO_OF_THE_VILLAGE),
+				"Final wave captain win must grant Hero of the Village");
+			var totems = w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p.getBoundingBox().expand(16),
+				ie -> ie.getStack().isOf(Items.TOTEM_OF_UNDYING));
+			assertTrue(!totems.isEmpty(), "Final wave captain win must drop Totem of Undying");
+			for (var v : w.getEntitiesByClass(VillagerEntity.class, p.getBoundingBox().expand(32), Entity::isAlive)) v.discard();
+			for (var r : w.getEntitiesByClass(net.minecraft.entity.raid.RaiderEntity.class, p.getBoundingBox().expand(64), Entity::isAlive)) r.discard();
+		});
+		ctx.waitTicks(5);
 	}
 
 	private void testAct3BastionGuest(ClientGameTestContext ctx, TestSingleplayerContext sp) {

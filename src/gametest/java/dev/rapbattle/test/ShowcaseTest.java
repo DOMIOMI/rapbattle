@@ -84,6 +84,7 @@ public class ShowcaseTest implements FabricClientGameTest {
 
 	@Override
 	public void runTest(ClientGameTestContext ctx) {
+		GameTestSupport.installKeyAudit();
 		ctx.getInput().resizeWindow(1920, 1080);
 		ctx.waitTicks(5);
 		// Full bling on the mob in every shot.
@@ -97,6 +98,7 @@ public class ShowcaseTest implements FabricClientGameTest {
 		Battle[] battle = new Battle[1];
 		try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
 			sp.getClientWorld().waitForChunksRender();
+			GameTestSupport.applyLang(ctx);
 			sp.getServer().runCommand("gamerule doMobSpawning false");
 			sp.getServer().runCommand("gamerule doDaylightCycle false");
 			sp.getServer().runCommand("gamerule doWeatherCycle false");
@@ -172,6 +174,7 @@ public class ShowcaseTest implements FabricClientGameTest {
 			ctx.runOnClient(c -> c.setScreen(null));
 			ctx.waitFor(c -> ClientBattle.view == null, 900);
 			ctx.waitTicks(20);
+			GameTestSupport.assertNoRawKeys("ShowcaseTest");
 		}
 	}
 }

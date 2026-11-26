@@ -133,6 +133,22 @@ public final class PvpBattle {
 		return null;
 	}
 
+	/** Test-only helper to end a PvP battle cleanly. */
+	public void forceEndForTest() {
+		if (!finished) end(Text.literal("test cleanup"));
+	}
+
+	/** Test-only helper to inspect the localized BattleView for a participant. */
+	public BattleView snapshotForTest(ServerPlayerEntity viewer) {
+		return localized(view, Lang.of(viewer), false);
+	}
+
+	/** Test-only helper to get pending PvP invite id for a player. */
+	public static int pendingInviteIdForTest(UUID playerId) {
+		Invite i = INVITES.get(playerId);
+		return i == null ? -1 : i.id();
+	}
+
 	static void tickAll() {
 		long now = System.currentTimeMillis();
 		INVITES.values().removeIf(i -> now > i.until());

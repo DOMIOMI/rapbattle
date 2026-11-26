@@ -426,6 +426,11 @@ public final class Crowd {
 		return false;
 	}
 
+	/** Test-only helper to clear active truces immediately. */
+	public static void expireTruceForTest() {
+		TRUCE.clear();
+	}
+
 	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
 		long now = System.currentTimeMillis();
