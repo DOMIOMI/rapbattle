@@ -46,6 +46,7 @@ public class GangsGameTest implements FabricClientGameTest {
 			testRematchCallout(ctx, sp);
 			testPendingAutoChallengeExit(ctx, sp);
 			testDaytimeSunSafety(ctx, sp);
+			testLongBreakdownTrophyVisible(ctx, sp);
 
 			GameTestSupport.assertNoRawKeys("GangsGameTest");
 		}
@@ -349,6 +350,64 @@ public class GangsGameTest implements FabricClientGameTest {
 			GameTestSupport.cleanupBattles(server);
 			z.discard();
 			sk.discard();
+		});
+		ctx.waitTicks(5);
+	}
+
+	private void testLongBreakdownTrophyVisible(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		ZombieEntity[] zRef = new ZombieEntity[1];
+		Battle[] battle = new Battle[1];
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			net.minecraft.item.ItemStack witherMic = new net.minecraft.item.ItemStack(net.minecraft.item.Items.END_ROD);
+			net.minecraft.nbt.NbtCompound tag = new net.minecraft.nbt.NbtCompound();
+			tag.putString(Trophies.NBT_KEY, "wither");
+			witherMic.set(net.minecraft.component.DataComponentTypes.CUSTOM_DATA, net.minecraft.component.type.NbtComponent.of(tag));
+			p.setStackInHand(net.minecraft.util.Hand.OFF_HAND, witherMic);
+
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+			w.spawnEntity(z);
+			zRef[0] = z;
+
+			battle[0] = BattleManager.start(p, z);
+			battle[0].startEarly(p);
+		});
+		ctx.waitFor(c -> phase("TIMELINE"), 800);
+		ctx.waitFor(c -> !Intro.active(), 400);
+		ctx.waitFor(c -> ClientBattle.timeline() && ClientBattle.beat() >= ClientBattle.view.mobEndBeat + 2, 1600);
+		sp.getServer().runOnServer(server -> battle[0].onAudio(
+			server.getPlayerManager().getPlayerList().get(0),
+			new Payloads.AudioC2S(battle[0].id, 0, true, 0, GameTestSupport.wav())));
+		ctx.waitFor(c -> phase("RESULT") || phase("ROUND_RESULT"), 3600);
+		ctx.runOnClient(c -> {
+			if (ClientBattle.view != null && ClientBattle.view.result != null) {
+				var hits = ClientBattle.view.result.hits;
+				String pname = c.player.getName().getString();
+				String lang = c.getLanguageManager().getLanguage().startsWith("ru") ? "ru" : "en";
+				String silentNote = "«...» · " + (lang.equals("ru") ? "тишина" : "silence");
+				String witherNote = Trophies.TrophyPerk.WITHER.triggeredNote(lang);
+				// Ensure > maxRows (15 rows) with silent bars and the triggered Wither trophy row at the end.
+				hits.removeIf(h -> witherNote.equals(h.note));
+				while (hits.size() < 15) {
+					hits.add(0, new BattleView.Hit(pname, silentNote, 0, true, false));
+				}
+				hits.add(new BattleView.Hit(pname, witherNote, 0, false, false, true));
+			}
+		});
+		ctx.waitTicks(45);
+		ctx.runOnClient(c -> {
+			var hits = ClientBattle.view.result.hits;
+			assertTrue(hits.size() >= 12, "Breakdown must have at least 12 hits");
+			BattleView.Hit last = hits.get(hits.size() - 1);
+			assertTrue(last.system && !last.toMob && last.damage == 0, "Triggered trophy hit must be a zero-damage system row");
+		});
+		GameTestSupport.takeScreenshot(ctx, "trophy-long-breakdown");
+		sp.getServer().runOnServer(server -> {
+			GameTestSupport.cleanupBattles(server);
+			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
+			server.getPlayerManager().getPlayerList().get(0).getInventory().clear();
 		});
 		ctx.waitTicks(5);
 	}
