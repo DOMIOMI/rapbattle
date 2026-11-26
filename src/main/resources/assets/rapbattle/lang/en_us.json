@@ -497,5 +497,21 @@
   "rapbattle.act5.legend_show": "Golden Line (%s, %s): \"%s\"",
   "rapbattle.act6.gang_rival": "+1 rank (gang rivalry)",
   "rapbattle.act6.champion_callout": "Heard about your win streak. Step up to a champion?",
-  "rapbattle.act6.rematch_callout": "I remember you! No backing out this time — rematch!"
+  "rapbattle.act6.rematch_callout": "I remember you! No backing out this time — rematch!",
+  "rapbattle.settings.guide": "MC Handbook",
+  "rapbattle.guide.title": "MC Handbook",
+  "rapbattle.guide.page.1": "1. Getting Started\n\nHit a mob with an empty main hand to challenge it.\nHostile mobs nearby offer: [R] to rap, hit again to fight.\nNeeds a mic and server keys: /rapbattle.",
+  "rapbattle.guide.page.2": "2. Battle Flow\n\nFirst the beat and the mob's verse.\nThen your turn: read on the beat, end with the table rhyme.\n[R] — reroll rhyme.\nJudge hits Respect bars.",
+  "rapbattle.guide.page.3": "3. Scoring & Wins\n\n• Hit the 4th beat.\n• Meaning beats volume.\n• Flip mob targets (\"FLIP\").\n• Silence hurts you.\nKnockout ends early; close win makes the mob flee.",
+  "rapbattle.guide.page.4": "4. Ranks & Gear\n\nMobs have 5 armor ranks (Leather–Netherite) and bosses.\nHigher ranks won't battle naked: wear matching gear.\nGang gear counts too.",
+  "rapbattle.guide.page.5": "5. MC Style\n\n• Puncher — from 0.\n• Metronome — 500 Respect.\n• Provoker — 1500.\nPick in /rapbattle → \"MC Style\" or /rapbattle style.",
+  "rapbattle.guide.page.6": "6. Microphones\n\nHomemade: copper + redstone + stick in a column. Off-hand flashes the beat.\nTrophies drop from rank 5+ & bosses; perks work in off-hand.",
+  "rapbattle.guide.page.7": "7. Act 1: Outskirts\n\nCraft a homemade mic.\nAt night, solo weak mobs (rank 1–2) drop 2x loot & 1.5x XP.\nSave Respect for Metronome.",
+  "rapbattle.guide.page.8": "8. Act 2: Village\n\nBeating a villager gives discounts (1/day); villager lives.\nRaid: final-wave captain calls you out. Win to end the raid & get a Totem.",
+  "rapbattle.guide.page.9": "9. Act 3: Nether\n\nBastion brute calls you out. Win for 10m Bastion Guest: chests won't anger piglins.\nBlazes drop rods; wither skeletons drop skulls.",
+  "rapbattle.guide.page.10": "10. Act 4: To End\n\nEndermen drop pearls (don't look at their eyes).\nWarden: best of 3, stay quiet on his turn. Win for 15m shrieker silence.",
+  "rapbattle.guide.page.11": "11. Act 5: Dragon\n\nBreak crystals, then hit the dragon empty-handed.\nBest of 3, team allowed.\nWorld's best line: /rapbattle legend.",
+  "rapbattle.guide.page.12": "12. Gangs & ♛\n\nRival gang colors make mobs angrier and +1 rank.\nChampions ♛ seek players on a 3+ win streak.\nClose losers call for a rematch.",
+  "rapbattle.guide.page.13": "13. PvP\n\nHit a player with an empty main hand to duel ([Y]/[N]).\n1 round: each gets own rhymes & language. Nearby mobs hold truce.",
+  "rapbattle.guide.page.14": "14. Cheat Sheet\n\n[R] — rap / reroll\n[Y]/[N] — yes / no\n[1–3] — lobby topic\n/rapbattle — settings\n/rapbattle guide\n/rapbattle style\n/rapbattle legend\n/rapbattle clip"
 }
