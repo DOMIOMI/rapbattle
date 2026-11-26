@@ -11,6 +11,7 @@
     "MobGoalAccessor",
     "MoveControlMixin",
     "PiglinBrainMixin",
+    "PiglinBruteBrainMixin",
     "SculkShriekerMixin"
   ],
   "injectors": {

@@ -5,6 +5,7 @@ import dev.rapbattle.battle.BattleManager;
 import dev.rapbattle.battle.PlayerStatus;
 import dev.rapbattle.battle.PvpBattle;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.mob.AbstractPiglinEntity;
 import net.minecraft.entity.mob.PiglinBrain;
 import net.minecraft.entity.mob.PiglinEntity;
@@ -19,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Suppresses piglin anger during battles, PvP, pending callouts, and for Bastion Guest chests. */
+/** Suppresses piglin anger during battles/PvP/pending, for Bastion Guests, and (gold-check only) for Piglin Pals. */
 @Mixin(PiglinBrain.class)
 public class PiglinBrainMixin {
 	private static boolean isQuietPlayer(LivingEntity target) {
@@ -37,7 +38,7 @@ public class PiglinBrainMixin {
 
 	@Inject(method = "becomeAngryWith", at = @At("HEAD"), cancellable = true)
 	private static void rapbattle$quietDuringBattle(ServerWorld world, AbstractPiglinEntity piglin, LivingEntity target, CallbackInfo ci) {
-		if (isQuietPlayer(target)) {
+		if (isQuietPlayer(target) || (target instanceof PlayerEntity p && PlayerStatus.has(p.getUuid(), PlayerStatus.BASTION_GUEST))) {
 			ci.cancel();
 		}
 	}
@@ -46,8 +47,19 @@ public class PiglinBrainMixin {
 	private static void rapbattle$ignoreQuietPlayers(ServerWorld world, PiglinEntity piglin,
 			CallbackInfoReturnable<Optional<? extends LivingEntity>> cir) {
 		Optional<? extends LivingEntity> opt = cir.getReturnValue();
-		if (opt != null && opt.isPresent() && isQuietPlayer(opt.get())) {
+		if (opt == null || opt.isEmpty() || !(opt.get() instanceof PlayerEntity p)) return;
+		UUID u = p.getUuid();
+		if (isQuietPlayer(p) || PlayerStatus.has(u, PlayerStatus.BASTION_GUEST)) {
 			cir.setReturnValue(Optional.empty());
+			return;
+		}
+		if (PlayerStatus.has(u, PlayerStatus.PIGLIN_PAL)) {
+			// Piglin Pal acts like wearing gold: still gets angry from chests/gold mining (ANGRY_AT), not from bare armor.
+			boolean angryAtThis = piglin.getBrain().getOptionalRegisteredMemory(MemoryModuleType.ANGRY_AT)
+				.map(a -> a.equals(u)).orElse(false);
+			if (!angryAtThis) {
+				cir.setReturnValue(Optional.empty());
+			}
 		}
 	}
 }
