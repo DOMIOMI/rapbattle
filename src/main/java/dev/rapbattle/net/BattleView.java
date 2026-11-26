@@ -111,6 +111,10 @@ public class BattleView {
 	public boolean allowed = true;
 	public String refusal = "";
 	public String yourOutfit = "";
+	/** Soft progression gate warning on the choice card (bonuses closed). */
+	public String gateWarning = "";
+	/** Formatted progression access summary for StyleScreen. */
+	public String playerGateSummary = "";
 
 	public static class Member {
 		public String name;

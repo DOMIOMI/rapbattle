@@ -652,13 +652,18 @@ public final class BattleHud {
 		} else {
 			l1 = I18n.translate("rapbattle.hud.choice_refused", c.refusal);
 			l1c = RED;
-			l2 = I18n.translate("rapbattle.hud.choice_refused_sub", c.requiredOutfit, c.yourOutfit);
+			l2 = !c.requiredOutfit.isEmpty()
+				? I18n.translate("rapbattle.hud.choice_refused_sub", c.requiredOutfit, c.yourOutfit)
+				: I18n.translate("rapbattle.hud.choice_fight");
 			accent = 0xFF6A6A78;
 		}
+		String warn = c.allowed && !c.gateWarning.isEmpty() ? c.gateWarning : "";
 		Text nameT = Ui.bold(name);
 		String rank = c.rankArmor + " · " + c.rankStreet;
-		int bw = Math.min(w - 16, Math.max(Math.max(tr.getWidth(nameT) + 30, tr.getWidth(Ui.bold(l1)) + 26), Math.max(tr.getWidth(l2) + 26, 200)));
-		int bh = 58;
+		int bw = Math.min(w - 16, Math.max(
+			Math.max(tr.getWidth(nameT) + 30, tr.getWidth(Ui.bold(l1)) + 26),
+			Math.max(Math.max(tr.getWidth(l2), tr.getWidth(warn)) + 26, 200)));
+		int bh = warn.isEmpty() ? 58 : 70;
 		float in = Ui.easeOutBack(since / 320f);
 		float a = Ui.clamp01(since / 150f);
 		int cx = w / 2, x = cx - bw / 2;
@@ -678,6 +683,9 @@ public final class BattleHud {
 		ctx.fill(x + 8, y + 29, x + bw - 8, y + 30, Ui.alphaOf(accent, 0.6f * a));
 		Ui.text(ctx, tr, Ui.bold(BattleHud.fit(tr, l1, bw - 16)), x + 8, y + 34, 1f, l1c, a, true);
 		Ui.text(ctx, tr, BattleHud.fit(tr, l2, bw - 16), x + 8, y + 45, 1f, DIM, a, false);
+		if (!warn.isEmpty()) {
+			Ui.text(ctx, tr, BattleHud.fit(tr, warn, bw - 16), x + 8, y + 56, 1f, 0xFFFFB84A, a, false);
+		}
 		// Time to decide, draining along the bottom edge.
 		float left = 1 - Ui.clamp01(since / (float) Math.max(1, c.choiceMs));
 		ctx.fill(x, y + bh - 2, x + Math.round(bw * left), y + bh, Ui.alphaOf(Ui.mix(accent, Ui.WHITE, 0.4f), a));

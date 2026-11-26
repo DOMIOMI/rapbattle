@@ -5,6 +5,7 @@
   "mixins": [
     "AbstractPiglinAccessor",
     "CreeperMixin",
+    "EndermanEntityMixin",
     "HoglinAccessor",
     "MobEntityDaylightMixin",
     "MobEntityTargetMixin",

@@ -17,6 +17,7 @@ public class StyleScreen extends Screen {
 	private final Screen parent;
 	private static Integer serverRespect;
 	private static String serverStyle = McStyle.PUNCHER.id;
+	private static String serverGateSummary = "";
 	private final ButtonWidget[] selectButtons = new ButtonWidget[McStyle.values().length];
 
 	public StyleScreen(Screen parent) {
@@ -24,9 +25,10 @@ public class StyleScreen extends Screen {
 		this.parent = parent;
 	}
 
-	public static void serverStatus(int respect, String style) {
+	public static void serverStatus(int respect, String style, String gateSummary) {
 		serverRespect = respect;
 		serverStyle = McStyle.of(style).id;
+		serverGateSummary = gateSummary == null ? "" : gateSummary;
 	}
 
 	@Override
@@ -34,12 +36,13 @@ public class StyleScreen extends Screen {
 		boolean inWorld = client != null && client.world != null;
 		if (inWorld) {
 			serverRespect = null;
+			serverGateSummary = "";
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"style_status\"}"));
 		}
 		int cardW = 128, gap = 8;
 		int totalW = cardW * 3 + gap * 2;
 		int x0 = (width - totalW) / 2;
-		int cardY = 48, cardH = Math.min(148, height - 92);
+		int cardY = 52, cardH = Math.min(144, height - 96);
 
 		McStyle[] styles = McStyle.values();
 		for (int i = 0; i < styles.length; i++) {
@@ -94,12 +97,15 @@ public class StyleScreen extends Screen {
 			: serverRespect == null
 				? Text.translatable("rapbattle.style.loading")
 				: Text.translatable("rapbattle.style.respect_have", serverRespect);
-		ctx.drawCenteredTextWithShadow(textRenderer, sub, width / 2, 26, inWorld ? 0xFFFFD84A : 0xFF9AA0B8);
+		ctx.drawCenteredTextWithShadow(textRenderer, sub, width / 2, 24, inWorld ? 0xFFFFD84A : 0xFF9AA0B8);
+		if (inWorld && !serverGateSummary.isEmpty()) {
+			ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(serverGateSummary), width / 2, 36, 0xFFB8C4E0);
+		}
 
 		int cardW = 128, gap = 8;
 		int totalW = cardW * 3 + gap * 2;
 		int x0 = (width - totalW) / 2;
-		int cardY = 48, cardH = Math.min(148, height - 92);
+		int cardY = 52, cardH = Math.min(144, height - 96);
 		int respect = serverRespect != null ? serverRespect : 0;
 
 		McStyle[] styles = McStyle.values();
