@@ -284,7 +284,10 @@ public class ActsGameTest implements FabricClientGameTest {
 		ctx.waitTicks(20);
 		sp.getServer().runCommand("execute in minecraft:the_nether run place structure minecraft:bastion_remnant 0 70 0");
 		ctx.waitTicks(10);
+		String[] prevProg = {"soft"};
 		sp.getServer().runOnServer(server -> {
+			prevProg[0] = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld nw = server.getWorld(World.NETHER);
 			BastionBattle.setTestBastionBox(new net.minecraft.util.math.BlockBox(-64, 50, -64, 64, 120, 64));
@@ -299,6 +302,7 @@ public class ActsGameTest implements FabricClientGameTest {
 		ctx.waitTicks(25);
 		GameTestSupport.takeScreenshot(ctx, "act3-bastion-guest");
 		sp.getServer().runOnServer(server -> {
+			dev.rapbattle.RapConfig.get().progression = prevProg[0];
 			BastionBattle.setTestBastionBox(null);
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld ow = server.getWorld(World.OVERWORLD);
@@ -326,7 +330,10 @@ public class ActsGameTest implements FabricClientGameTest {
 	}
 
 	private void testAct5Dragon(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		String[] prevProg = {"soft"};
 		sp.getServer().runOnServer(server -> {
+			prevProg[0] = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			p.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
 			p.getAbilities().flying = true;
@@ -356,6 +363,7 @@ public class ActsGameTest implements FabricClientGameTest {
 		ctx.waitTicks(5);
 		GameTestSupport.takeScreenshot(ctx, "act5-dragon-hover");
 		sp.getServer().runOnServer(server -> {
+			dev.rapbattle.RapConfig.get().progression = prevProg[0];
 			if (b[0] != null && dRef[0] != null) {
 				b[0].forceOutcomeForTest(true, true);
 				EnderDragonEntity dragon = dRef[0];

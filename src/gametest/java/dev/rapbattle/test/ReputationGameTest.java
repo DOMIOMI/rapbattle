@@ -53,6 +53,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		CreeperEntity[] strangerRef = new CreeperEntity[1];
 
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			p.changeGameMode(GameMode.SURVIVAL);
@@ -75,6 +77,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		ctx.waitTicks(5);
 
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			GameTestSupport.assertTrue(PlayerStatus.has(p.getUuid(), PlayerStatus.STREET_CRED), "Must have Street Cred after winning");
@@ -109,6 +113,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		GameTestSupport.takeScreenshot(ctx, "reputation-nod-actionbar");
 
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			Reputation.onPlayerHostileAction(p, skRef[0]);
 			GameTestSupport.assertTrue(!PlayerStatus.has(p.getUuid(), PlayerStatus.STREET_CRED), "Hostile action must revoke Street Cred");
@@ -120,6 +126,7 @@ public class ReputationGameTest implements FabricClientGameTest {
 				if (e != null && !e.isRemoved()) e.discard();
 			}
 			Reputation.clear();
+			dev.rapbattle.RapConfig.get().progression = prevProg;
 		});
 		ctx.waitTicks(5);
 	}
@@ -127,6 +134,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 	private void testRunAfterLoss(ClientGameTestContext ctx, TestSingleplayerContext sp) {
 		ZombieEntity[] zRef = new ZombieEntity[1];
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
@@ -140,6 +149,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		});
 		ctx.waitTicks(5);
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			GameTestSupport.assertTrue(PlayerStatus.has(p.getUuid(), PlayerStatus.RUN_AWAY), "Must have RUN_AWAY after loss");
 			GameTestSupport.assertTrue(p.hasStatusEffect(StatusEffects.SPEED), "Must have Speed I after loss");
@@ -151,6 +162,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		GameTestSupport.takeScreenshot(ctx, "reputation-run-laugh");
 
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			Crowd.expireTruceForTest();
 			zRef[0].setTarget(p);
@@ -160,6 +173,7 @@ public class ReputationGameTest implements FabricClientGameTest {
 			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
 			p.clearStatusEffects();
 			Reputation.clear();
+			dev.rapbattle.RapConfig.get().progression = prevProg;
 		});
 		ctx.waitTicks(5);
 	}
@@ -168,6 +182,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		PiglinEntity[] pgRef = new PiglinEntity[1];
 		PiglinBruteEntity[] brRef = new PiglinBruteEntity[1];
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 
@@ -201,6 +217,7 @@ public class ReputationGameTest implements FabricClientGameTest {
 			if (pgRef[0] != null && !pgRef[0].isRemoved()) pgRef[0].discard();
 			if (brRef[0] != null && !brRef[0].isRemoved()) brRef[0].discard();
 			Reputation.clear();
+			dev.rapbattle.RapConfig.get().progression = prevProg;
 		});
 		ctx.waitTicks(5);
 	}
@@ -209,6 +226,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 		sp.getServer().runCommand("time set 6000");
 		// Forbidden items must never be stolen: sword, GuideBook, trophy mic
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			p.getInventory().clear();
 			p.getInventory().setStack(0, new ItemStack(Items.DIAMOND_SWORD));
@@ -239,6 +258,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 
 		// Creeper thief explodes -> stolen item drops
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			p.getInventory().clear();
@@ -260,6 +281,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 
 		// Piglin thief conversion -> stolen item transfers to ZombifiedPiglinEntity
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			p.getInventory().clear();
@@ -280,6 +303,7 @@ public class ReputationGameTest implements FabricClientGameTest {
 			zp.discard();
 			GameTestSupport.cleanupBattles(server);
 			Reputation.clear();
+			dev.rapbattle.RapConfig.get().progression = prevProg;
 		});
 	}
 
@@ -288,6 +312,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 													boolean returnViaRematch, String shotName) {
 		MobEntity[] ref = new MobEntity[1];
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			p.getInventory().clear();
@@ -315,6 +341,8 @@ public class ReputationGameTest implements FabricClientGameTest {
 			GameTestSupport.takeScreenshot(ctx, shotName);
 		}
 		sp.getServer().runOnServer(server -> {
+			String prevProg = dev.rapbattle.RapConfig.get().progression;
+			dev.rapbattle.RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 			MobEntity m = ref[0];
