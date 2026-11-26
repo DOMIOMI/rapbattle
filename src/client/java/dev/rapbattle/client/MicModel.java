@@ -43,11 +43,11 @@ public final class MicModel {
 			};
 		}
 
-		// Handle: black, tapering toward the bottom, with a grey end cap. Origin = middle of the grip.
+		// Handle: black, tapering toward the bottom, with a grey end cap and a full-360° perk-coloured band.
 		block(m, q, light, scale, cap, 0f, 0f, 2.55f, 0.75f, 0.75f, 0.5f);
 		block(m, q, light, scale, grip, 0f, 0f, 1.2f, 0.85f, 0.85f, 2.3f);
 		block(m, q, light, scale, grip, 0f, 0f, -0.9f, 1.05f, 1.05f, 2.0f);
-		block(m, q, headLight, scale, button, 0f, -0.56f, -0.6f, 0.4f, 0.12f, 0.6f);
+		block(m, q, headLight, scale, button, 0f, 0f, -1.1f, 1.12f, 1.12f, 0.4f);
 		// Collar: a flared silver band under the head.
 		block(m, q, headLight, scale, ring, 0f, 0f, -2.05f, 1.3f, 1.3f, 0.35f);
 		block(m, q, headLight, scale, ring, 0f, 0f, -2.35f, 1.6f, 1.6f, 0.3f);
