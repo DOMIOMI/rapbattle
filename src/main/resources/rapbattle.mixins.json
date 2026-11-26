@@ -3,6 +3,7 @@
   "package": "dev.rapbattle.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MobEntityDaylightMixin",
     "MobEntityTargetMixin",
     "PiglinBrainMixin",
     "SculkShriekerMixin"

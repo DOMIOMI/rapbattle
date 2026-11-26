@@ -28,7 +28,7 @@ public final class Crowd {
 
 	private static final int RADIUS = 16, MAX = 20;
 	/** After the battle the truce holds a little longer, then everyone is free to fight. */
-	private static final List<Map.Entry<MobEntity, Long>> TRUCE = new ArrayList<>();
+	private static final Map<MobEntity, Long> TRUCE = new IdentityHashMap<>();
 	private record Retreat(MobEntity mob, Vec3d awayFrom, long until) {}
 	private static final List<Retreat> RETREATING = new ArrayList<>();
 
@@ -388,7 +388,7 @@ public final class Crowd {
 		for (MobEntity m : members.keySet()) {
 			m.getNavigation().stop();
 			if (m.isAlive()) m.setSilent(wasSilent.getOrDefault(m, false));
-			if (m instanceof HostileEntity) TRUCE.add(Map.entry(m, until));
+			if (m instanceof HostileEntity) holdTruce(m, until);
 		}
 	}
 
@@ -400,7 +400,7 @@ public final class Crowd {
 			m.setTarget(null);
 			m.setAttacker(null);
 			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
-			TRUCE.add(Map.entry(m, until));
+			holdTruce(m, until);
 			RETREATING.add(new Retreat(m, awayFrom, until));
 			steerAway(m, awayFrom);
 		}
@@ -421,9 +421,8 @@ public final class Crowd {
 	}
 
 	public static boolean inTruce(MobEntity m) {
-		long now = System.currentTimeMillis();
-		for (Map.Entry<MobEntity, Long> e : TRUCE) if (e.getKey() == m && now <= e.getValue()) return true;
-		return false;
+		Long until = TRUCE.get(m);
+		return until != null && System.currentTimeMillis() <= until;
 	}
 
 	/** Test-only helper to clear active truces immediately. */
@@ -434,21 +433,15 @@ public final class Crowd {
 	/** Keeps a mob in truce until {@code untilMs} (e.g. during a PvP battle near the stage). */
 	public static void holdTruce(MobEntity m, long untilMs) {
 		if (m == null || !m.isAlive()) return;
-		for (int i = 0; i < TRUCE.size(); i++) {
-			if (TRUCE.get(i).getKey() == m) {
-				if (TRUCE.get(i).getValue() < untilMs) TRUCE.set(i, Map.entry(m, untilMs));
-				return;
-			}
-		}
-		TRUCE.add(Map.entry(m, untilMs));
+		Long prev = TRUCE.get(m);
+		if (prev == null || prev < untilMs) TRUCE.put(m, untilMs);
 	}
 
 	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
 		long now = System.currentTimeMillis();
-		TRUCE.removeIf(e -> now > e.getValue() || !e.getKey().isAlive());
-		for (Map.Entry<MobEntity, Long> e : TRUCE) {
-			MobEntity m = e.getKey();
+		TRUCE.entrySet().removeIf(e -> now > e.getValue() || !e.getKey().isAlive());
+		for (MobEntity m : TRUCE.keySet()) {
 			m.setTarget(null);
 			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
 			if (m.isOnFire()) m.extinguish();
