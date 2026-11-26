@@ -77,6 +77,12 @@ public final class PvpBattle {
 	private boolean sttMissing;
 	boolean finished;
 	private final Set<UUID> spectators = new HashSet<>();
+	private ServerPlayerEntity testPeer;
+
+	/** Test-only helper so a FakePlayer participant stays connected during tick tests. */
+	public void setTestPeerForTest(ServerPlayerEntity peer) {
+		this.testPeer = peer;
+	}
 
 	// ------------------------------------------------------------------ challenge
 
@@ -240,7 +246,10 @@ public final class PvpBattle {
 		return v;
 	}
 
-	private ServerPlayerEntity player(UUID u) { return world.getServer().getPlayerManager().getPlayer(u); }
+	private ServerPlayerEntity player(UUID u) {
+		if (testPeer != null && testPeer.getUuid().equals(u)) return testPeer;
+		return world.getServer().getPlayerManager().getPlayer(u);
+	}
 
 	private UUID other(UUID u) { return u.equals(a) ? b : a; }
 
@@ -321,8 +330,11 @@ public final class PvpBattle {
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
 			Vec3d at = anchors.get(u);
-			if (p.squaredDistanceTo(at) > 0.25) p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
+			if (p != testPeer && p.networkHandler != null && p.squaredDistanceTo(at) > 0.25) {
+				p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
+			}
 		}
+		holdMobTruce(now);
 		int beat = (int) Math.floorDiv(now - beatZero, beatMs);
 		glow(beat);
 		switch (phase) {
@@ -346,6 +358,19 @@ public final class PvpBattle {
 				long read = RESULT_MS + (view.result == null ? 0 : view.result.hits.size() * 400L);
 				if (now - phaseStart >= read) finish();
 			}
+		}
+	}
+
+	/** Keeps hostile mobs within 16 blocks of the stage in truce (no attacking or creeper fuse) and facing the stage. */
+	private void holdMobTruce(long now) {
+		var box = new net.minecraft.util.math.Box(stage.x - 16, stage.y - 8, stage.z - 16, stage.x + 16, stage.y + 8, stage.z + 16);
+		for (net.minecraft.entity.mob.MobEntity m : world.getEntitiesByClass(net.minecraft.entity.mob.MobEntity.class, box,
+			e -> e.isAlive() && !Opponent.isBoss(e) && e instanceof net.minecraft.entity.mob.HostileEntity)) {
+			Crowd.holdTruce(m, now + 1500L);
+			if (m.getTarget() != null) m.setTarget(null);
+			m.getNavigation().stop();
+			m.getLookControl().lookAt(stage.x, stage.y + 1.0, stage.z);
+			if (m instanceof net.minecraft.entity.mob.CreeperEntity c) c.setFuseSpeed(-1);
 		}
 	}
 

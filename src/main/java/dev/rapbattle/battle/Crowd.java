@@ -431,6 +431,18 @@ public final class Crowd {
 		TRUCE.clear();
 	}
 
+	/** Keeps a mob in truce until {@code untilMs} (e.g. during a PvP battle near the stage). */
+	public static void holdTruce(MobEntity m, long untilMs) {
+		if (m == null || !m.isAlive()) return;
+		for (int i = 0; i < TRUCE.size(); i++) {
+			if (TRUCE.get(i).getKey() == m) {
+				if (TRUCE.get(i).getValue() < untilMs) TRUCE.set(i, Map.entry(m, untilMs));
+				return;
+			}
+		}
+		TRUCE.add(Map.entry(m, untilMs));
+	}
+
 	/** Server tick: hostile crowd and escaped mobs keep their hands off until the truce ends. */
 	static void tickTruce() {
 		long now = System.currentTimeMillis();
