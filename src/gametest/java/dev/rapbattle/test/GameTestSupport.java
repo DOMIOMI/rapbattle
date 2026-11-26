@@ -21,6 +21,7 @@ public final class GameTestSupport {
 
 	private static final Pattern RAW_KEY = Pattern.compile("\\brapbattle\\.[a-z0-9_.]+");
 	private static final List<String> RAW_MESSAGES = new ArrayList<>();
+	private static final List<String> ACTIONBAR_MESSAGES = new ArrayList<>();
 	private static boolean listenerInstalled;
 
 	public static void assertTrue(boolean cond, String msg) {
@@ -37,15 +38,27 @@ public final class GameTestSupport {
 
 	public static void installKeyAudit() {
 		RAW_MESSAGES.clear();
+		ACTIONBAR_MESSAGES.clear();
 		if (listenerInstalled) return;
 		listenerInstalled = true;
 		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
 			String s = message.getString();
+			if (overlay) ACTIONBAR_MESSAGES.add(s);
 			Matcher m = RAW_KEY.matcher(s);
 			if (m.find()) {
 				RAW_MESSAGES.add((overlay ? "[actionbar] " : "[chat] ") + s);
 			}
 		});
+	}
+
+	public static void clearActionbarMessages() {
+		ACTIONBAR_MESSAGES.clear();
+	}
+
+	public static int countActionbarContaining(String part) {
+		int n = 0;
+		for (String s : ACTIONBAR_MESSAGES) if (s.contains(part)) n++;
+		return n;
 	}
 
 	public static void assertNoRawKeys(String testName) {

@@ -20,10 +20,12 @@ import net.minecraft.entity.mob.SkeletonEntity;
 import net.minecraft.entity.mob.ZombieEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -36,52 +38,97 @@ import java.util.UUID;
 
 import static dev.rapbattle.test.GameTestSupport.assertTrue;
 
-/** Coverage scenario (6.19): coop invite/leave/violation, SoreLosers tryRage+blast, GolemDefender offended+tick, 2v1 + 30s expiry, Enderman gaze + hints, ClipRecorder WAV. */
+/** Coverage scenario (6.19 & 6.21): no fighting in battle, 2v1 with witnesses & truce, SoreLosers tryRage+blast, GolemDefender, Enderman gaze, ClipRecorder. */
 public final class CoverageScenario {
 	private CoverageScenario() {}
 
 	public static void run(ClientGameTestContext ctx, TestSingleplayerContext sp) {
-		testCoopInviteLeaveViolationAndBlast(ctx, sp);
+		testNoFightingDuringBattle(ctx, sp);
 		testSoreLosersTryRageAndGolemTickAndTwoOnOne(ctx, sp);
 		testEndermanGazeAndStyleUnlockHints(ctx, sp);
 		testClipRecorder(ctx);
 		GameTestSupport.assertNoRawKeys("coverage");
 	}
 
-	private static void testCoopInviteLeaveViolationAndBlast(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+	/** 6.21 Item 1: Participant in battle cannot hit opponent, crowd mob, other player, or deal bow damage; mic-only hint shows once per 3s. */
+	private static void testNoFightingDuringBattle(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		GameTestSupport.clearActionbarMessages();
+		Battle[] bRef = new Battle[1];
+		ZombieEntity[] crowdMobRef = new ZombieEntity[1];
+		BlazeEntity[] blazeRef = new BlazeEntity[1];
+		ServerPlayerEntity[] p2Ref = new ServerPlayerEntity[1];
+
 		sp.getServer().runOnServer(server -> {
 			RapConfig.get().progression = "off";
 			RapConfig.get().dressCode = false;
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p1.getEntityWorld();
+			p1.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p1.setInvulnerable(true);
 
-			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopMate"));
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "Bystander"));
 			p2.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
-			ServerPlayerEntity p3 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "Violator"));
-			p3.refreshPositionAndAngles(p1.getX() - 2, p1.getY(), p1.getZ(), 0, 0);
+			p2.setHealth(p2.getMaxHealth());
+			p2Ref[0] = p2;
 
 			BlazeEntity blaze = EntityType.BLAZE.create(w, SpawnReason.COMMAND);
 			blaze.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
 			blaze.setAiDisabled(true);
 			w.spawnEntity(blaze);
+			blazeRef[0] = blaze;
+
+			ZombieEntity crowdMob = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			crowdMob.refreshPositionAndAngles(p1.getX() + 4, p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(crowdMob);
+			crowdMobRef[0] = crowdMob;
 
 			Battle b = BattleManager.start(p1, blaze);
-			b.invite(p2);
-			b.answerInvite(p2, true);
-			assertTrue(b.hasPlayer(p2.getUuid()), "Accepted teammate must join battle");
-
-			b.invite(p3);
-			b.answerInvite(p3, true);
-			assertTrue(b.hasPlayer(p3.getUuid()), "Second teammate must join battle");
 			b.jumpToForTest(Battle.Phase.TIMELINE);
-			p3.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.IRON_SWORD));
-			AttackEntityCallback.EVENT.invoker().interact(p3, w, Hand.MAIN_HAND, blaze, null);
-			assertTrue(b.phase() == Battle.Phase.RESULT, "Weapon hit mid-battle must forfeit battle via violation()");
+			bRef[0] = b;
 
-			b.abort("coop test cleanup");
-			blaze.discard();
+			p1.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.IRON_SWORD));
+			float blazeHp = blaze.getHealth();
+			float crowdHp = crowdMob.getHealth();
+			float p2Hp = p2.getHealth();
+
+			// Hit opponent, crowd mob, and second player -> all cancelled with FAIL, battle continues
+			ActionResult r1 = AttackEntityCallback.EVENT.invoker().interact(p1, w, Hand.MAIN_HAND, blaze, null);
+			ActionResult r2 = AttackEntityCallback.EVENT.invoker().interact(p1, w, Hand.MAIN_HAND, crowdMob, null);
+			ActionResult r3 = AttackEntityCallback.EVENT.invoker().interact(p1, w, Hand.MAIN_HAND, p2, null);
+			assertTrue(r1 == ActionResult.FAIL && r2 == ActionResult.FAIL && r3 == ActionResult.FAIL,
+				"All attacks during battle must be cancelled");
+
+			// Bow arrow shot by participant must deal zero damage
+			ArrowEntity arrow = new ArrowEntity(w, p1, new ItemStack(Items.ARROW), null);
+			boolean damaged = crowdMob.damage(w, w.getDamageSources().arrow(arrow, p1), 6.0f);
+			arrow.discard();
+			assertTrue(!damaged, "Bow arrow from battle participant must not deal damage");
+			assertTrue(blaze.getHealth() == blazeHp && crowdMob.getHealth() == crowdHp && p2.getHealth() == p2Hp,
+				"No entity may take damage during battle");
+			assertTrue(b.phase() == Battle.Phase.TIMELINE, "Battle must remain active without forfeit");
+		});
+		ctx.waitTicks(3);
+		int hintCount = GameTestSupport.countActionbarContaining("микрофон") + GameTestSupport.countActionbarContaining("Mic only");
+		assertTrue(hintCount == 1, "Mic-only actionbar hint must appear exactly once within 3s cooldown (got " + hintCount + ")");
+
+		// After battle ends, sword hit deals damage again
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			bRef[0].jumpToForTest(Battle.Phase.RESULT);
+			Clock.advanceForTest(20_000L);
+			ZombieEntity target = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			target.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 3, 180, 0);
+			w.spawnEntity(target);
+			float before = target.getHealth();
+			p1.attack(target);
+			assertTrue(target.getHealth() < before, "Sword hit after battle ends must deal damage again");
+
+			target.discard();
+			if (!blazeRef[0].isRemoved()) blazeRef[0].discard();
+			if (!crowdMobRef[0].isRemoved()) crowdMobRef[0].discard();
+			p1.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
 			p1.getInventory().clear();
-			p3.getInventory().clear();
 			RapConfig.get().progression = "soft";
 			GameTestSupport.cleanupBattles(server);
 		});
@@ -93,12 +140,13 @@ public final class CoverageScenario {
 		SkeletonEntity[] twoMobRef = new SkeletonEntity[1];
 		SkeletonEntity[] twoFanRef = new SkeletonEntity[1];
 		ServerPlayerEntity[] twoP2Ref = new ServerPlayerEntity[1];
+		ServerPlayerEntity[] innocentP3Ref = new ServerPlayerEntity[1];
 
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
 
-			// 1. SoreLosers.tryRage (deterministic Random -> always triggers) + self-defense cred preservation + double drops
+			// 1. SoreLosers.tryRage: survives at ~50% HP, targets MVP via forceMobTarget even with Street Cred, double drops, self-defense preserves Cred
 			ZombieEntity raged = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
 			raged.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
 			w.spawnEntity(raged);
@@ -111,14 +159,22 @@ public final class CoverageScenario {
 			assertTrue(triggered, "SoreLosers.tryRage must trigger with deterministic Random on Zombie");
 			assertTrue(SoreLosers.isRaged(raged), "Zombie must be registered as RAGED");
 			assertTrue(raged.getHealth() <= raged.getMaxHealth() * 0.55f, "Raged mob must survive with ~50% HP");
-			assertTrue(raged.getTarget() == p, "Raged mob must target MVP");
+			assertTrue(raged.getTarget() == p, "Raged mob must target MVP via mod-forced path");
 			Reputation.onPlayerHostileAction(p, raged);
 			assertTrue(PlayerStatus.has(p.getUuid(), PlayerStatus.STREET_CRED),
 				"Hitting a RAGED mob (self-defense) must NOT revoke Street Cred");
-			raged.kill(w);
+			ItemEntity dropSample = new ItemEntity(w, raged.getX(), raged.getY(), raged.getZ(), new ItemStack(Items.ROTTEN_FLESH, 1));
+			w.spawnEntity(dropSample);
 			SoreLosers.doubleFreshDrops(w, raged.getEntityPos());
-			List<ItemEntity> drops = w.getEntitiesByClass(ItemEntity.class, new Box(raged.getBlockPos()).expand(3), e -> e.isAlive());
-			for (ItemEntity it : drops) it.discard();
+			List<ItemEntity> fleshDrops = w.getEntitiesByClass(ItemEntity.class, new Box(raged.getBlockPos()).expand(3),
+				e -> e.getStack().isOf(Items.ROTTEN_FLESH));
+			int totalFlesh = fleshDrops.stream().mapToInt(it -> it.getStack().getCount()).sum();
+			assertTrue(totalFlesh == 2, "SoreLosers doubleFreshDrops must duplicate fresh drops (got " + totalFlesh + ")");
+			for (ItemEntity it : fleshDrops) it.discard();
+			raged.kill(w);
+			for (ItemEntity it : w.getEntitiesByClass(ItemEntity.class, new Box(raged.getBlockPos()).expand(3), e -> e.isAlive())) {
+				it.discard();
+			}
 			if (!raged.isRemoved()) raged.discard();
 
 			// SoreLosers.blast must NOT break blocks
@@ -160,30 +216,40 @@ public final class CoverageScenario {
 		});
 		ctx.waitTicks(4);
 		sp.getServer().runOnServer(server -> {
-			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
-			assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "Natural golem must hunt and open PENDING via GolemDefender.tick()");
-			BattleManager.clearPendingForTest(p.getUuid());
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			assertTrue(BattleManager.hasPendingForTest(p1.getUuid()), "Natural golem must hunt and open PENDING via GolemDefender.tick()");
+			BattleManager.clearPendingForTest(p1.getUuid());
 			if (naturalGolemRef[0] != null) naturalGolemRef[0].discard();
-			p.getInventory().clear();
+			p1.getInventory().clear();
 
-			// 3. 2v1 post-battle crowd defense
-			ServerWorld w = p.getEntityWorld();
+			// 3. 6.21 Item 2: 2v1 post-battle crowd defense WITH active truce & WITNESSES (no clear/expire!)
+			ServerWorld w = p1.getEntityWorld();
 			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "FirstAttacker"));
-			p2.refreshPositionAndAngles(p.getX() + 2, p.getY(), p.getZ() + 3, 0, 0);
+			p2.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ() + 3, 0, 0);
+			BattleManager.registerTestPlayer(p2);
 			twoP2Ref[0] = p2;
 
+			ServerPlayerEntity p3 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "InnocentMate"));
+			p3.refreshPositionAndAngles(p1.getX() - 2, p1.getY(), p1.getZ() + 3, 0, 0);
+			BattleManager.registerTestPlayer(p3);
+			innocentP3Ref[0] = p3;
+
 			SkeletonEntity mob = EntityType.SKELETON.create(w, SpawnReason.COMMAND);
-			mob.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			mob.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
 			mob.setAiDisabled(true);
 			w.spawnEntity(mob);
 			twoMobRef[0] = mob;
 
 			SkeletonEntity fan = EntityType.SKELETON.create(w, SpawnReason.COMMAND);
-			fan.refreshPositionAndAngles(p.getX() + 5, p.getY(), p.getZ() + 4, 180, 0);
+			fan.refreshPositionAndAngles(p1.getX() + 5, p1.getY(), p1.getZ() + 4, 180, 0);
 			w.spawnEntity(fan);
 			twoFanRef[0] = fan;
 
-			Battle b = BattleManager.start(p, mob);
+			Battle b = BattleManager.start(p1, mob);
+			b.invite(p3);
+			b.answerInvite(p3, true);
+			b.setPlayerScoreForTest(p1.getName().getString(), 60);
+			b.setPlayerScoreForTest(p3.getName().getString(), 40);
 			b.jumpToForTest(Battle.Phase.TIMELINE);
 			twoBattleRef[0] = b;
 		});
@@ -194,21 +260,28 @@ public final class CoverageScenario {
 			SkeletonEntity mob = twoMobRef[0];
 			SkeletonEntity fan = twoFanRef[0];
 			ServerPlayerEntity p2 = twoP2Ref[0];
+			ServerPlayerEntity p3 = innocentP3Ref[0];
 
+			// Non-lethal win: truce and WITNESSES are both active right now!
 			twoBattleRef[0].jumpToForTest(Battle.Phase.RESULT, true, false, 85, 75);
-			Clock.advanceForTest(20_000L);
-			Reputation.clear();
+			assertTrue(Crowd.inTruce(fan, p1.getUuid()) && Crowd.inTruce(fan, p3.getUuid()), "Fan must be in truce after win");
+			assertTrue(Reputation.respects(fan, p1) && Reputation.respects(fan, p3), "Fan witness must respect both winners");
 
 			p1.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.WOODEN_SWORD));
 			p2.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.WOODEN_SWORD));
-			// First hit opens PENDING; second hit enters brawl / fightAfterBattle
+			// First hit (p2, 1v1): 2 hits -> enters brawl, fan does not intervene
 			AttackEntityCallback.EVENT.invoker().interact(p2, w, Hand.MAIN_HAND, mob, null);
 			AttackEntityCallback.EVENT.invoker().interact(p2, w, Hand.MAIN_HAND, mob, null);
 			assertTrue(fan.getTarget() == null, "1v1 brawl after battle must NOT pull mob fans");
 
+			// Second attacker (p1, 2v1): fan breaks truce/witnesses for p1 and targets p1; innocent p3 stays protected!
 			AttackEntityCallback.EVENT.invoker().interact(p1, w, Hand.MAIN_HAND, mob, null);
 			AttackEntityCallback.EVENT.invoker().interact(p1, w, Hand.MAIN_HAND, mob, null);
-			assertTrue(fan.getTarget() == p1, "2v1 brawl after battle must pull mob fan onto second attacker");
+			assertTrue(fan.getTarget() == p1, "2v1 brawl must pull mob fan onto second attacker even with active truce/witnesses");
+			assertTrue(!Reputation.respects(fan, p1), "Attacker p1 must lose witness respect");
+			assertTrue(!Crowd.inTruce(fan, p1.getUuid()), "Fan truce must break for attacker p1");
+			assertTrue(Reputation.respects(fan, p3) && Crowd.inTruce(fan, p3.getUuid()),
+				"Innocent player p3 must keep witness respect and truce");
 
 			// After >30s RECENT window expires, hitting mob no longer pulls crowd fans
 			fan.setTarget(null);

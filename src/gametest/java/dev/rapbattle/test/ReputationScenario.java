@@ -314,33 +314,76 @@ public final class ReputationScenario {
 		});
 	}
 
-	/** 6.19 coverage: coop 0-dealt gets 0% cred and coop loss steals from lowest-score player. */
+	/** 6.21 Item 3.1: 3-player coop world test — MVP gets 100%, contributor 50%, silent 0%; on loss, steals from lowest-score player. */
 	private static void testCoopWorstTheftAndZeroDealt(ClientGameTestContext ctx, TestSingleplayerContext sp) {
 		sp.getServer().runOnServer(server -> {
 			RapConfig.get().progression = "off";
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p1.getEntityWorld();
-			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopZeroDealt"));
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopMid"));
 			p2.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
+			ServerPlayerEntity p3 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopSilent"));
+			p3.refreshPositionAndAngles(p1.getX() - 2, p1.getY(), p1.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p2);
+			BattleManager.registerTestPlayer(p3);
 
+			// 1. Coop win: MVP (60) -> 100% cred, mid (30) -> 50% cred, silent (0) -> 0% cred
+			ZombieEntity zWin = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zWin.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4.0, 180, 0);
+			w.spawnEntity(zWin);
+			Battle bWin = BattleManager.start(p1, zWin);
+			bWin.invite(p2);
+			bWin.answerInvite(p2, true);
+			bWin.invite(p3);
+			bWin.answerInvite(p3, true);
+			bWin.setPlayerScoreForTest(p1.getName().getString(), 60);
+			bWin.setPlayerScoreForTest(p2.getName().getString(), 30);
+			bWin.setPlayerScoreForTest(p3.getName().getString(), 0);
+			bWin.jumpToForTest(Battle.Phase.RESULT, true, true, 90, 0);
+
+			assertTrue(PlayerStatus.has(p1.getUuid(), PlayerStatus.STREET_CRED) && Reputation.credLevel(p1.getUuid()) >= 1,
+				"MVP must get 100% Street Cred");
+			assertTrue(PlayerStatus.has(p2.getUuid(), PlayerStatus.STREET_CRED) && Reputation.credLevel(p2.getUuid()) >= 1,
+				"Contributor must get 50% Street Cred");
+			assertTrue(!PlayerStatus.has(p3.getUuid(), PlayerStatus.STREET_CRED) && Reputation.credLevel(p3.getUuid()) == 0,
+				"Silent teammate (0 dealt) must get 0% Street Cred");
+			// Advance clock by 55% of 3 minutes (100s): 50% cred (90s) expires, 100% cred (180s) remains!
+			Clock.advanceForTest(100_000L);
+			assertTrue(Reputation.credLevel(p1.getUuid()) >= 1, "MVP 100% cred must still be active after 100s");
+			assertTrue(Reputation.credLevel(p2.getUuid()) == 0, "Contributor 50% (90s) cred must expire after 100s");
+			zWin.discard();
+
+			// 2. Coop loss: p1(60), p2(30), p3(0) -> steals from lowest-score player (p3)
 			p1.getInventory().clear();
-			p1.getInventory().setStack(0, new ItemStack(Items.BREAD, 1));
-			p1.getInventory().setSelectedSlot(0);
+			p2.getInventory().clear();
+			p3.getInventory().clear();
+			p1.getInventory().setStack(0, new ItemStack(Items.APPLE, 1));
+			p2.getInventory().setStack(0, new ItemStack(Items.COAL, 1));
+			p3.getInventory().setStack(0, new ItemStack(Items.BREAD, 1));
 
-			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
-			z.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4.0, 180, 0);
-			w.spawnEntity(z);
+			ZombieEntity zLoss = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zLoss.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4.0, 180, 0);
+			w.spawnEntity(zLoss);
+			Battle bLoss = BattleManager.start(p1, zLoss);
+			bLoss.invite(p2);
+			bLoss.answerInvite(p2, true);
+			bLoss.invite(p3);
+			bLoss.answerInvite(p3, true);
+			bLoss.setPlayerScoreForTest(p1.getName().getString(), 60);
+			bLoss.setPlayerScoreForTest(p2.getName().getString(), 30);
+			bLoss.setPlayerScoreForTest(p3.getName().getString(), 0);
+			bLoss.jumpToForTest(Battle.Phase.RESULT, false, true, 0, 90);
 
-			Battle b = BattleManager.start(p1, z);
-			b.invite(p2);
-			b.answerInvite(p2, true);
-			b.jumpToForTest(Battle.Phase.RESULT, false, true, 0, 90);
-			assertTrue(Reputation.credLevel(p2.getUuid()) == 0, "0-dealt coop teammate must get 0% Street Cred");
-			assertTrue(Theft.hasStolen(z) && p1.getInventory().count(Items.BREAD) == 0,
-				"Coop loss must steal from lowest-score player (p1)");
+			assertTrue(Theft.hasStolen(zLoss) && Theft.getStolen(zLoss).isOf(Items.BREAD),
+				"Coop loss must steal from lowest-score player (p3)");
+			assertTrue(p3.getInventory().count(Items.BREAD) == 0, "p3's bread must be stolen");
+			assertTrue(p1.getInventory().count(Items.APPLE) == 1 && p2.getInventory().count(Items.COAL) == 1,
+				"Higher-score teammates must keep their items");
 
-			z.discard();
+			zLoss.discard();
 			p1.getInventory().clear();
+			p2.getInventory().clear();
+			p3.getInventory().clear();
 			GameTestSupport.cleanupBattles(server);
 			Reputation.clear();
 			RapConfig.get().progression = "soft";
