@@ -83,6 +83,7 @@ public class Battle {
 	private final Map<MobEntity, String> mobNames = new HashMap<>();
 	private final Map<MobEntity, Boolean> hadNoAi = new HashMap<>();
 	private final Map<MobEntity, Boolean> wasSilent = new HashMap<>();
+	private final Map<MobEntity, Boolean> wasImmuneZombify = new HashMap<>();
 	private final Set<Entity> glowing = new HashSet<>();
 	private final Set<MobEntity> dressed = new HashSet<>();
 	/** Mobs around the stage watching and reacting. */
@@ -212,6 +213,7 @@ public class Battle {
 		m.setAiDisabled(true);
 		wasSilent.put(m, m.isSilent());
 		m.setSilent(true);
+		Crowd.protectZombify(m, wasImmuneZombify);
 		if (Gangs.dressUp(m)) dressed.add(m); // crew bandana on stage
 	}
 
@@ -1615,6 +1617,7 @@ public class Battle {
 		for (MobEntity m : dressed) Gangs.undress(m);
 		dressed.clear();
 		for (MobEntity m : mobTeam) {
+			Crowd.restoreZombify(m, wasImmuneZombify);
 			if (m.isAlive()) {
 				m.setAiDisabled(hadNoAi.getOrDefault(m, false));
 				m.setSilent(wasSilent.getOrDefault(m, false));
