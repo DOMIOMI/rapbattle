@@ -44,6 +44,7 @@ public class GangsGameTest implements FabricClientGameTest {
 			testGangRivalry(ctx, sp);
 			testChampionSunAndCooldown(ctx, sp);
 			testRematchCallout(ctx, sp);
+			testPendingAutoChallengeExit(ctx, sp);
 			testDaytimeSunSafety(ctx, sp);
 
 			GameTestSupport.assertNoRawKeys("GangsGameTest");
@@ -216,6 +217,108 @@ public class GangsGameTest implements FabricClientGameTest {
 		sp.getServer().runOnServer(server -> {
 			GameTestSupport.cleanupBattles(server);
 			if (rivalRef[0] != null && !rivalRef[0].isRemoved()) rivalRef[0].discard();
+		});
+		ctx.waitTicks(5);
+	}
+
+	private void testPendingAutoChallengeExit(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		ZombieEntity[] mobs = new ZombieEntity[2];
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.changeGameMode(GameMode.SURVIVAL);
+			p.setInvulnerable(true);
+			p.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, ItemStack.EMPTY);
+			Stats.of(server).player(p.getUuid()).streak = 3;
+
+			// 0 = champion, 1 = rematch mob
+			ZombieEntity champ = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			champ.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+			MobRecord.win(champ);
+			w.spawnEntity(champ);
+			mobs[0] = champ;
+
+			ZombieEntity rem = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			rem.refreshPositionAndAngles(p.getX() + 4.0, p.getY(), p.getZ() + 4.0, 180, 0);
+			MobRecord.remember(rem, p.getName().getString(), false, "test line");
+			w.spawnEntity(rem);
+			mobs[1] = rem;
+		});
+
+		// Test 1: Punch during PENDING for both champion & rematch.
+		for (int idx = 0; idx < 2; idx++) {
+			final int i = idx;
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				if (i == 0) mobs[1].refreshPositionAndAngles(p.getX() + 40, p.getY(), p.getZ(), 0, 0);
+				else {
+					mobs[0].refreshPositionAndAngles(p.getX() + 40, p.getY(), p.getZ(), 0, 0);
+					mobs[1].refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+				}
+				BattleManager.clearPendingForTest(p.getUuid());
+				BattleManager.advanceCooldownsForTest(10 * 60_000L);
+			});
+			ctx.waitTicks(25);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				ServerWorld w = p.getEntityWorld();
+				assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "Auto-challenge should open PENDING for mob " + i);
+				net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker()
+					.interact(p, w, net.minecraft.util.Hand.MAIN_HAND, mobs[i], null);
+				assertTrue(!BattleManager.hasPendingForTest(p.getUuid()), "Punch during PENDING must clear choice without crash");
+				assertTrue(mobs[i].getTarget() == p, "Mob " + i + " must aggro after punch refusal");
+			});
+
+			// Test 2: 15s timeout during PENDING.
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				mobs[i].setTarget(null);
+				BattleManager.clearPendingForTest(p.getUuid());
+				BattleManager.advanceCooldownsForTest(10 * 60_000L);
+			});
+			ctx.waitTicks(25);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "PENDING should open before timeout test");
+				BattleManager.expirePendingForTest(p.getUuid());
+			});
+			ctx.waitTicks(2);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				assertTrue(!BattleManager.hasPendingForTest(p.getUuid()), "PENDING must clear on 15s timeout without crash");
+				assertTrue(mobs[i].getTarget() == p, "Mob " + i + " must aggro after timeout");
+			});
+
+			// Test 3: Walk away 16+ blocks during PENDING.
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				mobs[i].setTarget(null);
+				BattleManager.clearPendingForTest(p.getUuid());
+				BattleManager.advanceCooldownsForTest(10 * 60_000L);
+			});
+			ctx.waitTicks(25);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				ServerWorld w = p.getEntityWorld();
+				assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "PENDING should open before walk-away test");
+				p.teleport(w, mobs[i].getX() + 18.0, mobs[i].getY(), mobs[i].getZ(),
+					java.util.Set.of(), p.getYaw(), p.getPitch(), false);
+			});
+			ctx.waitTicks(2);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+				ServerWorld w = p.getEntityWorld();
+				assertTrue(!BattleManager.hasPendingForTest(p.getUuid()), "PENDING must clear on 16+ block walk-away without crash");
+				assertTrue(mobs[i].getTarget() == p, "Mob " + i + " must aggro after walk-away");
+				p.teleport(w, 0.5, mobs[i].getY(), 0.5, java.util.Set.of(), p.getYaw(), p.getPitch(), false);
+			});
+		}
+
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			GameTestSupport.cleanupBattles(server);
+			Stats.of(server).player(p.getUuid()).streak = 0;
+			for (ZombieEntity z : mobs) if (z != null && !z.isRemoved()) z.discard();
 		});
 		ctx.waitTicks(5);
 	}
