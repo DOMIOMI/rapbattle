@@ -37,7 +37,7 @@ public final class ClipRecorder {
 	private static boolean saving;
 
 	/** Keeps the verse just recorded and offers to save it. */
-	static void keep(byte[] voiceWav, long voiceStart, long from, long to, String track, long beatMs, String opponent) {
+	public static void keep(byte[] voiceWav, long voiceStart, long from, long to, String track, long beatMs, String opponent) {
 		if (voiceWav == null || voiceWav.length < 4000) return;
 		last = new Take(voiceWav, voiceStart, from, to, track, beatMs, opponent);
 		MinecraftClient mc = MinecraftClient.getInstance();
