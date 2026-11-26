@@ -140,4 +140,22 @@ class ProgressionTest {
 		assertEquals(0L, p.dailyDay);
 		assertTrue(p.dailySpeciesWins.isEmpty());
 	}
+
+	@Test
+	void effectiveRanksForGatesAndStats() {
+		// Raid captain boost (GOLD = 4) affects battleRank only, NOT gateRank
+		var raid = ProgressionRules.computeEffectiveRanks(2, true, false, false);
+		assertEquals(4, raid.battleRank());
+		assertEquals(2, raid.gateRank());
+
+		// Rival gang (+1) raises both battleRank and gateRank (rank 3 -> rank 4 gate)
+		var rival = ProgressionRules.computeEffectiveRanks(3, false, true, false);
+		assertEquals(4, rival.battleRank());
+		assertEquals(4, rival.gateRank());
+
+		// Emerald bribe (-1) lowers both battleRank and gateRank (rank 4 -> rank 3 gate)
+		var bribed = ProgressionRules.computeEffectiveRanks(4, false, false, true);
+		assertEquals(3, bribed.battleRank());
+		assertEquals(3, bribed.gateRank());
+	}
 }

@@ -41,6 +41,7 @@ public class ReputationGameTest implements FabricClientGameTest {
 			testRunAfterLoss(ctx, sp);
 			testPiglinTwoTiers(ctx, sp);
 			testTheftAllThievesAndEdgeCases(ctx, sp);
+			testThiefChampionNameAndMapCleanup(ctx, sp);
 
 			GameTestSupport.assertNoRawKeys("ReputationGameTest");
 		}
@@ -363,6 +364,66 @@ public class ReputationGameTest implements FabricClientGameTest {
 			}
 			if (m != null && !m.isRemoved()) m.discard();
 			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.waitTicks(3);
+	}
+
+	private void testThiefChampionNameAndMapCleanup(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.getInventory().clear();
+			p.getInventory().setStack(0, new ItemStack(Items.APPLE, 1));
+			p.getInventory().setSelectedSlot(0);
+
+			ZombieEntity thief = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			thief.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+			w.spawnEntity(thief);
+
+			// 1st loss: steals apple & gets crown
+			Battle b1 = BattleManager.start(p, thief);
+			b1.forceOutcomeForTest(false, true, 10, 90);
+			GameTestSupport.assertTrue(Theft.hasStolen(thief), "Thief must hold stolen apple");
+			String n1 = thief.getCustomName() != null ? thief.getCustomName().getString() : "";
+			GameTestSupport.assertTrue(n1.contains("♛") && n1.contains("["), "1st win name must keep crown and stolen tag: " + n1);
+
+			// 2nd loss: thief wins again -> crown becomes ♛×2 AND stolen tag stays!
+			Battle b2 = BattleManager.start(p, thief);
+			b2.forceOutcomeForTest(false, true, 10, 90);
+			String n2 = thief.getCustomName() != null ? thief.getCustomName().getString() : "";
+			GameTestSupport.assertTrue(n2.contains("♛×2") && n2.contains("["), "2nd win name must keep ♛×2 AND stolen tag: " + n2);
+			GameTestSupport.assertTrue(thief.getCustomName().getStyle().getColor() != null, "2nd win name must keep gold color");
+
+			// Player wins rematch: stolen tag removed, ♛×2 golden crown stays, persistent stays true for champion
+			Battle b3 = BattleManager.start(p, thief);
+			b3.forceOutcomeForTest(true, true, 90, 10);
+			GameTestSupport.assertTrue(!Theft.hasStolen(thief), "Stolen item must be returned on win");
+			String n3 = thief.getCustomName() != null ? thief.getCustomName().getString() : "";
+			GameTestSupport.assertTrue(n3.contains("♛×2") && !n3.contains("["), "Returned name must keep ♛×2 without stolen tag: " + n3);
+			GameTestSupport.assertTrue(thief.getCustomName().getStyle().getColor() != null, "Returned champion name must keep gold color");
+			GameTestSupport.assertTrue(thief.isPersistent(), "Champion must remain persistent");
+			thief.discard();
+
+			// wasPersistent=false restoration on non-champion thief
+			ZombieEntity nonChamp = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			nonChamp.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+			w.spawnEntity(nonChamp);
+			GameTestSupport.assertTrue(!nonChamp.isPersistent(), "Fresh mob starts non-persistent");
+			nonChamp.setAttached(Theft.STOLEN_ITEM, new Theft.StolenData(new ItemStack(Items.COAL), false, ""));
+			nonChamp.setPersistent();
+			Theft.dropOnDeathOrExplode(nonChamp);
+			GameTestSupport.assertTrue(!nonChamp.isPersistent(), "Non-champion must restore wasPersistent=false when stolen item drops");
+			nonChamp.discard();
+
+			// Reputation map cleanup after timer expiration
+			Reputation.advanceTimersForTest(60 * 60_000L);
+		});
+		ctx.waitTicks(15);
+		sp.getServer().runOnServer(server -> {
+			int left = Reputation.activeMapEntriesForTest();
+			GameTestSupport.assertTrue(left == 0, "All expired Reputation map entries must be cleaned up (left=" + left + ")");
+			GameTestSupport.cleanupBattles(server);
+			Reputation.clear();
 		});
 		ctx.waitTicks(3);
 	}

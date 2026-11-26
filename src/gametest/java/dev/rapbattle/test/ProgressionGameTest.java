@@ -41,6 +41,7 @@ public class ProgressionGameTest implements FabricClientGameTest {
 			GameTestSupport.applyLang(ctx);
 
 			testSoftAndStrictBlaze(ctx, sp);
+			testEffectiveRankGatesAndSkipChoice(ctx, sp);
 			testWardenAndDragonGates(ctx, sp);
 			testDailyFarmCapAndEndermanAndStyleScreen(ctx, sp);
 
@@ -174,6 +175,109 @@ public class ProgressionGameTest implements FabricClientGameTest {
 		});
 		ctx.runOnClient(mc -> ClientBattle.choice = null);
 		ctx.waitTicks(5);
+	}
+
+	private void testEffectiveRankGatesAndSkipChoice(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		// 1. Vindicator (base rank 4) + emerald in off-hand, 0 Respect, strict: allowed as rank 3; emerald consumed only on start
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "strict";
+			RapConfig.get().dressCode = false;
+			RapConfig.get().skipChoice = false;
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			Stats.Player st = Stats.of(server).player(p.getUuid());
+			st.respect = 0;
+			st.speciesWins.clear();
+			p.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+			p.setStackInHand(Hand.OFF_HAND, new ItemStack(Items.EMERALD, 1));
+
+			ServerWorld w = p.getEntityWorld();
+			var vind = EntityType.VINDICATOR.create(w, SpawnReason.COMMAND);
+			vind.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 3.0, 180, 0);
+			vind.setAiDisabled(true);
+			w.spawnEntity(vind);
+			net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker()
+				.interact(p, w, Hand.MAIN_HAND, vind, null);
+			GameTestSupport.assertTrue(p.getOffHandStack().getCount() == 1, "Emerald must NOT be consumed on choice card");
+		});
+		ctx.waitTicks(5);
+		GameTestSupport.assertTrue(ClientBattle.choice != null && ClientBattle.choice.allowed,
+			"Bribed vindicator must be allowed at 0 Respect in strict mode");
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			Battle b = BattleManager.acceptPendingForTest(p);
+			GameTestSupport.assertTrue(b != null, "Bribed vindicator battle must start");
+			GameTestSupport.assertTrue(p.getOffHandStack().isEmpty(), "Emerald must be consumed when battle starts");
+			GameTestSupport.assertTrue(b.rank == Rank.IRON, "Bribed vindicator battle rank must be IRON (3)");
+			b.forceOutcomeForTest(true, true);
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.runOnClient(mc -> ClientBattle.choice = null);
+		ctx.waitTicks(3);
+
+		// 2. Rank-3 mob (Enderman) in rival gang colors, 0 Respect, strict: refused as rank 4
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			Stats.Player st = Stats.of(server).player(p.getUuid());
+			st.respect = 0;
+			st.speciesWins.clear();
+			Gangs.Gang zombieGang = Gangs.of(MobProfiles.of(EntityType.ZOMBIE));
+			ItemStack rivalGear = Gangs.randomPiece(zombieGang, new java.util.Random());
+			var slot = p.getPreferredEquipmentSlot(rivalGear);
+			p.equipStack(slot, rivalGear);
+
+			ServerWorld w = p.getEntityWorld();
+			EndermanEntity em = EntityType.ENDERMAN.create(w, SpawnReason.COMMAND);
+			em.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 3.0, 180, 0);
+			em.setAiDisabled(true);
+			w.spawnEntity(em);
+			net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker()
+				.interact(p, w, Hand.MAIN_HAND, em, null);
+			p.equipStack(slot, ItemStack.EMPTY);
+			em.discard();
+		});
+		ctx.waitTicks(5);
+		GameTestSupport.assertTrue(ClientBattle.choice != null && !ClientBattle.choice.allowed,
+			"Rival gang rank-3 mob must be refused as rank 4 in strict mode at 0 Respect");
+		ctx.runOnClient(mc -> ClientBattle.choice = null);
+
+		// 3. skipChoice = true: Warden without mic refused; Blaze in strict at 0 Respect refused
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().skipChoice = true;
+			RapConfig.get().progression = "strict";
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			BattleManager.clearPendingForTest(p.getUuid());
+			p.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+			p.setStackInHand(Hand.OFF_HAND, ItemStack.EMPTY);
+			Stats.Player st = Stats.of(server).player(p.getUuid());
+			st.respect = 0;
+			st.speciesWins.clear();
+
+			ServerWorld w = p.getEntityWorld();
+			WardenEntity warden = EntityType.WARDEN.create(w, SpawnReason.COMMAND);
+			warden.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 3.0, 180, 0);
+			warden.setAiDisabled(true);
+			w.spawnEntity(warden);
+			net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker()
+				.interact(p, w, Hand.MAIN_HAND, warden, null);
+			GameTestSupport.assertTrue(BattleManager.byPlayer(p.getUuid()) == null,
+				"skipChoice=true must NOT start Warden battle without mic");
+			warden.discard();
+
+			BlazeEntity blaze = EntityType.BLAZE.create(w, SpawnReason.COMMAND);
+			blaze.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 3.0, 180, 0);
+			blaze.setAiDisabled(true);
+			w.spawnEntity(blaze);
+			net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker()
+				.interact(p, w, Hand.MAIN_HAND, blaze, null);
+			GameTestSupport.assertTrue(BattleManager.byPlayer(p.getUuid()) == null,
+				"skipChoice=true must NOT start strict 0-Respect blaze battle");
+			blaze.discard();
+
+			RapConfig.get().skipChoice = false;
+			RapConfig.get().progression = "soft";
+			BattleManager.clearPendingForTest(p.getUuid());
+		});
+		ctx.waitTicks(3);
 	}
 
 	private void testWardenAndDragonGates(ClientGameTestContext ctx, TestSingleplayerContext sp) {
