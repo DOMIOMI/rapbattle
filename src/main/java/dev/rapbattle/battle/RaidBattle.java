@@ -50,7 +50,7 @@ public final class RaidBattle {
 				FINAL_CAPTAINS.add(captain.getUuid());
 				captain.getNavigation().startMovingTo(p, 1.1);
 				Speech.bubble(captain, Lang.t(Lang.of(p), "rapbattle.act2.raid_callout"), 0xF07167, 4000);
-				BattleManager.challengeFrom(p, captain);
+				BattleManager.challengeFrom(p, captain, "rapbattle.manager.raid_captain_challenge");
 			}
 		}
 	}

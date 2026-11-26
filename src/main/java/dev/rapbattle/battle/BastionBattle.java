@@ -55,7 +55,7 @@ public final class BastionBattle {
 				PiglinBruteEntity brute = brutes.get(0);
 				CHALLENGED_BRUTES.put(brute.getUuid(), now + 120_000L);
 				brute.setTarget(null);
-				BattleManager.challengeFrom(p, brute);
+				BattleManager.challengeFrom(p, brute, "rapbattle.manager.brute_challenge");
 			}
 		}
 	}

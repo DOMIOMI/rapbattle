@@ -69,14 +69,18 @@ public final class BattleManager {
 		}
 	}
 
-	/** The village golem calls the player out: answer with R, or it's a fight. */
-	static void challengeFrom(ServerPlayerEntity p, MobEntity golem) {
+	/** An auto-challenge from a mob (golem, champion, rematch, raid captain, brute): answer with R, or it's a fight. */
+	static void challengeFrom(ServerPlayerEntity p, MobEntity mob) {
+		challengeFrom(p, mob, "rapbattle.manager.golem_challenge");
+	}
+
+	static void challengeFrom(ServerPlayerEntity p, MobEntity mob, String titleKey) {
 		String lang = Lang.of(p);
-		Opponent o = Opponent.of(golem, new Random(), p, lang);
-		PENDING.put(p.getUuid(), new Pending(golem, System.currentTimeMillis() + 15_000, true, true, false));
+		Opponent o = Opponent.of(mob, new Random(), p, lang);
+		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + 15_000, true, true, false));
 		BattleView v = new BattleView();
 		v.type = "choice";
-		v.mobEntityId = golem.getId();
+		v.mobEntityId = mob.getId();
 		v.mobName = o.name();
 		v.mobSpecies = o.profile().species(lang);
 		v.rankArmor = o.rank().armor(lang);
@@ -84,7 +88,7 @@ public final class BattleManager {
 		v.rankLevel = o.rank().level();
 		v.rankColor = o.rank().color;
 		v.allowed = true;
-		v.challengeFrom = Lang.t(lang, "rapbattle.manager.golem_challenge");
+		v.challengeFrom = Lang.t(lang, titleKey);
 		v.choiceMs = 15_000;
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 	}
@@ -505,8 +509,9 @@ public final class BattleManager {
 					restorePendingTarget(pd, pl);
 				}
 			}
-			// While he decides, the mob that asked stands still and waits.
+			// While he decides, the mob that asked stands still and waits (protected from sunburn).
 			for (Pending pd : PENDING.values()) {
+				if (pd.mob.isAlive() && pd.mob.isOnFire()) pd.mob.extinguish();
 				if (!pd.golem && pd.mob.isAlive() && pd.mob.getTarget() != null) {
 					pd.mob.setTarget(null);
 					pd.mob.getNavigation().stop();
@@ -724,7 +729,7 @@ public final class BattleManager {
 					MobEntity rival = rivals.get(0);
 					REMATCH_COOLDOWN.put(rival.getUuid(), now + 2 * 60_000L);
 					Speech.bubble(rival, Lang.t(Lang.of(p), "rapbattle.act6.rematch_callout"), 0xFF8A7A, 4000);
-					challengeFrom(p, rival);
+					challengeFrom(p, rival, "rapbattle.manager.rematch_challenge");
 					continue;
 				}
 				// 2. Champion (wins > 0) calls out a player on a 3+ win streak.
@@ -737,7 +742,7 @@ public final class BattleManager {
 				MobEntity champ = champs.get(0);
 				CHAMPION_COOLDOWN.put(champ.getUuid(), now + 5 * 60_000L);
 				Speech.bubble(champ, Lang.t(Lang.of(p), "rapbattle.act6.champion_callout"), 0xF2C94C, 4000);
-				challengeFrom(p, champ);
+				challengeFrom(p, champ, "rapbattle.manager.champion_challenge");
 			}
 		}
 	}
