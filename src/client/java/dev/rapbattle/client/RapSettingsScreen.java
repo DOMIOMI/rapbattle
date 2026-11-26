@@ -43,7 +43,16 @@ public class RapSettingsScreen extends Screen {
 			.build(x2, y, w, 20, Text.translatable("rapbattle.settings.victory_dance"), (b, v) -> c.victoryDance = v));
 		y += 28;
 		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.settings.style"), b -> client.setScreen(new StyleScreen(this)))
-			.dimensions(x1, y, w * 2 + gap, 20).build());
+			.dimensions(x1, y, w, 20).build());
+		ButtonWidget guideBtn = ButtonWidget.builder(Text.translatable("rapbattle.settings.guide"), b -> {
+			if (client.getNetworkHandler() != null) {
+				net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
+					new dev.rapbattle.net.Payloads.ActionC2S("{\"type\":\"guide\"}"));
+				client.setScreen(null);
+			}
+		}).dimensions(x2, y, w, 20).build();
+		guideBtn.active = client.getNetworkHandler() != null;
+		addDrawableChild(guideBtn);
 		y += 24;
 		addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.settings.api_keys"), b -> client.setScreen(new KeysScreen(this)))
 			.dimensions(x1, y, w, 20).build());

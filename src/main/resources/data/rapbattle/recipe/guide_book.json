@@ -1,0 +1,41 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:book",
+    "minecraft:note_block"
+  ],
+  "result": {
+    "count": 1,
+    "id": "minecraft:written_book",
+    "components": {
+      "minecraft:custom_data": {
+        "rapbattle_guide": 1
+      },
+      "minecraft:written_book_content": {
+        "title": {
+          "raw": "MC Handbook"
+        },
+        "author": "DOMI",
+        "generation": 0,
+        "resolved": true,
+        "pages": [
+          { "raw": { "translate": "rapbattle.guide.page.1" } },
+          { "raw": { "translate": "rapbattle.guide.page.2" } },
+          { "raw": { "translate": "rapbattle.guide.page.3" } },
+          { "raw": { "translate": "rapbattle.guide.page.4" } },
+          { "raw": { "translate": "rapbattle.guide.page.5" } },
+          { "raw": { "translate": "rapbattle.guide.page.6" } },
+          { "raw": { "translate": "rapbattle.guide.page.7" } },
+          { "raw": { "translate": "rapbattle.guide.page.8" } },
+          { "raw": { "translate": "rapbattle.guide.page.9" } },
+          { "raw": { "translate": "rapbattle.guide.page.10" } },
+          { "raw": { "translate": "rapbattle.guide.page.11" } },
+          { "raw": { "translate": "rapbattle.guide.page.12" } },
+          { "raw": { "translate": "rapbattle.guide.page.13" } },
+          { "raw": { "translate": "rapbattle.guide.page.14" } }
+        ]
+      }
+    }
+  }
+}
