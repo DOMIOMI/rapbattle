@@ -665,15 +665,41 @@ public final class BattleManager {
 	private static final Map<UUID, Long> CHAMPION_COOLDOWN = new HashMap<>();
 	private static final Map<UUID, Long> REMATCH_COOLDOWN = new HashMap<>();
 
+	/** Test-only helper to advance champion/rematch cooldowns without waiting real minutes. */
+	public static void advanceCooldownsForTest(long deltaMs) {
+		CHAMPION_COOLDOWN.replaceAll((k, v) -> v - deltaMs);
+		REMATCH_COOLDOWN.replaceAll((k, v) -> v - deltaMs);
+	}
+
+	/** Test-only helper to check if a player has a pending approach/callout choice. */
+	public static boolean hasPendingForTest(UUID playerId) {
+		return PENDING.containsKey(playerId);
+	}
+
+	/** Test-only helper to clear pending choices between test scenarios. */
+	public static void clearPendingForTest(UUID playerId) {
+		PENDING.remove(playerId);
+		ASKED.clear();
+	}
+
+	/** Test-only helper to accept a pending choice/callout as if the player pressed R. */
+	public static Battle acceptPendingForTest(ServerPlayerEntity p) {
+		Pending pending = PENDING.remove(p.getUuid());
+		if (pending == null || !pending.allowed || !pending.mob.isAlive()
+			|| byMob(pending.mob) != null || byPlayer(p.getUuid()) != null) {
+			return null;
+		}
+		closeChoice(p);
+		return start(p, pending.mob);
+	}
+
 	private static void tickChampions(net.minecraft.server.MinecraftServer server) {
 		long now = System.currentTimeMillis();
-		if (server.getTicks() % 5 == 0) {
-			for (var w : server.getWorlds()) {
-				for (ServerPlayerEntity p : w.getPlayers()) {
-					for (MobEntity m : w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(48),
-						e -> e.isAlive() && e.isOnFire() && MobRecord.of(e).wins() > 0)) {
-						m.extinguish();
-					}
+		for (var w : server.getWorlds()) {
+			for (ServerPlayerEntity p : w.getPlayers()) {
+				for (MobEntity m : w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(48),
+					e -> e.isAlive() && e.isOnFire() && MobRecord.of(e).wins() > 0)) {
+					m.extinguish();
 				}
 			}
 		}
