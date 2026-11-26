@@ -48,9 +48,9 @@ public final class MicModel {
 		block(m, q, light, scale, grip, 0f, 0f, 1.2f, 0.85f, 0.85f, 2.3f);
 		block(m, q, light, scale, grip, 0f, 0f, -0.9f, 1.05f, 1.05f, 2.0f);
 		block(m, q, headLight, scale, button, 0f, 0f, -1.1f, 1.12f, 1.12f, 0.4f);
-		// Collar: a flared silver band under the head.
+		// Collar: upper thin metal band + wider band under the head (colored by perk when active so it reads in 1st person).
 		block(m, q, headLight, scale, ring, 0f, 0f, -2.05f, 1.3f, 1.3f, 0.35f);
-		block(m, q, headLight, scale, ring, 0f, 0f, -2.35f, 1.6f, 1.6f, 0.3f);
+		block(m, q, headLight, scale, perk != null ? button : ring, 0f, 0f, -2.35f, 1.6f, 1.6f, 0.3f);
 		// Ball head: a smooth silver body, a narrower dome on top and a darker seam band, so it reads as round.
 		block(m, q, headLight, scale, mesh, 0f, 0f, -3.4f, 2.3f, 2.3f, 1.7f);
 		block(m, q, headLight, scale, seam, 0f, 0f, -3.4f, 2.42f, 2.42f, 0.3f);
