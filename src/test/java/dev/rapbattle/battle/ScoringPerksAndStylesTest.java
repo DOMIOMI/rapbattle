@@ -71,4 +71,16 @@ class ScoringPerksAndStylesTest {
 		assertEquals(0, rP.teamHeal());
 		assertEquals(4, rV.teamHeal());
 	}
+
+	@Test
+	void wardenNoiseAddsExtraMobDamage() {
+		Scoring.Bonuses b = Scoring.computeBonuses(0, false, 0);
+		List<Scoring.LineInput> lines = List.of(
+			McStyle.PUNCHER.lineInput("MC", "a", 5, 1, false, false, "n1", 1, false, false, 1.0, false)
+		);
+		var quiet = Scoring.evaluateRound(Rank.NETHERITE, lines, b, 10, 0);
+		var noisy = Scoring.evaluateRound(Rank.NETHERITE, lines, b, 10, 6); // e.g. 3 Warden noise -> 2 * 3 = 6
+		assertEquals(0, quiet.extraMobDamage());
+		assertEquals(6, noisy.extraMobDamage());
+	}
 }
