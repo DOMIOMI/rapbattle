@@ -78,6 +78,20 @@ public final class GameTestSupport {
 		ctx.waitTicks(5);
 	}
 
+	/** Takes a screenshot and, when RB_TEST_LANG is set, moves it into screenshots/<lang>/<name>.png. */
+	public static void takeScreenshot(ClientGameTestContext ctx, String name) {
+		Path file = ctx.takeScreenshot(name);
+		String lang = System.getenv("RB_TEST_LANG");
+		if (lang == null || lang.isBlank() || file == null) return;
+		try {
+			Path dir = file.getParent().resolve(lang);
+			Files.createDirectories(dir);
+			Files.move(file, dir.resolve(file.getFileName()), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			throw new RuntimeException("Failed to move screenshot to lang subfolder", e);
+		}
+	}
+
 	public static void cleanupBattles(net.minecraft.server.MinecraftServer server) {
 		for (var p : server.getPlayerManager().getPlayerList()) {
 			BattleManager.clearPendingForTest(p.getUuid());

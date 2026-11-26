@@ -118,7 +118,7 @@ public class GangsGameTest implements FabricClientGameTest {
 			}
 		});
 		assertTrue(hasRivalNote[0], "Breakdown must contain gang rivalry line");
-		ctx.takeScreenshot("gangs-rival-breakdown");
+		GameTestSupport.takeScreenshot(ctx, "gangs-rival-breakdown");
 		ctx.waitFor(c -> ClientBattle.view == null, 900);
 		sp.getServer().runOnServer(server -> {
 			GameTestSupport.cleanupBattles(server);
@@ -157,7 +157,7 @@ public class GangsGameTest implements FabricClientGameTest {
 			assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "Champion must call out player on 3+ win streak");
 		});
 		ctx.waitTicks(5);
-		ctx.takeScreenshot("gangs-champion-callout");
+		GameTestSupport.takeScreenshot(ctx, "gangs-champion-callout");
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			Battle b = BattleManager.acceptPendingForTest(p);
@@ -212,7 +212,7 @@ public class GangsGameTest implements FabricClientGameTest {
 			assertTrue(BattleManager.hasPendingForTest(p.getUuid()), "Remembered mob within 16 blocks must call player out for rematch");
 		});
 		ctx.waitTicks(5);
-		ctx.takeScreenshot("gangs-rematch-callout");
+		GameTestSupport.takeScreenshot(ctx, "gangs-rematch-callout");
 		sp.getServer().runOnServer(server -> {
 			GameTestSupport.cleanupBattles(server);
 			if (rivalRef[0] != null && !rivalRef[0].isRemoved()) rivalRef[0].discard();

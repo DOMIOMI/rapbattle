@@ -44,7 +44,7 @@ public class ShowcaseTest implements FabricClientGameTest {
 			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
 		});
 		ctx.waitTicks(wait);
-		ctx.takeScreenshot(name);
+		GameTestSupport.takeScreenshot(ctx, name);
 		ctx.runOnClient(c -> {
 			c.options.hudHidden = false;
 			c.options.setPerspective(Perspective.FIRST_PERSON);
@@ -79,7 +79,7 @@ public class ShowcaseTest implements FabricClientGameTest {
 	private static void hud(ClientGameTestContext ctx, String name) {
 		ctx.runOnClient(c -> { c.inGameHud.getChatHud().clear(false); c.player.clearStatusEffects(); c.particleManager.clearParticles(); });
 		ctx.waitTicks(2);
-		ctx.takeScreenshot(name);
+		GameTestSupport.takeScreenshot(ctx, name);
 	}
 
 	@Override
@@ -170,7 +170,7 @@ public class ShowcaseTest implements FabricClientGameTest {
 			keepHud = false;
 			ctx.runOnClient(c -> c.setScreen(new dev.rapbattle.client.RapSettingsScreen(null)));
 			ctx.waitTicks(5);
-			ctx.takeScreenshot("11-settings");
+			GameTestSupport.takeScreenshot(ctx, "11-settings");
 			ctx.runOnClient(c -> c.setScreen(null));
 			ctx.waitFor(c -> ClientBattle.view == null, 900);
 			ctx.waitTicks(20);

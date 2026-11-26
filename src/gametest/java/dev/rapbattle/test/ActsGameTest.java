@@ -88,7 +88,7 @@ public class ActsGameTest implements FabricClientGameTest {
 		Intro.skip();
 		ctx.waitFor(c -> ClientBattle.timeline() && ClientBattle.beat() >= ClientBattle.view.mobEndBeat + 2, 1200);
 		ctx.waitTicks(3);
-		ctx.takeScreenshot("act1-homemade-mic");
+		GameTestSupport.takeScreenshot(ctx, "act1-homemade-mic");
 		// First-person view during player's turn: empty main hand + homemade mic (orange button) + beat flash.
 		ctx.runOnClient(c -> c.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON));
 		sp.getServer().runOnServer(server -> {
@@ -98,7 +98,7 @@ public class ActsGameTest implements FabricClientGameTest {
 		ctx.waitFor(c -> ClientBattle.timeline()
 			&& ClientBattle.readerId() == c.player.getId()
 			&& dev.rapbattle.client.BattleDance.onBeat(), 1200);
-		ctx.takeScreenshot("act1-first-person-homemade-mic");
+		GameTestSupport.takeScreenshot(ctx, "act1-first-person-homemade-mic");
 		// Compare with trophy mic in offhand.
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
@@ -110,7 +110,7 @@ public class ActsGameTest implements FabricClientGameTest {
 		});
 		ctx.waitTicks(2);
 		ctx.waitFor(c -> ClientBattle.timeline() && dev.rapbattle.client.BattleDance.onBeat(), 400);
-		ctx.takeScreenshot("act1-first-person-trophy-mic");
+		GameTestSupport.takeScreenshot(ctx, "act1-first-person-trophy-mic");
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
@@ -148,7 +148,7 @@ public class ActsGameTest implements FabricClientGameTest {
 			assertTrue(rep > 0, "Villager should grant positive gossip after win, got " + rep);
 		});
 		ctx.waitTicks(5);
-		ctx.takeScreenshot("act2-villager-alive");
+		GameTestSupport.takeScreenshot(ctx, "act2-villager-alive");
 		sp.getServer().runOnServer(server -> {
 			if (vRef[0] != null) vRef[0].discard();
 		});
@@ -297,7 +297,7 @@ public class ActsGameTest implements FabricClientGameTest {
 			assertTrue(PlayerStatus.has(p.getUuid(), PlayerStatus.BASTION_GUEST), "Bastion Guest status must be active after brute win");
 		});
 		ctx.waitTicks(25);
-		ctx.takeScreenshot("act3-bastion-guest");
+		GameTestSupport.takeScreenshot(ctx, "act3-bastion-guest");
 		sp.getServer().runOnServer(server -> {
 			BastionBattle.setTestBastionBox(null);
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
@@ -322,7 +322,7 @@ public class ActsGameTest implements FabricClientGameTest {
 			assertTrue(wardens.isEmpty(), "Shrieker must not summon Warden while WARDEN_QUIET is active");
 		});
 		ctx.waitTicks(25);
-		ctx.takeScreenshot("act4-warden-quiet");
+		GameTestSupport.takeScreenshot(ctx, "act4-warden-quiet");
 	}
 
 	private void testAct5Dragon(ClientGameTestContext ctx, TestSingleplayerContext sp) {
@@ -354,7 +354,7 @@ public class ActsGameTest implements FabricClientGameTest {
 			assertTrue(dragon.getPhaseManager().getCurrent().getType() == PhaseType.HOVER, "Dragon should be in HOVER phase during battle");
 		});
 		ctx.waitTicks(5);
-		ctx.takeScreenshot("act5-dragon-hover");
+		GameTestSupport.takeScreenshot(ctx, "act5-dragon-hover");
 		sp.getServer().runOnServer(server -> {
 			if (b[0] != null && dRef[0] != null) {
 				b[0].forceOutcomeForTest(true, true);
