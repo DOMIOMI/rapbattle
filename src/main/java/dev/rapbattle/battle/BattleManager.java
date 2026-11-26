@@ -545,9 +545,11 @@ public final class BattleManager {
 		});
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			ServerPlayerEntity player = handler.player;
+			GuideBook.giveOnFirstJoin(player, server);
 			if (!RapConfig.get().hasLlm() || RapConfig.get().sttKey().isEmpty()) {
-				if (server.isSingleplayer() && server.isHost(handler.player.getPlayerConfigEntry())) {
-					handler.player.sendMessage(Text.translatable("rapbattle.manager.fallback_notice").formatted(Formatting.YELLOW), false);
+				if (server.isSingleplayer() && server.isHost(player.getPlayerConfigEntry())) {
+					player.sendMessage(Text.translatable("rapbattle.manager.fallback_notice").formatted(Formatting.YELLOW), false);
 				}
 			}
 		});
@@ -627,6 +629,7 @@ public final class BattleManager {
 						ServerPlayNetworking.send(p, new Payloads.StateS2C(kv.toJson()));
 					}
 					case "style_status" -> sendStyleStatus(p);
+					case "guide" -> GuideBook.give(p);
 					case "legend" -> {
 						Stats.Legend leg = Stats.of(p.getEntityWorld().getServer()).legend;
 						if (leg == null || leg.isEmpty()) {
