@@ -436,7 +436,7 @@ public final class BattleManager {
 			if (!(target instanceof MobEntity mob) || !mob.isAlive() || sp.isSpectator()) return ActionResult.PASS;
 
 			Battle own = byPlayer(sp.getUuid());
-			if (own != null && !own.hasMob(mob) && !sp.getMainHandStack().isEmpty()) {
+			if (own != null && !sp.getMainHandStack().isEmpty()) {
 				// A participant swinging a weapon mid-battle breaks the street law.
 				own.violation(sp);
 				return ActionResult.FAIL;
