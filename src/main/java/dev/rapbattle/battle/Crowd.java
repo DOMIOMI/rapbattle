@@ -449,6 +449,10 @@ public final class Crowd {
 
 	/** Battle over: keep the truce 5 more seconds, restore AI controls & zombification, then let everyone go. */
 	void release() {
+		release(false);
+	}
+
+	void release(boolean playersWin) {
 		long until = System.currentTimeMillis() + 5000;
 		for (MobEntity m : members.keySet()) {
 			m.getNavigation().stop();
@@ -460,6 +464,12 @@ public final class Crowd {
 			restoreZombify(m, wasImmuneZombify);
 			if (m.isAlive()) m.setSilent(wasSilent.getOrDefault(m, false));
 			if (m instanceof HostileEntity) holdTruce(m, until);
+			if (playersWin && m.isAlive() && center != null && !fear) {
+				double dx = m.getX() - center.x, dz = m.getZ() - center.z;
+				double len = Math.hypot(dx, dz);
+				if (len < 1e-3) { dx = 1; dz = 0; } else { dx /= len; dz /= len; }
+				m.getNavigation().startMovingTo(m.getX() + dx * 6, m.getY(), m.getZ() + dz * 6, 0.85);
+			}
 		}
 		lockedControls.clear();
 		wasImmuneZombify.clear();

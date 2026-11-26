@@ -174,6 +174,7 @@ public final class BattleManager {
 				m -> {
 					if (!m.isAlive() || m.getTarget() != p || !(m instanceof net.minecraft.entity.mob.Monster)) return false;
 					if (Opponent.isBoss(m) || byMob(m) != null || inAnyCrowd(m) || Crowd.inTruce(m) || ASKED.containsKey(m.getUuid())) return false;
+					if (Reputation.respects(m, p)) return false;
 					double r = isRangedChallenger(m) ? 12.0 : 7.0;
 					if (Gangs.isRival(p, MobProfiles.of(m.getType()))) r *= 1.5;
 					return m.squaredDistanceTo(p) <= r * r;
@@ -451,6 +452,7 @@ public final class BattleManager {
 					disrespect(sp, mob);
 				}
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
+				Reputation.onPlayerHostileAction(sp, mob);
 				fightAfterBattle(sp, mob);
 				brawl(sp, mob);
 				LAST_COMBAT.put(sp.getUuid(), now);
@@ -464,6 +466,7 @@ public final class BattleManager {
 				closeChoice(sp);
 				disrespect(sp, mob);
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
+				Reputation.onPlayerHostileAction(sp, mob);
 				fightAfterBattle(sp, mob);
 				brawl(sp, mob);
 				LAST_COMBAT.put(sp.getUuid(), now);
@@ -472,6 +475,7 @@ public final class BattleManager {
 			if (!sp.getMainHandStack().isEmpty()) {
 				// Weapons just fight. Hurting a villager brings the golem; brawling at a finished battle wakes the crowd.
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
+				Reputation.onPlayerHostileAction(sp, mob);
 				fightAfterBattle(sp, mob);
 				brawl(sp, mob);
 				LAST_COMBAT.put(sp.getUuid(), now);
@@ -538,6 +542,7 @@ public final class BattleManager {
 			RaidBattle.tick(server);
 			BastionBattle.tick(server);
 			PlayerStatus.tick(server);
+			Reputation.tick(server);
 			tickChampions(server);
 			PvpBattle.tickAll();
 			tickStares(server);
@@ -580,6 +585,8 @@ public final class BattleManager {
 			CHAMPION_COOLDOWN.clear();
 			REMATCH_COOLDOWN.clear();
 			PlayerStatus.clear();
+			Reputation.clear();
+			SoreLosers.clear();
 			BastionBattle.clear();
 			RaidBattle.clear();
 			DragonBattle.clear();

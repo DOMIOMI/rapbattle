@@ -513,5 +513,11 @@
   "rapbattle.guide.page.11": "11. Act 5: Dragon\n\nBreak crystals, then hit the dragon empty-handed.\nBest of 3, team allowed.\nWorld's best line: /rapbattle legend.",
   "rapbattle.guide.page.12": "12. Gangs & ♛\n\nRival gang colors make mobs angrier and +1 rank.\nChampions ♛ seek players on a 3+ win streak.\nClose losers call for a rematch.",
   "rapbattle.guide.page.13": "13. PvP\n\nHit a player with an empty main hand to duel ([Y]/[N]).\n1 round: each gets own rhymes & language. Nearby mobs hold truce.",
-  "rapbattle.guide.page.14": "14. Cheat Sheet\n\n[R] — rap / reroll\n[Y]/[N] — yes / no\n[1–3] — lobby topic\n/rapbattle — settings\n/rapbattle guide\n/rapbattle style\n/rapbattle legend\n/rapbattle clip"
+  "rapbattle.guide.page.14": "14. Cheat Sheet\n\n[R] — rap / reroll\n[Y]/[N] — yes / no\n[1–3] — lobby topic\n/rapbattle — settings\n/rapbattle guide\n/rapbattle style\n/rapbattle legend\n/rapbattle clip",
+  "rapbattle.status.street_cred": "🎤 Street cred (rank ≤%s) %s",
+  "rapbattle.status.run_away": "🏃 Run! %s",
+  "rapbattle.status.piglin_pal": "🐷 Piglin pal %s",
+  "rapbattle.reputation.lost_brawl": "Street cred lost — you picked a fight.",
+  "rapbattle.theft.stole": "The %s stole: %s ×1. Win it back",
+  "rapbattle.theft.returned": "Won back in rematch: %s ×1"
 }

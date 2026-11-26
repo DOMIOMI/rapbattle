@@ -64,7 +64,7 @@ public class Battle {
 	public final MobEntity mob;
 	public final Opponent opp;
 	public final Rank rank;
-	private final boolean boss;
+	final boolean boss;
 	private final int rounds, winsNeeded;
 	private final Random rnd = new Random();
 	private final RapConfig cfg = RapConfig.get();
@@ -73,7 +73,7 @@ public class Battle {
 	private final BeatTracks.Track track;
 
 	final List<UUID> players = new ArrayList<>();
-	private final Map<UUID, String> names = new HashMap<>();
+	final Map<UUID, String> names = new HashMap<>();
 	final Set<UUID> invited = new HashSet<>();
 	private final Map<UUID, Vec3d> anchors = new HashMap<>();
 	private final Set<UUID> spectators = new HashSet<>();
@@ -106,7 +106,7 @@ public class Battle {
 	private BattleView view;
 	private final Map<UUID, List<String>> rhymeWords = new HashMap<>();
 	private int outfitBonus;
-	private boolean overdressed;
+	boolean overdressed;
 
 	private final Map<UUID, ByteArrayOutputStream> audio = new HashMap<>();
 	private final Map<UUID, CompletableFuture<String>> transcripts = new HashMap<>();
@@ -136,12 +136,12 @@ public class Battle {
 	private int dealtTotal, linesOnBeat, linesTotal, roundToMob, roundToTeam, bestLineDamage;
 	private String bestLine = "";
 	private final Map<String, Integer> roundDealt = new HashMap<>();
-	private final Map<String, Integer> battleDealt = new HashMap<>();
+	final Map<String, Integer> battleDealt = new HashMap<>();
 	private final Set<Integer> mobLinesFired = new HashSet<>();
 	private int allyBonus;
 	private CompletableFuture<Llm.Verdict> verdictFuture;
 	private long judgingStart, verdictStart;
-	private BattleView.Result result;
+	BattleView.Result result;
 
 	public Battle(ServerPlayerEntity challenger, MobEntity mob) {
 		this.lang = Lang.of(challenger);
@@ -1613,7 +1613,7 @@ public class Battle {
 	}
 
 	private void releaseMobs() {
-		if (crowd != null) crowd.release();
+		if (crowd != null) crowd.release(result != null && result.playersWin);
 		for (MobEntity m : dressed) Gangs.undress(m);
 		dressed.clear();
 		for (MobEntity m : mobTeam) {
@@ -1673,6 +1673,8 @@ public class Battle {
 		if (result.playersWin) {
 			MobRecord.loss(mob);
 			rememberPlayers(false);
+			Theft.returnOnWin(mob, mvpPlayer != null ? mvpPlayer : challenger());
+			Reputation.grantOnWin(this, mvpPlayer);
 			Text verb = players.size() > 1
 				? Text.translatable("rapbattle.battle.team_win_verb." + rnd.nextInt(TEAM_WIN_VERBS))
 				: Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
@@ -1844,12 +1846,22 @@ public class Battle {
 				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, boss ? winsMob : respectMob, boss ? winsPlayers : respectTeam);
 			broadcastChat(msg.copy().formatted(Formatting.RED));
 			punishPlayers();
+			Reputation.onLoss(this);
 			if (!boss) {
 				int wins = MobRecord.of(mob).wins();
 				mob.setCustomName(Text.literal(opp.name() + " ♛" + (wins > 1 ? "×" + wins : "")).formatted(Formatting.GOLD));
 				mob.setCustomNameVisible(true);
 				mob.setPersistent();
 			}
+			ServerPlayerEntity worst = null;
+			int minScore = Integer.MAX_VALUE;
+			for (UUID u : players) {
+				ServerPlayerEntity pl = player(u);
+				if (pl == null) continue;
+				int sc = battleDealt.getOrDefault(names.get(u), 0);
+				if (sc < minScore) { minScore = sc; worst = pl; }
+			}
+			Theft.stealOnLoss(this, worst != null ? worst : challenger());
 			// Lost to a villager: the village golem takes it personally.
 			if (mob instanceof net.minecraft.entity.passive.VillagerEntity villager && challenger() != null) {
 				GolemDefender.offended(challenger(), villager);
@@ -1979,15 +1991,6 @@ public class Battle {
 				case DIAMOND -> {
 					p.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 90, 1));
 					p.addExperienceLevels(-2);
-					ItemStack held = p.getMainHandStack();
-					if (!held.isEmpty() && mob.getEquippedStack(EquipmentSlot.MAINHAND).isEmpty()) {
-						// The legend keeps your item as a trophy; win a rematch to get it back.
-						mob.equipStack(EquipmentSlot.MAINHAND, held.copy());
-						mob.setDropGuaranteed(EquipmentSlot.MAINHAND);
-						p.getInventory().setStack(p.getInventory().getSelectedSlot(), ItemStack.EMPTY);
-						p.sendMessage(Text.translatable("rapbattle.battle.mob_took_trophy", opp.name(), held.getName())
-							.formatted(Formatting.GOLD), false);
-					}
 				}
 				case NETHERITE -> {
 					bossFinisher(p);
@@ -2001,7 +2004,8 @@ public class Battle {
 				p.damage(world, src, hp);
 				DamagePop.spawn(world, p, "-" + Math.round(hp / 2) + " ❤", 0xFF5050);
 			}
-			p.addStatusEffect(new StatusEffectInstance(StatusEffects.NAUSEA, 20 * 6, 0));
+			p.addStatusEffect(new StatusEffectInstance(StatusEffects.NAUSEA, 20 * 2, 0));
+			p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 20 * 5, 0));
 		}
 	}
 }
