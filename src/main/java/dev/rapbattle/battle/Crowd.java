@@ -40,17 +40,50 @@ public final class Crowd {
 
 	final Map<MobEntity, Side> members = new LinkedHashMap<>();
 	private final Map<MobEntity, Boolean> wasSilent = new HashMap<>();
+	private final Map<MobEntity, Boolean> wasImmuneZombify = new HashMap<>();
+	private final Set<MobEntity> lockedControls = new HashSet<>();
 	private final Battle battle;
 	private final Random rnd = new Random();
 	Vec3d center;
 	/** Ring radius: the crowd stands on this circle around the stage. */
 	double radius = 4.5;
 	private boolean fear;
+	private boolean stageInWater;
 	/** Members already standing on their spot of the ring. */
-	private final Set<MobEntity> placed = new HashSet<>();
+	final Set<MobEntity> placed = new HashSet<>();
 	private int ticks;
 
 	Crowd(Battle battle) { this.battle = battle; }
+
+	static void protectZombify(MobEntity m, Map<MobEntity, Boolean> saved) {
+		if (m instanceof net.minecraft.entity.mob.AbstractPiglinEntity ap) {
+			saved.putIfAbsent(m, ((dev.rapbattle.mixin.AbstractPiglinAccessor) ap).rapbattle$isImmuneToZombification());
+			ap.setImmuneToZombification(true);
+		} else if (m instanceof net.minecraft.entity.mob.HoglinEntity hg) {
+			saved.putIfAbsent(m, ((dev.rapbattle.mixin.HoglinAccessor) hg).rapbattle$isImmuneToZombification());
+			hg.setImmuneToZombification(true);
+		}
+	}
+
+	static void restoreZombify(MobEntity m, Map<MobEntity, Boolean> saved) {
+		Boolean prev = saved.remove(m);
+		if (prev == null || !m.isAlive()) return;
+		if (m instanceof net.minecraft.entity.mob.AbstractPiglinEntity ap) ap.setImmuneToZombification(prev);
+		else if (m instanceof net.minecraft.entity.mob.HoglinEntity hg) hg.setImmuneToZombification(prev);
+	}
+
+	private void addMember(MobEntity m, String kin) {
+		MobProfiles.Profile p = MobProfiles.of(m.getType());
+		Side side;
+		if (p.kin().equals(kin)) side = Side.MOB;
+		else if (m instanceof VillagerEntity || p.kin().equals("villager") || m instanceof AllayEntity || m instanceof ParrotEntity
+			|| m instanceof SnowGolemEntity || (m instanceof TameableEntity t && t.isTamed())) side = Side.PLAYERS;
+		else side = Side.NEUTRAL;
+		members.put(m, side);
+		wasSilent.put(m, m.isSilent());
+		m.setSilent(true);
+		protectZombify(m, wasImmuneZombify);
+	}
 
 	/** Called when the lobby closes. */
 	void gather() {
@@ -61,22 +94,14 @@ public final class Crowd {
 		center = challenger == null ? new Vec3d(star.getX(), star.getY(), star.getZ())
 			: new Vec3d((star.getX() + challenger.getX()) / 2, star.getY(), (star.getZ() + challenger.getZ()) / 2);
 		String kin = battle.opp.profile().kin();
-		boolean stageInWater = w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(center)).isIn(net.minecraft.registry.tag.FluidTags.WATER);
+		stageInWater = w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(center)).isIn(net.minecraft.registry.tag.FluidTags.WATER);
 		List<MobEntity> near = w.getEntitiesByClass(MobEntity.class, star.getBoundingBox().expand(RADIUS),
 			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null && !Opponent.isBoss(m)
 				&& (!isAquaticOnly(m) || stageInWater));
 		near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(star)));
 		for (MobEntity m : near) {
 			if (members.size() >= MAX) break;
-			MobProfiles.Profile p = MobProfiles.of(m.getType());
-			Side side;
-			if (p.kin().equals(kin)) side = Side.MOB;
-			else if (m instanceof VillagerEntity || p.kin().equals("villager") || m instanceof AllayEntity || m instanceof ParrotEntity
-				|| m instanceof SnowGolemEntity || (m instanceof TameableEntity t && t.isTamed())) side = Side.PLAYERS;
-			else side = Side.NEUTRAL;
-			members.put(m, side);
-			wasSilent.put(m, m.isSilent());
-			m.setSilent(true);
+			addMember(m, kin);
 		}
 		radius = Math.max(4.5, members.size() * 1.7 / (2 * Math.PI));
 		react(Moment.START);
@@ -87,6 +112,35 @@ public final class Crowd {
 		if (center == null) return;
 		ticks++;
 		ServerWorld w = battle.world;
+		if (ticks % 20 == 0 && !fear) {
+			String kin = battle.opp.profile().kin();
+			var scanBox = new net.minecraft.util.math.Box(
+				center.x - RADIUS, center.y - 8, center.z - RADIUS,
+				center.x + RADIUS, center.y + 8, center.z + RADIUS);
+			List<MobEntity> late = w.getEntitiesByClass(MobEntity.class, scanBox,
+				m -> m.isAlive() && !members.containsKey(m) && !battle.mobTeam.contains(m)
+					&& BattleManager.byMob(m) == null && !BattleManager.inAnyCrowd(m) && !Opponent.isBoss(m)
+					&& (!isAquaticOnly(m) || stageInWater));
+			late.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(center)));
+			boolean added = false;
+			long now = System.currentTimeMillis();
+			for (MobEntity m : late) {
+				if (members.size() < MAX) {
+					addMember(m, kin);
+					added = true;
+				} else if (m instanceof HostileEntity) {
+					holdTruce(m, now + 2000L);
+					m.setTarget(null);
+					double minR = radius + 1.5;
+					if (m.squaredDistanceTo(center.x, m.getY(), center.z) < minR * minR) {
+						steerAway(m, center);
+					}
+				}
+			}
+			if (added) {
+				radius = Math.max(4.5, members.size() * 1.7 / (2 * Math.PI));
+			}
+		}
 		var challenger = battle.challenger();
 		// Slots are counted from the challenger side, so the ring looks the same for every battle.
 		double base = challenger == null ? 0 : Math.atan2(challenger.getZ() - center.z, challenger.getX() - center.x);
@@ -96,6 +150,7 @@ public final class Crowd {
 			if (!m.isAlive()) continue;
 			if (m.isOnFire()) m.extinguish();
 			if (m instanceof HostileEntity || m.getTarget() != null) m.setTarget(null);
+			if (m instanceof net.minecraft.entity.mob.CreeperEntity c) c.setFuseSpeed(-1);
 			if (fear) {
 				// Peaceful mobs keep their distance from a boss.
 				if (m.squaredDistanceTo(center) < 10 * 10) m.getNavigation().startMovingTo(
@@ -108,17 +163,27 @@ public final class Crowd {
 			if (!placed.contains(m)) {
 				double d2 = m.squaredDistanceTo(tx, m.getY(), tz);
 				if (spot != null && (d2 < 1.2 * 1.2 || ticks > 100)) {
-					// Arrived (or took too long to walk): step onto the exact spot.
+					// Arrived (or took too long to walk): step onto the exact spot and lock movement goals.
 					if (d2 >= 1.2 * 1.2) w.spawnParticles(ParticleTypes.POOF, spot.x, spot.y + 0.3, spot.z, 5, 0.2, 0.2, 0.2, 0.01);
 					m.refreshPositionAndAngles(spot.x, spot.y, spot.z, m.getYaw(), m.getPitch());
+					m.getNavigation().stop();
+					m.setVelocity(0, m.getVelocity().y, 0);
+					var gs = ((dev.rapbattle.mixin.MobGoalAccessor) m).rapbattle$goalSelector();
+					gs.disableControl(net.minecraft.entity.ai.goal.Goal.Control.MOVE);
+					gs.disableControl(net.minecraft.entity.ai.goal.Goal.Control.JUMP);
+					lockedControls.add(m);
 					placed.add(m);
 				} else if (m.getNavigation().isIdle() || ticks % 20 == 0) {
 					m.getNavigation().startMovingTo(tx, m.getY(), tz, 1.1);
 				}
 			} else {
-				// Stay on the spot: no wandering off, no grazing walks.
+				// Stay smoothly on the spot: movement/jump goals are disabled; teleport only if pushed > 1 block away.
 				m.getNavigation().stop();
-				if (spot != null && m.squaredDistanceTo(spot) > 0.2 * 0.2 && m.isOnGround()) m.setPosition(spot.x, spot.y, spot.z);
+				m.setForwardSpeed(0);
+				m.setSidewaysSpeed(0);
+				if (spot != null && m.squaredDistanceTo(spot) > 1.0 * 1.0 && m.isOnGround()) {
+					m.setPosition(spot.x, spot.y, spot.z);
+				}
 				m.setVelocity(0, m.getVelocity().y, 0);
 			}
 			// Face the stage: the reader if someone is reading, else the centre.
@@ -382,14 +447,22 @@ public final class Crowd {
 		w.spawnParticles(type, x, y, z, count, 0.3, 0.2, 0.3, 0.02);
 	}
 
-	/** Battle over: keep the truce 5 more seconds, then let everyone go. */
+	/** Battle over: keep the truce 5 more seconds, restore AI controls & zombification, then let everyone go. */
 	void release() {
 		long until = System.currentTimeMillis() + 5000;
 		for (MobEntity m : members.keySet()) {
 			m.getNavigation().stop();
+			if (lockedControls.remove(m)) {
+				var gs = ((dev.rapbattle.mixin.MobGoalAccessor) m).rapbattle$goalSelector();
+				gs.enableControl(net.minecraft.entity.ai.goal.Goal.Control.MOVE);
+				gs.enableControl(net.minecraft.entity.ai.goal.Goal.Control.JUMP);
+			}
+			restoreZombify(m, wasImmuneZombify);
 			if (m.isAlive()) m.setSilent(wasSilent.getOrDefault(m, false));
 			if (m instanceof HostileEntity) holdTruce(m, until);
 		}
+		lockedControls.clear();
+		wasImmuneZombify.clear();
 	}
 
 	/** Escaped mob team: 15 s truce and actively walking away from {@code awayFrom}. */

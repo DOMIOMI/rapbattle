@@ -3,8 +3,13 @@
   "package": "dev.rapbattle.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "AbstractPiglinAccessor",
+    "CreeperMixin",
+    "HoglinAccessor",
     "MobEntityDaylightMixin",
     "MobEntityTargetMixin",
+    "MobGoalAccessor",
+    "MoveControlMixin",
     "PiglinBrainMixin",
     "SculkShriekerMixin"
   ],

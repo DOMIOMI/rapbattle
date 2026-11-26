@@ -273,9 +273,17 @@ public final class BattleManager {
 		return false;
 	}
 
-	private static boolean inAnyCrowd(Entity e) {
+	public static boolean inAnyCrowd(Entity e) {
 		if (e == null) return false;
 		for (Battle b : BATTLES) if (!b.finished && b.inCrowd(e)) return true;
+		return false;
+	}
+
+	public static boolean isPlacedCrowd(MobEntity m) {
+		if (m == null) return false;
+		for (Battle b : BATTLES) {
+			if (!b.finished && b.crowd != null && b.crowd.placed.contains(m)) return true;
+		}
 		return false;
 	}
 
