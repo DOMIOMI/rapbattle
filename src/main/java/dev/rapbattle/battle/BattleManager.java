@@ -77,7 +77,13 @@ public final class BattleManager {
 	static void challengeFrom(ServerPlayerEntity p, MobEntity mob, String titleKey) {
 		String lang = Lang.of(p);
 		Opponent o = Opponent.of(mob, new Random(), p, lang);
-		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + 15_000, true, true, false));
+		boolean isGolem = mob instanceof net.minecraft.entity.passive.IronGolemEntity;
+		PENDING.put(p.getUuid(), new Pending(mob, System.currentTimeMillis() + 15_000, true, isGolem, !isGolem));
+		if (!isGolem) {
+			mob.setTarget(null);
+			mob.getNavigation().stop();
+			stareAt(mob, p, 15_000);
+		}
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.mobEntityId = mob.getId();
@@ -195,8 +201,8 @@ public final class BattleManager {
 	private static void restorePendingTarget(Pending pd, ServerPlayerEntity pl) {
 		if (pd == null || pl == null || !pd.mob.isAlive() || !pl.isAlive() || pl.isCreative() || pl.isSpectator()) return;
 		STARES.removeIf(s -> s.mob() == pd.mob);
-		if (pd.golem) {
-			GolemDefender.chickenedOut(pl, (net.minecraft.entity.passive.IronGolemEntity) pd.mob);
+		if (pd.mob instanceof net.minecraft.entity.passive.IronGolemEntity ig) {
+			GolemDefender.chickenedOut(pl, ig);
 		} else if (pd.fromApproach) {
 			pd.mob.setTarget(pl);
 		}
@@ -430,8 +436,9 @@ public final class BattleManager {
 				REFUSED.remove(sp.getUuid());
 				STARES.removeIf(s -> s.mob() == mob);
 				closeChoice(sp);
-				if (pending.golem) GolemDefender.chickenedOut(sp, (net.minecraft.entity.passive.IronGolemEntity) mob);
-				else {
+				if (pending.mob instanceof net.minecraft.entity.passive.IronGolemEntity ig) {
+					GolemDefender.chickenedOut(sp, ig);
+				} else {
 					if (pending.fromApproach) mob.setTarget(sp);
 					disrespect(sp, mob);
 				}
@@ -512,9 +519,9 @@ public final class BattleManager {
 			// While he decides, the mob that asked stands still and waits (protected from sunburn).
 			for (Pending pd : PENDING.values()) {
 				if (pd.mob.isAlive() && pd.mob.isOnFire()) pd.mob.extinguish();
-				if (!pd.golem && pd.mob.isAlive() && pd.mob.getTarget() != null) {
-					pd.mob.setTarget(null);
-					pd.mob.getNavigation().stop();
+				if (!pd.golem && pd.mob.isAlive()) {
+					if (pd.mob.getTarget() != null) pd.mob.setTarget(null);
+					if (!pd.mob.getNavigation().isIdle()) pd.mob.getNavigation().stop();
 				}
 			}
 			if (server.getTicks() % 10 == 0) offerOnApproach(server);
@@ -555,8 +562,17 @@ public final class BattleManager {
 			RECENT.clear();
 			BATTLES.clear();
 			PENDING.clear();
+			REFUSED.clear();
+			BRAWLS.clear();
+			STARES.clear();
 			LAST_COMBAT.clear();
 			ASKED.clear();
+			CHAMPION_COOLDOWN.clear();
+			REMATCH_COOLDOWN.clear();
+			PlayerStatus.clear();
+			BastionBattle.clear();
+			RaidBattle.clear();
+			PvpBattle.clear();
 		});
 
 		ServerPlayNetworking.registerGlobalReceiver(Payloads.ActionC2S.ID, (payload, ctx) -> {
@@ -676,6 +692,21 @@ public final class BattleManager {
 		REMATCH_COOLDOWN.replaceAll((k, v) -> v - deltaMs);
 	}
 
+	/** Shared eligibility check for all automatic mob callouts (champions, rematches, raid captains, bastion brutes). */
+	public static boolean canAutoChallenge(ServerPlayerEntity p) {
+		if (p == null || p.isSpectator() || !p.isAlive()) return false;
+		UUID u = p.getUuid();
+		return byPlayer(u) == null && PvpBattle.byPlayer(u) == null && !PENDING.containsKey(u);
+	}
+
+	/** Test-only helper to expire the player's PENDING choice timer immediately. */
+	public static void expirePendingForTest(UUID playerId) {
+		Pending pd = PENDING.get(playerId);
+		if (pd != null) {
+			PENDING.put(playerId, new Pending(pd.mob, 0L, pd.allowed, pd.golem, pd.fromApproach));
+		}
+	}
+
 	/** Test-only helper to check if a player has a pending approach/callout choice. */
 	public static boolean hasPendingForTest(UUID playerId) {
 		return PENDING.containsKey(playerId);
@@ -714,7 +745,7 @@ public final class BattleManager {
 		Stats stats = Stats.of(server);
 		for (var w : server.getWorlds()) {
 			for (ServerPlayerEntity p : w.getPlayers()) {
-				if (p.isSpectator() || byPlayer(p.getUuid()) != null || PENDING.containsKey(p.getUuid())) continue;
+				if (!canAutoChallenge(p)) continue;
 				// 1. Rematch: a mob that fled after a close loss remembers the player and calls for a rematch.
 				String pName = p.getName().getString();
 				List<MobEntity> rivals = w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(16),
