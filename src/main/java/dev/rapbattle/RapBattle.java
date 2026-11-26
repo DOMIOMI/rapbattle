@@ -18,6 +18,7 @@ public class RapBattle implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> RapConfig.load());
 		Payloads.register();
 		dev.rapbattle.battle.CrowdSounds.register();
+		dev.rapbattle.battle.Theft.register();
 		BattleManager.register();
 	}
 }
