@@ -54,9 +54,26 @@ public final class BattleManager {
 	private static final long MIC_HINT_MS = 3_000L;
 	private static final Map<UUID, ServerPlayerEntity> TEST_PLAYERS = new HashMap<>();
 	private static final ThreadLocal<Boolean> MOD_FORCED_TARGET = ThreadLocal.withInitial(() -> Boolean.FALSE);
+	private static final ThreadLocal<Boolean> MOD_FORCED_EFFECT = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
 	public static boolean isModForcedTarget() {
 		return Boolean.TRUE.equals(MOD_FORCED_TARGET.get());
+	}
+
+	public static boolean isModForcedStatusEffect() {
+		return Boolean.TRUE.equals(MOD_FORCED_EFFECT.get());
+	}
+
+	/** Explicit mod-initiated status effect that bypasses the battle harmful-effect shield. */
+	public static void forceStatusEffect(net.minecraft.entity.LivingEntity target, net.minecraft.entity.effect.StatusEffectInstance effect) {
+		if (target == null || effect == null) return;
+		boolean prev = isModForcedStatusEffect();
+		MOD_FORCED_EFFECT.set(Boolean.TRUE);
+		try {
+			target.addStatusEffect(effect);
+		} finally {
+			MOD_FORCED_EFFECT.set(prev);
+		}
 	}
 
 	/** Explicit mod-initiated target assignment that bypasses truce/respect checks in MobEntityTargetMixin. */
@@ -81,9 +98,10 @@ public final class BattleManager {
 		return tp != null ? tp : server.getPlayerManager().getPlayer(uuid);
 	}
 
-	/** Minor non-hazardous damage types (e.g. hunger tick) that do not abort a battle. */
-	public static final Set<RegistryKey<DamageType>> MINOR_ENV_DAMAGE = Set.of(
-		DamageTypes.STARVE
+	/** Damage types that pass through battle protection and abort the battle without penalty. */
+	public static final Set<RegistryKey<DamageType>> BATTLE_ABORT_ENV_DAMAGE = Set.of(
+		DamageTypes.LAVA,
+		DamageTypes.OUT_OF_WORLD
 	);
 
 	public static boolean isBattling(ServerPlayerEntity p) {
@@ -612,8 +630,11 @@ public final class BattleManager {
 		});
 
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
-			boolean entityAttack = source.getAttacker() != null || source.getSource() != null;
-			boolean playerProtected = entity instanceof ServerPlayerEntity p && isBattling(p) && entityAttack;
+			RegistryKey<DamageType> dmgKey = source.getTypeRegistryEntry().getKey().orElse(null);
+			boolean passesThrough = source.isIn(net.minecraft.registry.tag.DamageTypeTags.BYPASSES_INVULNERABILITY)
+				|| (dmgKey != null && BATTLE_ABORT_ENV_DAMAGE.contains(dmgKey))
+				|| Battle.RAP_DEATH.equals(dmgKey);
+			boolean playerProtected = entity instanceof ServerPlayerEntity p && isBattling(p) && !passesThrough;
 			boolean allowed = !playerProtected
 				&& !(source.getAttacker() instanceof ServerPlayerEntity sp && isBattling(sp))
 				&& byMob(entity) == null
@@ -629,9 +650,8 @@ public final class BattleManager {
 
 		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, baseDamageTaken, damageTaken, blocked) -> {
 			if (damageTaken <= 0 || !(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
-			if (source.getAttacker() != null || source.getSource() != null) return;
 			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
-			if (key != null && MINOR_ENV_DAMAGE.contains(key)) return;
+			if (key == null || !BATTLE_ABORT_ENV_DAMAGE.contains(key)) return;
 			Text msg = Text.translatable("rapbattle.battle.abort_env");
 			Battle b = byPlayer(p.getUuid());
 			if (b != null) b.abortNoPenalty(p, msg);
