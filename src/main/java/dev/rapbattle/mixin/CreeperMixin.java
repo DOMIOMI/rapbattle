@@ -41,7 +41,7 @@ public class CreeperMixin {
 		}
 	}
 
-	@Inject(method = "explode", at = @At("HEAD"))
+	@Inject(method = "explode", at = @At("TAIL"))
 	private void rapbattle$dropStolenOnExplode(CallbackInfo ci) {
 		Theft.dropOnDeathOrExplode((CreeperEntity) (Object) this);
 	}
