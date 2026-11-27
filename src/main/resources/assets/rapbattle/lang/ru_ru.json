@@ -511,7 +511,7 @@
   "rapbattle.guide.page.11": "11. Акт 5. Дракон\n\nНужно: трофейный микрофон (5+ ранг), 1000 Респекта, победа 5+ ранга и сбитые кристаллы.\nПосле победы с трофейным микрофоном эндермены мирные к взгляду.\n/rapbattle legend.",
   "rapbattle.guide.page.12": "12. Банды и репутация\n\nВражеские цвета: +1 ранг.\nЧемпионы ♛ ищут серию 3+ побед; проигравшие зовут на реванш.\nПобеда — «Уважуха», проигрыш — «Беги!» и кража вещи.",
   "rapbattle.guide.page.13": "13. PvP\n\nУдарь игрока пустой правой рукой — вызов на дуэль ([Y]/[N]).\n1 раунд: у каждого свои рифмы и язык. Мобы вокруг держат перемирие.",
-  "rapbattle.guide.page.14": "14. Шпаргалка\n\n[R] — баттл / рифма\n[Y]/[N] — да / нет\n[1–3] — тема лобби\n/rapbattle — опции\n/rapbattle leave (уйти)\n/rapbattle guide · style\n/rapbattle legend · clip",
+  "rapbattle.guide.page.14": "14. Шпаргалка\n\n[R] — баттл / рифма\n[Y]/[N] — да / нет\n[1–3] — тема лобби\n/rapbattle (опции, leave)\n/rapbattle guide\n/rapbattle style\n/rapbattle legend\n/rapbattle clip",
   "rapbattle.status.street_cred": "🎤 Уважуха (ранг ≤%s) %s",
   "rapbattle.status.run_away": "🏃 Беги! %s",
   "rapbattle.status.piglin_pal": "🐷 Свой для пиглинов %s",
