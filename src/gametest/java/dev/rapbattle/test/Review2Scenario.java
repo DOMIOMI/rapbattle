@@ -383,7 +383,7 @@ public final class Review2Scenario {
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
 		});
-		ctx.waitTicks(10);
+		ctx.waitTicks(65);
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			assertTrue(p.isAlive() && !BattleManager.isBattling(p), "Respawned player must be alive and not in battle");
@@ -400,7 +400,6 @@ public final class Review2Scenario {
 			b2.invite(p2);
 			b2.answerInvite(p2, true);
 			p.onTeleportationDone();
-			p.setLoaded(true);
 			p.timeUntilRegen = 0;
 			boolean killed = p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
 			assertTrue(killed && !BattleManager.isBattling(p) && !BattleManager.isBattling(p2),
@@ -411,7 +410,7 @@ public final class Review2Scenario {
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
 		});
-		ctx.waitTicks(10);
+		ctx.waitTicks(65);
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
@@ -424,7 +423,6 @@ public final class Review2Scenario {
 			int pvpId = PvpBattle.pendingInviteIdForTest(p3.getUuid());
 			PvpBattle.answer(p3, pvpId, true);
 			p.onTeleportationDone();
-			p.setLoaded(true);
 			p.timeUntilRegen = 0;
 			boolean killed = p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
 			assertTrue(killed && !BattleManager.isBattling(p) && !BattleManager.isBattling(p3),
