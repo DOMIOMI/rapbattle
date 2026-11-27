@@ -14,7 +14,10 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * In-game handbook ("MC Handbook" / "Книга МС") built on vanilla written_book.
@@ -25,6 +28,8 @@ public final class GuideBook {
 	public static final String NBT_KEY = "rapbattle_guide";
 	public static final int PAGE_COUNT = 14;
 	public static final int MAX_PAGE_CHARS = 240;
+	private static final Map<UUID, Long> GIVE_COOLDOWN = new HashMap<>();
+	private static final long GIVE_COOLDOWN_MS = 5_000L;
 
 	public static ItemStack create(String lang) {
 		ItemStack book = new ItemStack(Items.WRITTEN_BOOK);
@@ -63,9 +68,21 @@ public final class GuideBook {
 		return custom.copyNbt().getInt(NBT_KEY).orElse(0) == 1;
 	}
 
+	public static boolean hasGuideBook(ServerPlayerEntity player) {
+		if (player == null) return false;
+		var inv = player.getInventory();
+		for (int i = 0; i < inv.size(); i++) {
+			if (isGuideBook(inv.getStack(i))) return true;
+		}
+		return false;
+	}
+
 	/** Gives the handbook in the player's current language; drops at feet if inventory is full. */
 	public static void give(ServerPlayerEntity player) {
-		if (player == null) return;
+		if (player == null || hasGuideBook(player)) return;
+		long now = dev.rapbattle.Clock.now();
+		if (now < GIVE_COOLDOWN.getOrDefault(player.getUuid(), 0L)) return;
+		GIVE_COOLDOWN.put(player.getUuid(), now + GIVE_COOLDOWN_MS);
 		ItemStack book = create(Lang.of(player));
 		if (!player.getInventory().insertStack(book)) {
 			player.dropItem(book, false);
