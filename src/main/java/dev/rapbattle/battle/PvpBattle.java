@@ -126,6 +126,12 @@ public final class PvpBattle {
 			from.sendMessage(Text.translatable("rapbattle.pvp.declined", p.getName().getString()).formatted(Formatting.GRAY), false);
 			return true;
 		}
+		if (from.getEntityWorld() != p.getEntityWorld()) {
+			Text msg = Text.translatable("rapbattle.pvp.different_world").formatted(Formatting.RED);
+			from.sendMessage(msg, false);
+			p.sendMessage(msg, false);
+			return true;
+		}
 		if (busy(from) || busy(p)) return true;
 		ALL.add(new PvpBattle(id, from, p));
 		return true;

@@ -2,6 +2,7 @@ package dev.rapbattle.battle;
 
 import dev.rapbattle.Lang;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -129,10 +130,15 @@ public final class SoreLosers {
 
 	public static void register() {
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+			RAGED.remove(entity.getUuid());
 			Long until = DOUBLE_DROP.remove(entity.getUuid());
 			if (until != null && dev.rapbattle.Clock.now() < until && entity.getEntityWorld() instanceof ServerWorld w) {
 				doubleFreshDrops(w, new Vec3d(entity.getX(), entity.getY(), entity.getZ()));
 			}
+		});
+		ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
+			RAGED.remove(entity.getUuid());
+			DOUBLE_DROP.remove(entity.getUuid());
 		});
 	}
 

@@ -426,6 +426,7 @@
   "rapbattle.rank.armor_lower.netherite": "netherite",
   "rapbattle.pvp.challenge_sent": "Challenge sent: %s is deciding whether to step up.",
   "rapbattle.pvp.declined": "%s turned down the battle. Scared?",
+  "rapbattle.pvp.different_world": "Opponent is in another dimension",
   "rapbattle.pvp.started": "Rap battle: %s vs %s! %s goes first.",
   "rapbattle.pvp.rank_armor": "PLAYER",
   "rapbattle.pvp.rank_street": "1v1",

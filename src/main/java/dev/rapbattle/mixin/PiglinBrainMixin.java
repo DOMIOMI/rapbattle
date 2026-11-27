@@ -2,8 +2,10 @@ package dev.rapbattle.mixin;
 
 import dev.rapbattle.battle.BastionBattle;
 import dev.rapbattle.battle.BattleManager;
+import dev.rapbattle.battle.Crowd;
 import dev.rapbattle.battle.PlayerStatus;
 import dev.rapbattle.battle.PvpBattle;
+import dev.rapbattle.battle.Reputation;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.mob.AbstractPiglinEntity;
@@ -38,7 +40,10 @@ public class PiglinBrainMixin {
 
 	@Inject(method = "becomeAngryWith", at = @At("HEAD"), cancellable = true)
 	private static void rapbattle$quietDuringBattle(ServerWorld world, AbstractPiglinEntity piglin, LivingEntity target, CallbackInfo ci) {
-		if (isQuietPlayer(target) || (target instanceof PlayerEntity p && PlayerStatus.has(p.getUuid(), PlayerStatus.BASTION_GUEST))) {
+		if (isQuietPlayer(target) || (target instanceof PlayerEntity p
+			&& (PlayerStatus.has(p.getUuid(), PlayerStatus.BASTION_GUEST)
+			|| Crowd.inTruce(piglin, p.getUuid())
+			|| Reputation.respects(piglin, p)))) {
 			ci.cancel();
 		}
 	}
@@ -49,7 +54,8 @@ public class PiglinBrainMixin {
 		Optional<? extends LivingEntity> opt = cir.getReturnValue();
 		if (opt == null || opt.isEmpty() || !(opt.get() instanceof PlayerEntity p)) return;
 		UUID u = p.getUuid();
-		if (isQuietPlayer(p) || PlayerStatus.has(u, PlayerStatus.BASTION_GUEST)) {
+		if (isQuietPlayer(p) || PlayerStatus.has(u, PlayerStatus.BASTION_GUEST)
+			|| Crowd.inTruce(piglin, u) || Reputation.respects(piglin, p)) {
 			cir.setReturnValue(Optional.empty());
 			return;
 		}

@@ -661,6 +661,9 @@ public final class BattleManager {
 		});
 
 		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, baseDamageTaken, damageTaken, blocked) -> {
+			if (entity instanceof MobEntity mob && source.getAttacker() instanceof ServerPlayerEntity sp && !isBattling(sp)) {
+				Reputation.onPlayerHostileAction(sp, mob);
+			}
 			if (damageTaken <= 0 || !(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
 			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
 			boolean envAbort = key != null && BATTLE_ABORT_ENV_DAMAGE.contains(key);
@@ -1002,7 +1005,7 @@ public final class BattleManager {
 				if (stats.player(p.getUuid()).streak < 3) continue;
 				List<MobEntity> champs = w.getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(24),
 					m -> m.isAlive() && !Opponent.isBoss(m) && byMob(m) == null && !inAnyCrowd(m)
-						&& MobRecord.of(m).wins() > 0 && !CHAMPION_COOLDOWN.containsKey(m.getUuid()));
+						&& !Crowd.inTruce(m, p.getUuid()) && MobRecord.hasWins(m) && !CHAMPION_COOLDOWN.containsKey(m.getUuid()));
 				if (champs.isEmpty()) continue;
 				champs.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
 				MobEntity champ = champs.get(0);
