@@ -153,10 +153,17 @@ public final class SoreLosers {
 
 	/** Duplicates the item drops that just landed around {@code pos} (the vanilla loot of a mob that just died). */
 	public static void doubleFreshDrops(ServerWorld w, Vec3d pos) {
+		doubleFreshDrops(w, pos, null);
+	}
+
+	/** Duplicates fresh drops around {@code pos}, skipping items already seen/spawned in {@code seen} (prevents pack x4/x8). */
+	public static void doubleFreshDrops(ServerWorld w, Vec3d pos, Set<UUID> seen) {
 		for (ItemEntity it : w.getEntitiesByClass(ItemEntity.class, new Box(pos, pos).expand(2.5), e -> e.getItemAge() <= 1)) {
+			if (seen != null && !seen.add(it.getUuid())) continue;
 			ItemEntity copy = new ItemEntity(w, it.getX(), it.getY(), it.getZ(), it.getStack().copy());
 			copy.setToDefaultPickupDelay();
 			w.spawnEntity(copy);
+			if (seen != null) seen.add(copy.getUuid());
 		}
 	}
 
