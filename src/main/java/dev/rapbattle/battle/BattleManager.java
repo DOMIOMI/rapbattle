@@ -360,6 +360,8 @@ public final class BattleManager {
 			return false;
 		});
 		REFUSED.values().removeIf(r -> now > r.until() || !r.mob().isAlive());
+		BRAWLS.values().removeIf(r -> now > r.until() || !r.mob().isAlive() || r.mob().isRemoved());
+		RECENT.removeIf(s -> now > s.until() || !s.mob().isAlive() || s.mob().isRemoved());
 		LAST_COMBAT.values().removeIf(t -> now - t > 60_000);
 	}
 
@@ -701,11 +703,12 @@ public final class BattleManager {
 				|| isVoid
 				|| Battle.RAP_DEATH.equals(dmgKey);
 			boolean playerProtected = battlingTarget && !passesThrough;
+			boolean mobProtected = !passesThrough && (byMob(entity) != null || inAnyCrowd(entity));
 			boolean allowed = !playerProtected
+				&& !mobProtected
 				&& !(source.getAttacker() instanceof ServerPlayerEntity sp && isBattling(sp))
-				&& byMob(entity) == null
 				// The crowd is a truce zone: no zombie turning its neighbour villager into a zombie villager mid-show.
-				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker());
+				&& !inAnyCrowd(source.getAttacker());
 			if (allowed && amount > 0) {
 				long now = dev.rapbattle.Clock.now();
 				if (entity instanceof ServerPlayerEntity sp) LAST_COMBAT.put(sp.getUuid(), now);
@@ -729,6 +732,13 @@ public final class BattleManager {
 		});
 
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+			if (entity instanceof MobEntity mob) {
+				Battle b = byMob(mob);
+				if (b != null && !b.finished && !b.isResolving()) {
+					b.abort(Text.translatable("rapbattle.battle.abort_env"));
+				}
+				return;
+			}
 			if (!(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
 			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
 			if (Battle.RAP_DEATH.equals(key)) return;
@@ -742,6 +752,9 @@ public final class BattleManager {
 			PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
 			if (pvp != null) pvp.abortNoPenalty(msg);
 		});
+
+		ServerLivingEntityEvents.ALLOW_CONVERSION.register((entity, convertedType, ctx) ->
+			!(entity instanceof MobEntity m && (byMob(m) != null || inAnyCrowd(m))));
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (Battle b : new ArrayList<>(BATTLES)) {
