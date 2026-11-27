@@ -39,8 +39,15 @@ public class ClientConfig {
 	public static ClientConfig get() { return instance; }
 
 	public static void save() {
+		Path path = FabricLoader.getInstance().getConfigDir().resolve("rapbattle.json");
 		try {
-			Files.writeString(FabricLoader.getInstance().getConfigDir().resolve("rapbattle.json"), GSON.toJson(instance), StandardCharsets.UTF_8);
+			if (Files.exists(path)) {
+				JsonObject o = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
+				if (o.has("openRouterApiKey") || o.has("sttApiKey") || o.has("anthropicApiKey")) {
+					dev.rapbattle.RapConfig.load();
+				}
+			}
+			Files.writeString(path, GSON.toJson(instance), StandardCharsets.UTF_8);
 		} catch (Exception ignored) {
 			// Settings stay in memory for this session.
 		}
