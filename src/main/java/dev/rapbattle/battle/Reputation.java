@@ -119,10 +119,12 @@ public final class Reputation {
 				boolean isBrute = mob instanceof PiglinBruteEntity;
 				String statusKey = isBrute ? PlayerStatus.BASTION_GUEST : PlayerStatus.PIGLIN_PAL;
 				long baseDur = isBrute ? BASTION_GUEST_MS : PIGLIN_PAL_MS;
+				int activeCount = battle.activePlayers().size();
 				for (UUID u : battle.players) {
+					if (battle.leftPlayers.contains(u)) continue;
 					String name = battle.names.get(u);
 					int dealt = name != null ? battle.battleDealt.getOrDefault(name, 0) : 0;
-					boolean isMvp = u.equals(mvpId) || battle.players.size() == 1;
+					boolean isMvp = u.equals(mvpId) || activeCount == 1;
 					if (!isMvp && dealt <= 0) continue;
 					long dur = isMvp ? baseDur : baseDur / 2;
 					PlayerStatus.grant(u, statusKey, dur);
@@ -136,10 +138,12 @@ public final class Reputation {
 		int rankLevel = battle.rank.level();
 		List<UUID> creditedPlayers = new ArrayList<>();
 
+		int activeCount = battle.activePlayers().size();
 		for (UUID u : battle.players) {
+			if (battle.leftPlayers.contains(u)) continue;
 			String name = battle.names.get(u);
 			int dealt = name != null ? battle.battleDealt.getOrDefault(name, 0) : 0;
-			boolean isMvp = u.equals(mvpId) || battle.players.size() == 1;
+			boolean isMvp = u.equals(mvpId) || activeCount == 1;
 			long dur = computeCredDurationMs(battle.overdressed, isMvp, dealt);
 			if (dur <= 0) continue;
 			CredState next = mergeCred(CRED.get(u), rankLevel, dur, now);

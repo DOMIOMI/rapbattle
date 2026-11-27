@@ -257,13 +257,28 @@ public class Battle {
 		if (p != null) anchorReleased.add(p.getUuid());
 	}
 
-	public ServerPlayerEntity challenger() { return player(players.get(0)); }
+	public ServerPlayerEntity challenger() {
+		for (UUID u : players) {
+			if (!leftPlayers.contains(u)) {
+				ServerPlayerEntity p = player(u);
+				if (p != null) return p;
+			}
+		}
+		return players.isEmpty() ? null : player(players.get(0));
+	}
+
+	List<UUID> activePlayers() {
+		if (leftPlayers.isEmpty()) return players;
+		List<UUID> out = new ArrayList<>(players.size());
+		for (UUID u : players) if (!leftPlayers.contains(u)) out.add(u);
+		return out;
+	}
 
 	private ServerPlayerEntity player(UUID uuid) { return BattleManager.findPlayer(world.getServer(), uuid); }
 
 	private List<String> namesList() {
 		List<String> out = new ArrayList<>();
-		for (UUID u : players) out.add(names.get(u));
+		for (UUID u : activePlayers()) out.add(names.get(u));
 		return out;
 	}
 
@@ -349,8 +364,16 @@ public class Battle {
 			abort(Text.translatable("rapbattle.battle.abort_player_left"));
 			return;
 		}
-		// Coop partner left mid-battle: release them cleanly, keep going for remaining players.
+		// Coop partner left in LOBBY: remove completely so they aren't included in timeline/rewards.
 		ServerPlayerEntity leaver = player(uuid);
+		if (phase == Phase.LOBBY) {
+			players.remove(uuid);
+			leftPlayers.remove(uuid);
+			names.remove(uuid);
+			anchors.remove(uuid);
+			pushTicks.remove(uuid);
+		}
+		// Coop partner left mid-battle: release them cleanly, keep going for remaining players.
 		if (leaver != null) {
 			if (glowing.remove(leaver)) leaver.setGlowing(false);
 			BattleView end = new BattleView();
@@ -358,7 +381,7 @@ public class Battle {
 			end.id = id;
 			send(leaver, end);
 		}
-		if (!transcripts.containsKey(uuid)) transcripts.put(uuid, CompletableFuture.completedFuture(""));
+		if (phase != Phase.LOBBY && !transcripts.containsKey(uuid)) transcripts.put(uuid, CompletableFuture.completedFuture(""));
 		broadcastState();
 	}
 
@@ -1048,7 +1071,7 @@ public class Battle {
 			if (r.mob && beat == r.startBeat + 3 && mobLinesFired.add(i)) {
 				int d = i < mobLiveDamages.length ? mobLiveDamages[i] : 0;
 				liveHit(false, d, null);
-				for (UUID u : players) DamagePop.spawn(world, player(u), "-" + d + (r.punch ? " " + Lang.t(lang, "rapbattle.battle.punch_pop") : ""), 0xFF6060);
+				for (UUID u : activePlayers()) DamagePop.spawn(world, player(u), "-" + d + (r.punch ? " " + Lang.t(lang, "rapbattle.battle.punch_pop") : ""), 0xFF6060);
 				broadcastState();
 			}
 		}
@@ -1108,11 +1131,12 @@ public class Battle {
 			MobProfiles.Profile p = MobProfiles.of(m.getType());
 			rappers.add(new Llm.Rapper(mobNames.get(m), p.species(lang), p.adlib(lang), p.style(lang)));
 		}
+		List<UUID> active = activePlayers();
 		// Usually the rank's length, sometimes a longer verse (two more lines), never shorter.
-		int lineCount = rank.mobLines + Math.max(0, players.size() - 1) + (rnd.nextInt(3) == 0 ? 2 : 0);
+		int lineCount = rank.mobLines + Math.max(0, active.size() - 1) + (rnd.nextInt(3) == 0 ? 2 : 0);
 		List<String> opponents = namesList();
 		int groups = 0;
-		for (int i = 0; i < players.size(); i++) groups += (playerLines() + 3) / 4;
+		for (int i = 0; i < active.size(); i++) groups += (playerLines() + 3) / 4;
 		int groupsNeeded = groups;
 		String prev = history.toString();
 		String rivalry = rivalryText();
@@ -1120,7 +1144,7 @@ public class Battle {
 		String topicText = topicPromptText();
 		Stats stats = Stats.of(world.getServer());
 		int maxTargets = 2;
-		for (UUID u : players) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		for (UUID u : active) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
 		int targetLimit = maxTargets;
 		contentFuture = CompletableFuture.supplyAsync(() -> {
 			Llm.Content c = Llm.roundContent(rappers, rank.label(lang), opp.mood(), opp.profile().language(lang), lineCount,
@@ -1146,18 +1170,19 @@ public class Battle {
 	}
 
 	private int playerLines() {
-		return Math.max(1, rank.linesPerPlayer(players.size()));
+		return Math.max(1, rank.linesPerPlayer(Math.max(1, activePlayers().size())));
 	}
 
 	private void buildTimeline(Llm.Content content, long zero) {
 		beatZero = zero;
+		List<UUID> active = activePlayers();
 		List<String> speakers = mobTeamNames();
 		List<Llm.MobLine> lines = content != null ? content.lines()
 			: Fallback.mobVerse(speakers, namesList(), rank.mobLines, rnd, lang);
 		mobLines = lines;
 		Stats stats = Stats.of(world.getServer());
 		int maxTargets = 2;
-		for (UUID u : players) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		for (UUID u : active) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
 		targets = (content != null && !content.targets().isEmpty()) ? content.targets() : Fallback.extractTargets(lines, lang, maxTargets);
 		BattleView v = baseView();
 		v.targets = new ArrayList<>(targets);
@@ -1192,10 +1217,10 @@ public class Battle {
 		List<List<String>> groups = new ArrayList<>();
 		if (content != null) groups.addAll(content.rhymes());
 		Collections.shuffle(groups, rnd);
-		if (groups.size() < blocks * players.size()) groups.addAll(RhymeBank.pickBlocks(blocks * players.size() - groups.size(), rnd, lang));
+		if (groups.size() < blocks * active.size()) groups.addAll(RhymeBank.pickBlocks(blocks * active.size() - groups.size(), rnd, lang));
 		Map<UUID, List<String>> words = new LinkedHashMap<>();
 		int g = 0;
-		for (UUID u : players) {
+		for (UUID u : active) {
 			List<String> w = new ArrayList<>();
 			for (int b = 0; b < blocks; b++) w.addAll(groups.get(g++));
 			List<String> sliced = new ArrayList<>(w.subList(0, perPlayer));
@@ -1223,15 +1248,15 @@ public class Battle {
 		}
 		int firstPlayerRow = v.rows.size();
 		int colorIdx = rnd.nextInt(BLOCK_COLORS.length);
-		boolean pingPong = players.size() > 1 && rank.level() >= 4;
+		boolean pingPong = active.size() > 1 && rank.level() >= 4;
 		if (pingPong) {
 			// Friends alternate line by line after one shared get-ready bar.
 			int leadIn = beat;
 			beat += rank.leadInBeats;
 			Map<UUID, BattleView.Segment> segs = new LinkedHashMap<>();
 			for (int i = 0; i < perPlayer; i++) {
-				for (int pi = 0; pi < players.size(); pi++) {
-					UUID u = players.get(pi);
+				for (int pi = 0; pi < active.size(); pi++) {
+					UUID u = active.get(pi);
 					BattleView.Row r = playerRow(u, i, perPlayer, words.get(u).get(i), BLOCK_COLORS[(colorIdx + pi) % BLOCK_COLORS.length], beat);
 					v.rows.add(r);
 					BattleView.Segment s = segs.computeIfAbsent(u, k -> {
@@ -1247,7 +1272,7 @@ public class Battle {
 			}
 			v.segments.addAll(segs.values());
 		} else {
-			for (UUID u : players) {
+			for (UUID u : active) {
 				BattleView.Segment seg = new BattleView.Segment();
 				seg.reader = names.get(u);
 				seg.leadInBeat = beat;
@@ -1587,7 +1612,11 @@ public class Battle {
 			? (done ? (respectMob <= 0 ? true : respectTeam <= 0 ? false : winsPlayers > winsMob) : roundPlayers)
 			: roundPlayers;
 		result.comment = v.comment();
-		result.mvp = players.size() > 1 ? battleDealt.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("") : "";
+		List<UUID> active = activePlayers();
+		result.mvp = active.size() > 1
+			? active.stream().map(names::get)
+				.max(Comparator.comparingInt(n -> battleDealt.getOrDefault(n, 0))).orElse("")
+			: "";
 		result.outfitBonus = bonuses.styleBonus();
 		result.overdressed = overdressed;
 		result.mobLabel = mobTeam.size() > 1 ? Lang.t(lang, "rapbattle.battle.mob_and_crew", opp.profile().species(lang)) : opp.profile().species(lang);
@@ -1968,11 +1997,12 @@ public class Battle {
 		sendEnd();
 		releaseMobs();
 		BattleManager.recent(this);
+		List<UUID> active = activePlayers();
 		String team = String.join(" + ", namesList());
-		ServerPlayerEntity mvpPlayer = playerByName(result.mvp.isEmpty() ? names.get(players.get(0)) : result.mvp);
+		ServerPlayerEntity mvpPlayer = playerByName(result.mvp.isEmpty() ? (active.isEmpty() ? "" : names.get(active.get(0))) : result.mvp);
 		if (mvpPlayer == null) mvpPlayer = challenger();
 		if (mvpPlayer == null) {
-			for (UUID u : players) {
+			for (UUID u : active) {
 				mvpPlayer = player(u);
 				if (mvpPlayer != null) break;
 			}
@@ -1981,7 +2011,7 @@ public class Battle {
 		double effectiveDailyScale = 1.0;
 		boolean anyContributor = false;
 		Stats statsForCap = Stats.of(world.getServer());
-		for (UUID u : players) {
+		for (UUID u : active) {
 			String nm = names.get(u);
 			int dealt = nm != null ? battleDealt.getOrDefault(nm, 0) : 0;
 			if (dealt > 0) {
@@ -2187,7 +2217,7 @@ public class Battle {
 			}
 			ServerPlayerEntity worst = null;
 			int minScore = Integer.MAX_VALUE;
-			for (UUID u : players) {
+			for (UUID u : active) {
 				ServerPlayerEntity pl = player(u);
 				if (pl == null) continue;
 				int sc = battleDealt.getOrDefault(names.get(u), 0);
@@ -2218,7 +2248,7 @@ public class Battle {
 		Map<UUID, Integer> scores = new HashMap<>();
 		Map<UUID, Integer> outfits = new HashMap<>();
 		for (UUID u : players) {
-			if (resolvedPlayers.contains(u)) continue;
+			if (leftPlayers.contains(u) || resolvedPlayers.contains(u)) continue;
 			toRecord.add(u);
 			scores.put(u, battleDealt.getOrDefault(names.get(u), 0));
 			ServerPlayerEntity p = player(u);
