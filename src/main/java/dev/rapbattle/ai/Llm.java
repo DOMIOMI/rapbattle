@@ -132,11 +132,19 @@ public final class Llm {
 				Пример хорошей пары (овца против игрока Steve):
 				  «Бе-е! Ты в кожанке, Steve, и это позор»
 				  «Даже моя шерсть дороже, чем твой топор»
-				Ещё придумай группы рифм для игроков: в каждой ровно 4 русских слова, которые точно рифмуются между собой
-				(одинаковое окончание, начиная с ударной гласной: последние 2–3 буквы у всех четырёх совпадают), удобные для ответного панча.
-				Проверь каждое слово группы: если хоть одно не рифмуется с остальными — замени его. Не повторяй рифмы мобов.
-				Слова в группе бери в разных формах, не только начальной: падежи, множественное число, глаголы
-				(например: «кирками, руками, врагами, веками» или «сгорел, умел, задел, пропел»).
+				Ещё придумай группы рифм для игроков — это их ОТВЕТКА этому мобу, патроны для панча против него.
+				Сначала подумай, чем этого моба можно унизить: его слабости, позорные повадки, как его убивают в Minecraft,
+				что с него падает (зомби: горит на солнце, тупой, гниёт, падает с него гнилая плоть; крипер: взрывается сам, боится кошек).
+				Каждая группа — 6 русских слов на ОДНУ такую тему, хлёсткие и разговорные, которыми удобно закончить строку-панч (игрок увидит 4 лучших).
+				Хорошо: «сгниёшь, ложь, вошь, нож» (гниль зомби), «горишь, сидишь, молчишь, сгоришь» (солнце),
+				«взорвался, обосрался, сдался, нарвался» (крипер).
+				Плохо: случайные слова без связи с мобом и баттлом («вещами, клещами, прыщами, овощами», «грима, режима»),
+				книжные и редкие слова, которые никто не скажет в споре.
+				В каждой группе минимум 2 слова — конкретные вещи или действия из Minecraft про ЭТОГО моба (солнце, плоть, кость, порох, стрела,
+				жемчуг, взрыв, вода). Общие ругательства вроде «тупой, кривой, хромой, воняешь» — не больше одного на группу.
+				Группы про разные слабости. Не копируй примеры из этой инструкции, придумывай свои под этого моба.
+				Рифма точная: одинаковое окончание, начиная с ударной гласной. Проверь каждое слово — если хоть одно выпадает, замени его.
+				Не повторяй рифмы мобов. Слова бери в разных формах: глаголы на «ты» (сгоришь, сгниёшь), прошедшее время, падежи.
 				Каждый раз новый куплет: не повторяй типовые фразы, придумывай свежие образы.
 				Также укажи targets: ровно """ + targetLimit + """
 				 существительных или ярких образов прямо из твоего куплета мобов (слово должно дословно стоять в строках), которые игрок может обыграть в ответ.
@@ -185,11 +193,18 @@ public final class Llm {
 				Example of a good couplet (sheep vs player Steve):
 				  "Baa! You're in leather gear, Steve, what a shame"
 				  "Even my wool is worth more than your name"
-				Also invent rhyme groups for the players: each group has exactly 4 English words that truly rhyme with each other
-				(same stressed vowel and ending), easy to use for a clapback. Check every word: if one does not rhyme with the rest, replace it.
-				Do not repeat the mobs' rhymes.
-				Use varied word forms in each group, not just base nouns: plurals, past tense, -ing verbs
-				(for example: "mining, shining, whining, dining" or "burned, turned, learned, earned").
+				Also invent rhyme groups for the players: this is their COMEBACK against this mob, ammo for punchlines aimed at it.
+				First think how to humiliate this mob: its weaknesses, embarrassing habits, how it dies in Minecraft, what it drops
+				(zombie: burns in the sun, brainless, rotting, drops rotten flesh; creeper: blows itself up, scared of cats).
+				Each group is exactly 4 English words on ONE such theme, punchy, everyday words that land at the end of a diss.
+				Good: "rotting, forgotten, rotten, plotting" (zombie rot), "burning, learning, turning, yearning" (the sun),
+				"exploded, corroded, eroded, loaded" (creeper).
+				Bad: random words with no link to the mob or the battle, bookish or rare words nobody says in a beef.
+				True rhymes: same stressed vowel and ending. Check every word: if one does not rhyme with the rest, replace it.
+				At least 2 words in each group are concrete Minecraft things or actions about THIS mob (sun, flesh, bone, gunpowder, arrow,
+				pearl, blast, water). Generic insults like "dumb, lame, smelly" are at most one per group.
+				Groups cover different weaknesses. Do not copy the examples above; invent your own for this mob.
+				Do not repeat the mobs' rhymes. Use varied word forms: plurals, past tense, -ing verbs.
 				Fresh verse every time: do not recycle generic lines, invent new imagery.
 				Also return targets: exactly """ + targetLimit + """
 				 concrete nouns or vivid images from the mob's verse (the word must appear verbatim in the lines) that the player can flip in a rebuttal.
