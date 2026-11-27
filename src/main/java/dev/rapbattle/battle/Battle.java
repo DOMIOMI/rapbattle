@@ -1918,12 +1918,16 @@ public class Battle {
 		}
 		long activeCount = players.stream().filter(id -> !leftPlayers.contains(id)).count();
 		if (activeCount <= 1) {
+			if (result != null && !result.finalResult) {
+				result.playersWin = winsPlayers >= winsNeeded;
+				result.finalResult = true;
+			}
 			finish();
 			return;
 		}
 		ServerPlayerEntity p = player(u);
 		String nm = names.getOrDefault(u, p != null ? p.getName().getString() : "Player");
-		boolean win = result != null && result.playersWin;
+		boolean win = result != null && (result.finalResult ? result.playersWin : winsPlayers >= winsNeeded);
 		Stats stats = Stats.of(world.getServer());
 		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
 		int outfitLvl = p != null ? Outfit.of(p, lang).level() : 0;
