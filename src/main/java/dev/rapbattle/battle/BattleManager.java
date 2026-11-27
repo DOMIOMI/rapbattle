@@ -125,6 +125,14 @@ public final class BattleManager {
 		if (pvp != null && pvp.isResolving()) pvp.resolveNow();
 	}
 
+	private static void releaseAnchor(ServerPlayerEntity p) {
+		if (p == null) return;
+		Battle b = byPlayer(p.getUuid());
+		if (b != null && b.isResolving()) b.releaseAnchor(p);
+		PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
+		if (pvp != null && pvp.isResolving()) pvp.releaseAnchor(p);
+	}
+
 	public static void micOnlyHint(ServerPlayerEntity sp) {
 		long now = dev.rapbattle.Clock.now();
 		Long until = MIC_HINT_CD.get(sp.getUuid());
@@ -663,6 +671,10 @@ public final class BattleManager {
 			boolean battlingTarget = spTarget != null && isBattling(spTarget);
 			boolean resolvingTarget = battlingTarget && isPlayerResolving(spTarget);
 			boolean isVoid = DamageTypes.OUT_OF_WORLD.equals(dmgKey);
+			boolean isFireOrLava = DamageTypes.LAVA.equals(dmgKey) || DamageTypes.IN_FIRE.equals(dmgKey) || DamageTypes.ON_FIRE.equals(dmgKey);
+			if (resolvingTarget && isFireOrLava) {
+				releaseAnchor(spTarget);
+			}
 			if (resolvingTarget && isVoid) {
 				resolveNow(spTarget);
 			}

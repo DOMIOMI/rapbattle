@@ -75,6 +75,7 @@ public class Battle {
 	final List<UUID> players = new ArrayList<>();
 	final Set<UUID> leftPlayers = new HashSet<>();
 	final Set<UUID> resolvedPlayers = new HashSet<>();
+	private final Set<UUID> anchorReleased = new HashSet<>();
 	final Map<UUID, String> names = new HashMap<>();
 	final Set<UUID> invited = new HashSet<>();
 	private final Map<UUID, Vec3d> anchors = new HashMap<>();
@@ -250,6 +251,10 @@ public class Battle {
 
 	public boolean isResolving() {
 		return phase == Phase.JUDGING || phase == Phase.ROUND_RESULT || phase == Phase.RESULT;
+	}
+
+	public void releaseAnchor(ServerPlayerEntity p) {
+		if (p != null) anchorReleased.add(p.getUuid());
 	}
 
 	public ServerPlayerEntity challenger() { return player(players.get(0)); }
@@ -915,9 +920,9 @@ public class Battle {
 			if (p.getFireTicks() > 0) p.extinguish();
 			if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
 			// Players stand still horizontally during the battle (gravity still works) and can look around.
-			// During resolving (JUDGING/ROUND_RESULT/RESULT), players are freed from the anchor so they can leave hazards.
+			// During resolving, a player who touches lava/fire is freed from the anchor so they can walk out.
 			Vec3d a = anchors.get(u);
-			if (a != null && !isResolving()) {
+			if (a != null && !anchorReleased.contains(u)) {
 				if (p.getY() - a.y > 2.0) {
 					p.networkHandler.requestTeleport(a.x, a.y, a.z, p.getYaw(), p.getPitch());
 					continue;
@@ -1067,6 +1072,15 @@ public class Battle {
 	}
 
 	private void beginRoundContent(long now) {
+		anchorReleased.clear();
+		for (UUID u : players) {
+			if (leftPlayers.contains(u)) continue;
+			ServerPlayerEntity p = player(u);
+			Vec3d a = anchors.get(u);
+			if (p != null && p.networkHandler != null && a != null && p.squaredDistanceTo(a) > 0.09) {
+				p.networkHandler.requestTeleport(a.x, a.y, a.z, p.getYaw(), p.getPitch());
+			}
+		}
 		punchesFired.clear();
 		mobLinesFired.clear();
 		timed.clear();

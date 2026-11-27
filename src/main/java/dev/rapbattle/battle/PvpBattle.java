@@ -409,10 +409,15 @@ public final class PvpBattle {
 	}
 
 	private final Map<UUID, Integer> pushTicks = new HashMap<>();
+	private final Set<UUID> anchorReleased = new HashSet<>();
 	private int truceTick = 0;
 
 	public boolean isResolving() {
 		return phase == Phase.JUDGING || phase == Phase.RESULT;
+	}
+
+	public void releaseAnchor(ServerPlayerEntity p) {
+		if (p != null) anchorReleased.add(p.getUuid());
 	}
 
 	private void tick(long now) {
@@ -443,7 +448,7 @@ public final class PvpBattle {
 				if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
 			}
 			Vec3d at = anchors.get(u);
-			if (p != testPeer && p.networkHandler != null && at != null && !isResolving()) {
+			if (p != testPeer && p.networkHandler != null && at != null && !anchorReleased.contains(u)) {
 				if (p.getY() - at.y > 2.0) {
 					p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
 					continue;
