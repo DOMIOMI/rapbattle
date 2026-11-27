@@ -75,7 +75,7 @@ public final class BastionBattle {
 		}
 	}
 
-	static void onLoss(ServerWorld world, ServerPlayerEntity loser, BlockPos pos) {
+	public static void onLoss(ServerWorld world, ServerPlayerEntity loser, BlockPos pos) {
 		if (loser == null) return;
 		UUID loserId = loser.getUuid();
 		Later.run(Reputation.RUN_TRUCE_MS, () -> {

@@ -465,6 +465,8 @@ public final class ReputationScenario {
 		sp.getServer().runOnServer(server -> {
 			RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			p.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p.setInvulnerable(false);
 			ServerWorld w = p.getEntityWorld();
 			PiglinBruteEntity br = EntityType.PIGLIN_BRUTE.create(w, SpawnReason.COMMAND);
 			br.setImmuneToZombification(true);
@@ -478,6 +480,7 @@ public final class ReputationScenario {
 			pgRef[0] = pg;
 			Battle b = BattleManager.start(p, br);
 			b.jumpToForTest(Battle.Phase.RESULT, false, true, 0, 90);
+			BastionBattle.onLoss(w, p, br.getBlockPos());
 		});
 		ctx.waitTicks(2);
 		sp.getServer().runOnServer(server -> {
