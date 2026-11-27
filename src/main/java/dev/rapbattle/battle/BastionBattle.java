@@ -77,11 +77,17 @@ public final class BastionBattle {
 
 	static void onLoss(ServerWorld world, ServerPlayerEntity loser, BlockPos pos) {
 		if (loser == null) return;
-		List<AbstractPiglinEntity> piglins = world.getEntitiesByClass(AbstractPiglinEntity.class,
-			loser.getBoundingBox().expand(32),
-			m -> m.isAlive() && m.squaredDistanceTo(pos.getX(), pos.getY(), pos.getZ()) <= 32 * 32);
-		for (AbstractPiglinEntity pig : piglins) {
-			pig.setTarget(loser);
-		}
+		UUID loserId = loser.getUuid();
+		Later.run(Reputation.RUN_TRUCE_MS, () -> {
+			ServerPlayerEntity p = world.getServer().getPlayerManager().getPlayer(loserId);
+			if (p == null || !p.isAlive() || p.getEntityWorld() != world) return;
+			List<AbstractPiglinEntity> piglins = world.getEntitiesByClass(AbstractPiglinEntity.class,
+				p.getBoundingBox().expand(32),
+				m -> m.isAlive() && m.squaredDistanceTo(pos.getX(), pos.getY(), pos.getZ()) <= 32 * 32);
+			for (AbstractPiglinEntity pig : piglins) {
+				Crowd.breakTruceFor(pig, loserId);
+				BattleManager.forceMobTarget(pig, p);
+			}
+		});
 	}
 }

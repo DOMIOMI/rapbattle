@@ -129,9 +129,9 @@ public final class Theft {
 		if (stolen.isEmpty()) return;
 
 		boolean wasPers = mob.isPersistent();
-		// Capture only a true vanilla Name Tag (ignore mod-generated champion/thief labels).
-		String origName = "";
-		if (!MobRecord.hasWins(mob) && mob.hasCustomName() && mob.getCustomName() != null) {
+		// Capture only a true vanilla Name Tag (stored in MobRecord.origName when first seen).
+		String origName = MobRecord.of(mob).origName();
+		if (origName.isEmpty() && !MobRecord.hasWins(mob) && mob.hasCustomName() && mob.getCustomName() != null) {
 			origName = mob.getCustomName().getString();
 		}
 		mob.setAttached(STOLEN_ITEM, new StolenData(stolen.copy(), wasPers, origName));
@@ -221,10 +221,12 @@ public final class Theft {
 		}
 
 		String nameCore = "";
-		if (data != null && !data.originalName().isEmpty()) {
+		MobRecord rec = MobRecord.of(mob);
+		if (!rec.origName().isEmpty()) {
+			nameCore = rec.origName();
+		} else if (data != null && !data.originalName().isEmpty()) {
 			nameCore = data.originalName();
 		} else {
-			MobRecord rec = MobRecord.of(mob);
 			if (!rec.name(Lang.RU).isEmpty()) nameCore = rec.name(Lang.RU);
 			else if (!rec.name(Lang.EN).isEmpty()) nameCore = rec.name(Lang.EN);
 			else if (baseRapName != null && !baseRapName.isEmpty()) nameCore = baseRapName;

@@ -13,8 +13,12 @@ import net.minecraft.util.Identifier;
  * A mob's own battle history and its rap name (per language), saved inside the mob, so the same sheep stays
  * "Биг Шерсть" / "Big Wool" forever. Lost when the mob dies.
  */
-public record MobRecord(int wins, int losses, int streak, String name, String nameEn, java.util.List<String> memory, long lastDiscountTick) {
-	public static final MobRecord EMPTY = new MobRecord(0, 0, 0, "", "", java.util.List.of(), 0L);
+public record MobRecord(int wins, int losses, int streak, String name, String nameEn, java.util.List<String> memory, long lastDiscountTick, String origName) {
+	public static final MobRecord EMPTY = new MobRecord(0, 0, 0, "", "", java.util.List.of(), 0L, "");
+
+	public MobRecord(int wins, int losses, int streak, String name, String nameEn, java.util.List<String> memory, long lastDiscountTick) {
+		this(wins, losses, streak, name, nameEn, memory, lastDiscountTick, "");
+	}
 
 	/** One remembered opponent: who, how it ended for the mob, and a line of theirs. */
 	public record Rival(String player, boolean mobWon, String line) {}
@@ -26,7 +30,8 @@ public record MobRecord(int wins, int losses, int streak, String name, String na
 		Codec.STRING.optionalFieldOf("name", "").forGetter(MobRecord::name),
 		Codec.STRING.optionalFieldOf("name_en", "").forGetter(MobRecord::nameEn),
 		Codec.STRING.listOf().optionalFieldOf("memory", java.util.List.of()).forGetter(MobRecord::memory),
-		Codec.LONG.optionalFieldOf("last_discount_tick", 0L).forGetter(MobRecord::lastDiscountTick)
+		Codec.LONG.optionalFieldOf("last_discount_tick", 0L).forGetter(MobRecord::lastDiscountTick),
+		Codec.STRING.optionalFieldOf("orig_name", "").forGetter(MobRecord::origName)
 	).apply(i, MobRecord::new));
 
 	public static final AttachmentType<MobRecord> TYPE =
@@ -53,11 +58,20 @@ public record MobRecord(int wins, int losses, int streak, String name, String na
 		return Lang.isRu(lang) ? name : nameEn;
 	}
 
+	private static String captureOrigName(Entity e, MobRecord r) {
+		if (!r.origName.isEmpty()) return r.origName;
+		if (e.hasCustomName() && e.getCustomName() != null) {
+			String s = e.getCustomName().getString();
+			if (!s.contains("♛") && !s.endsWith("]")) return s;
+		}
+		return "";
+	}
+
 	public static void setName(Entity e, String name, String lang) {
 		MobRecord r = of(e);
 		String ru = Lang.isRu(lang) ? name : r.name;
 		String en = Lang.isRu(lang) ? r.nameEn : name;
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, ru, en, r.memory, r.lastDiscountTick));
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, ru, en, r.memory, r.lastDiscountTick, captureOrigName(e, r)));
 	}
 
 	@Deprecated
@@ -67,17 +81,17 @@ public record MobRecord(int wins, int losses, int streak, String name, String na
 
 	public static void win(Entity e) {
 		MobRecord r = of(e);
-		e.setAttached(TYPE, new MobRecord(r.wins + 1, r.losses, Math.max(0, r.streak) + 1, r.name, r.nameEn, r.memory, r.lastDiscountTick));
+		e.setAttached(TYPE, new MobRecord(r.wins + 1, r.losses, Math.max(0, r.streak) + 1, r.name, r.nameEn, r.memory, r.lastDiscountTick, captureOrigName(e, r)));
 	}
 
 	public static void loss(Entity e) {
 		MobRecord r = of(e);
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses + 1, Math.min(0, r.streak) - 1, r.name, r.nameEn, r.memory, r.lastDiscountTick));
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses + 1, Math.min(0, r.streak) - 1, r.name, r.nameEn, r.memory, r.lastDiscountTick, captureOrigName(e, r)));
 	}
 
 	public static void markDiscount(Entity e, long worldTime) {
 		MobRecord r = of(e);
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, r.name, r.nameEn, r.memory, worldTime));
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, r.name, r.nameEn, r.memory, worldTime, captureOrigName(e, r)));
 	}
 
 	/** Remembers a battle with this player (the last 4 opponents are kept). */
@@ -89,7 +103,7 @@ public record MobRecord(int wins, int losses, int streak, String name, String na
 		if (clean.length() > 90) clean = clean.substring(0, 89) + "…";
 		mem.add(player + "\t" + (mobWon ? "1" : "0") + "\t" + clean);
 		while (mem.size() > 4) mem.remove(0);
-		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, r.name, r.nameEn, java.util.List.copyOf(mem), r.lastDiscountTick));
+		e.setAttached(TYPE, new MobRecord(r.wins, r.losses, r.streak, r.name, r.nameEn, java.util.List.copyOf(mem), r.lastDiscountTick, captureOrigName(e, r)));
 	}
 
 	/** What this mob remembers about the player, or null if they never met. */

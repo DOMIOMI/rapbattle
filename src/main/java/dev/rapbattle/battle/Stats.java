@@ -181,7 +181,9 @@ public class Stats extends PersistentState {
 				p.streak = Math.max(0, p.streak) + 1;
 				p.bestStreak = Math.max(p.bestStreak, p.streak);
 				p.speciesWins.merge(sp, 1, Integer::sum);
-				if (overworldDay >= 0 && u.equals(initiator)) {
+				Integer scDay = scores == null ? null : scores.get(u);
+				boolean contributed = scDay != null ? scDay > 0 : u.equals(initiator);
+				if (overworldDay >= 0 && contributed) {
 					p.recordDailyWin(sp, overworldDay);
 				}
 				if (p.speciesWins.getOrDefault("sheep", 0) >= 10) p.addTitle("Овцеубийца");

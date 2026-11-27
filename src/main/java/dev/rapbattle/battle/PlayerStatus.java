@@ -89,7 +89,7 @@ public final class PlayerStatus {
 			if (map.isEmpty()) continue;
 			if (BattleManager.byPlayer(p.getUuid()) != null
 				|| PvpBattle.byPlayer(p.getUuid()) != null
-				|| BattleManager.hasPendingForTest(p.getUuid())) continue;
+				|| BattleManager.hasPending(p.getUuid())) continue;
 			ServerWorld w = p.getEntityWorld();
 			BlockPos pos = p.getBlockPos();
 			StringBuilder sb = new StringBuilder();

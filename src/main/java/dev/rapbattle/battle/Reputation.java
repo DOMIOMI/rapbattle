@@ -104,13 +104,17 @@ public final class Reputation {
 	}
 
 	static void grantOnWin(Battle battle, ServerPlayerEntity mvpPlayer) {
+		grantOnWin(battle, mvpPlayer, battle == null ? 1.0 : battle.dailyBonusScale);
+	}
+
+	static void grantOnWin(Battle battle, ServerPlayerEntity mvpPlayer, double effectiveDailyScale) {
 		if (battle == null || battle.boss) return;
 		MobEntity mob = battle.mob;
 		long now = dev.rapbattle.Clock.now();
 
 		// Piglin two-tier respect (gated if act bonuses are closed in soft mode or daily farm cap hit)
 		UUID mvpId = mvpPlayer != null ? mvpPlayer.getUuid() : null;
-		if (battle.actBonusesAllowed && battle.dailyBonusScale > 0.0) {
+		if (battle.actBonusesAllowed && effectiveDailyScale > 0.0) {
 			if (mob instanceof PiglinEntity || mob instanceof PiglinBruteEntity) {
 				boolean isBrute = mob instanceof PiglinBruteEntity;
 				String statusKey = isBrute ? PlayerStatus.BASTION_GUEST : PlayerStatus.PIGLIN_PAL;
@@ -208,7 +212,7 @@ public final class Reputation {
 	public static boolean isNeverRespecting(MobEntity m) {
 		if (m == null) return true;
 		if (Opponent.isBoss(m)) return true;
-		if (MobRecord.of(m).wins() > 0) return true;
+		if (MobRecord.hasWins(m)) return true;
 		if (SoreLosers.isRaged(m)) return true;
 		if (m instanceof RaiderEntity r) {
 			var raid = r.getRaid();

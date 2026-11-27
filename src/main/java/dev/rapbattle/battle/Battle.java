@@ -1807,12 +1807,26 @@ public class Battle {
 				if (mvpPlayer != null) break;
 			}
 		}
+		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
+		double effectiveDailyScale = 1.0;
+		boolean anyContributor = false;
+		Stats statsForCap = Stats.of(world.getServer());
+		for (UUID u : players) {
+			String nm = names.get(u);
+			int dealt = nm != null ? battleDealt.getOrDefault(nm, 0) : 0;
+			if (dealt > 0) {
+				anyContributor = true;
+				int prev = statsForCap.player(u).dailyWinsFor(opp.profile().id(), overworldDay);
+				effectiveDailyScale = Math.min(effectiveDailyScale, ProgressionRules.dailyBonusScale(prev));
+			}
+		}
+		if (!anyContributor) effectiveDailyScale = this.dailyBonusScale;
 		recordStats(mvpPlayer);
 		if (result.playersWin) {
 			MobRecord.loss(mob);
 			rememberPlayers(false);
 			Theft.returnOnWin(mob, mvpPlayer != null ? mvpPlayer : challenger());
-			Reputation.grantOnWin(this, mvpPlayer);
+			Reputation.grantOnWin(this, mvpPlayer, effectiveDailyScale);
 			Text verb = players.size() > 1
 				? Text.translatable("rapbattle.battle.team_win_verb." + rnd.nextInt(TEAM_WIN_VERBS))
 				: Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
@@ -1832,9 +1846,9 @@ public class Battle {
 			ServerPlayerEntity killer = mvpPlayer;
 			Vec3d pos = new Vec3d(mob.getX(), mob.getY() + 0.5, mob.getZ());
 			int xp = overdressed ? rank.xp / 2 : rank.xp;
-			boolean bonuses = actBonusesAllowed && dailyBonusScale > 0.0;
-			boolean fullBonuses = actBonusesAllowed && dailyBonusScale >= 1.0;
-			if (dailyBonusScale == 0.0) {
+			boolean bonuses = actBonusesAllowed && effectiveDailyScale > 0.0;
+			boolean fullBonuses = actBonusesAllowed && effectiveDailyScale >= 1.0;
+			if (effectiveDailyScale == 0.0) {
 				broadcastChat(Text.translatable("rapbattle.progression.daily_cap").formatted(Formatting.GRAY));
 			}
 			if (bonuses) Trophies.give(killer, opp, lang);
