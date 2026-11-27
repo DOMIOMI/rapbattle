@@ -76,6 +76,7 @@ public class Battle {
 	final List<UUID> players = new ArrayList<>();
 	final Set<UUID> leftPlayers = new HashSet<>();
 	final Set<UUID> resolvedPlayers = new HashSet<>();
+	final Set<UUID> pendingJudgeExit = new HashSet<>();
 	private final Set<UUID> anchorReleased = new HashSet<>();
 	final Map<UUID, String> names = new HashMap<>();
 	final Set<UUID> invited = new HashSet<>();
@@ -1666,6 +1667,7 @@ public class Battle {
 			Crowd.react(this, roundPlayers ? Crowd.Moment.WIN_PLAYERS : Crowd.Moment.WIN_MOB);
 		}
 		setPhase(done ? Phase.RESULT : Phase.ROUND_RESULT, now);
+		resolvePendingJudgeExits();
 	}
 
 	private UUID playerUuidByName(String name) {
@@ -1861,6 +1863,7 @@ public class Battle {
 	public void abort(Text reason) {
 		if (finished) return;
 		finished = true;
+		pendingJudgeExit.clear();
 		cancelFutures();
 		releaseMobs();
 		broadcastChat(reason.copy().formatted(Formatting.GRAY));
@@ -2018,20 +2021,19 @@ public class Battle {
 			finish();
 			return;
 		}
-		ServerPlayerEntity p = player(u);
-		String nm = names.getOrDefault(u, p != null ? p.getName().getString() : "Player");
-		boolean win = result != null && (result.finalResult ? result.playersWin : winsPlayers >= winsNeeded);
-		Stats stats = Stats.of(world.getServer());
-		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
-		int outfitLvl = p != null ? Outfit.of(p, lang).level() : 0;
-		stats.record(List.of(u), Map.of(u, battleDealt.getOrDefault(nm, 0)), null,
-			win, opp, this.rank, Map.of(u, outfitLvl), overworldDay);
-		if (p != null) notifyStyleUnlock(stats, u, p);
-		resolvedPlayers.add(u);
-		if (!win) Reputation.revokeCred(u);
+		if (phase == Phase.JUDGING) {
+			pendingJudgeExit.add(u);
+		} else {
+			boolean win = result != null && (result.finalResult ? result.playersWin : winsPlayers >= winsNeeded);
+			Stats stats = Stats.of(world.getServer());
+			long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
+			recordExitedPlayer(u, win, stats, overworldDay);
+		}
 		leftPlayers.add(u);
 		anchors.remove(u);
 		pushTicks.remove(u);
+		anchorReleased.remove(u);
+		ServerPlayerEntity p = player(u);
 		if (p != null) {
 			if (glowing.remove(p)) p.setGlowing(false);
 			BattleView end = new BattleView();
@@ -2042,8 +2044,32 @@ public class Battle {
 		broadcastState();
 	}
 
+	private void resolvePendingJudgeExits() {
+		if (pendingJudgeExit.isEmpty()) return;
+		boolean win = result != null && (result.finalResult ? result.playersWin : winsPlayers >= winsNeeded);
+		Stats stats = Stats.of(world.getServer());
+		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
+		for (UUID u : pendingJudgeExit) {
+			if (!resolvedPlayers.contains(u)) recordExitedPlayer(u, win, stats, overworldDay);
+		}
+		pendingJudgeExit.clear();
+	}
+
+	private void recordExitedPlayer(UUID u, boolean win, Stats stats, long overworldDay) {
+		ServerPlayerEntity p = player(u);
+		String nm = names.getOrDefault(u, p != null ? p.getName().getString() : "Player");
+		int outfitLvl = p != null ? Outfit.of(p, lang).level() : 0;
+		stats.record(List.of(u), Map.of(u, battleDealt.getOrDefault(nm, 0)), null,
+			win, opp, this.rank, Map.of(u, outfitLvl), overworldDay);
+		if (p != null) notifyStyleUnlock(stats, u, p);
+		resolvedPlayers.add(u);
+		if (!win) Reputation.revokeCred(u);
+	}
+
 	private void finish() {
 		finished = true;
+		resolvePendingJudgeExits();
+		pendingJudgeExit.clear();
 		cancelFutures();
 		sendEnd();
 		releaseMobs();
