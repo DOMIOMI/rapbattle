@@ -83,7 +83,8 @@ public final class Reputation {
 		if (durationMs <= 0 || newRankLevel <= 0) return current;
 		int prevLevel = (current != null && now < current.until()) ? current.level() : 0;
 		int level = Math.max(prevLevel, newRankLevel);
-		long until = Math.min(now + STREET_CRED_MS, now + durationMs);
+		long prevUntil = (current != null && now < current.until()) ? current.until() : 0L;
+		long until = Math.min(now + STREET_CRED_MS, Math.max(prevUntil, now + durationMs));
 		return new CredState(level, until);
 	}
 
@@ -95,6 +96,7 @@ public final class Reputation {
 
 	public static void revokeCred(UUID player) {
 		CRED.remove(player);
+		WITNESSES.values().forEach(map -> map.remove(player));
 		PlayerStatus.revoke(player, PlayerStatus.STREET_CRED);
 	}
 
