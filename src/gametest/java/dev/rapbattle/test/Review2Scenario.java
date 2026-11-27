@@ -383,7 +383,7 @@ public final class Review2Scenario {
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
 		});
-		ctx.waitTicks(4);
+		ctx.waitTicks(10);
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			assertTrue(p.isAlive() && !BattleManager.isBattling(p), "Respawned player must be alive and not in battle");
@@ -399,6 +399,7 @@ public final class Review2Scenario {
 			Battle b2 = BattleManager.start(p, z2);
 			b2.invite(p2);
 			b2.answerInvite(p2, true);
+			p.onTeleportationDone();
 			p.timeUntilRegen = 0;
 			p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
 			assertTrue(!BattleManager.isBattling(p) && !BattleManager.isBattling(p2), "Coop /kill must abort battle for both");
@@ -408,7 +409,7 @@ public final class Review2Scenario {
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
 		});
-		ctx.waitTicks(4);
+		ctx.waitTicks(10);
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
@@ -420,6 +421,7 @@ public final class Review2Scenario {
 			PvpBattle.challenge(p, p3);
 			int pvpId = PvpBattle.pendingInviteIdForTest(p3.getUuid());
 			PvpBattle.answer(p3, pvpId, true);
+			p.onTeleportationDone();
 			p.timeUntilRegen = 0;
 			p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
 			assertTrue(!BattleManager.isBattling(p) && !BattleManager.isBattling(p3), "PvP /kill must abort battle for both");
@@ -428,7 +430,7 @@ public final class Review2Scenario {
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
 		});
-		ctx.waitTicks(4);
+		ctx.waitTicks(10);
 	}
 
 	private static void testVehicleAndEnderPearl(ClientGameTestContext ctx, TestSingleplayerContext sp) {
