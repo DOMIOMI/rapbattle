@@ -65,6 +65,7 @@ public class RapBattleGameTestSuite implements FabricClientGameTest {
 				new Entry("pvp", PvpScenario::run),
 				new Entry("coverage", CoverageScenario::run),
 				new Entry("review2", Review2Scenario::run),
+				new Entry("first_minutes", FirstMinutesScenario::run),
 				new Entry("lang_en", RapBattleGameTestSuite::runEnglishTextPass)
 			);
 
