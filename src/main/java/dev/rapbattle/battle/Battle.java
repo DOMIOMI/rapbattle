@@ -1680,6 +1680,7 @@ public class Battle {
 	private BattleView baseView() {
 		BattleView v = new BattleView();
 		v.id = id;
+		v.allowSwearing = RapConfig.get().allowSwearing;
 		v.beatMs = beatMs;
 		v.beatTrack = track == null ? null : track.id();
 		v.boss = boss;
@@ -2104,9 +2105,7 @@ public class Battle {
 			rememberPlayers(false);
 			Theft.returnOnWin(mob, mvpPlayer != null ? mvpPlayer : challenger());
 			Reputation.grantOnWin(this, mvpPlayer, effectiveDailyScale);
-			Text verb = players.size() > 1
-				? Text.translatable("rapbattle.battle.team_win_verb." + rnd.nextInt(TEAM_WIN_VERBS))
-				: Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
+			Text verb = winVerb(players.size() > 1);
 			Text msg;
 			if (result.knockout) {
 				msg = result.mvp.isEmpty()
@@ -2285,7 +2284,7 @@ public class Battle {
 		} else {
 			MobRecord.win(mob);
 			rememberPlayers(true);
-			Text verb = Text.translatable("rapbattle.battle.win_verb." + rnd.nextInt(WIN_VERBS));
+			Text verb = winVerb(false);
 			Text msg = result.knockout
 				? Text.translatable("rapbattle.battle.win_ko", opp.name(), verb, team)
 				: Text.translatable("rapbattle.battle.win_pts", opp.name(), verb, team, boss ? winsMob : respectMob, boss ? winsPlayers : respectTeam);
@@ -2321,6 +2320,13 @@ public class Battle {
 		}
 		RapBattle.LOG.info("Battle {} finished: players {} respect {} vs mob {} (ko {}, rank {})", id, result.playersWin ? "won" : "lost",
 			respectTeam, respectMob, result.knockout, rank);
+	}
+
+	private Text winVerb(boolean team) {
+		int idx = rnd.nextInt(team ? TEAM_WIN_VERBS : WIN_VERBS);
+		String key = (team ? "rapbattle.battle.team_win_verb." : "rapbattle.battle.win_verb.") + idx;
+		if (idx == 0 && !RapConfig.get().allowSwearing) key += ".clean";
+		return Text.translatable(key);
 	}
 
 	private void recordStats(ServerPlayerEntity mvpPlayer) {

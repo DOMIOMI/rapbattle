@@ -114,7 +114,7 @@ public final class Trophies {
 		mic.set(DataComponentTypes.CUSTOM_NAME, name.copy().styled(s -> s.withItalic(false).withColor(opp.rank().isBoss() ? 0xB48CFF : 0xF2C94C)));
 		mic.set(DataComponentTypes.LORE, new LoreComponent(List.of(
 			Text.translatable("rapbattle.trophies.perk." + micKey).formatted(Formatting.AQUA),
-			Text.translatable("rapbattle.trophies.lore.crushed", opp.name(), opp.profile().species(lang)).formatted(Formatting.GOLD),
+			Text.translatable(dev.rapbattle.RapConfig.get().allowSwearing ? "rapbattle.trophies.lore.crushed" : "rapbattle.trophies.lore.crushed.clean", opp.name(), opp.profile().species(lang)).formatted(Formatting.GOLD),
 			Text.translatable("rapbattle.trophies.lore.rank", opp.rank().label(lang)).formatted(Formatting.GRAY),
 			Text.translatable("rapbattle.trophies.lore.mvp", mvp.getName().getString(), LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
 				.formatted(Formatting.DARK_GRAY))));

@@ -533,7 +533,9 @@ public final class BattleHud {
 			title = I18n.translate(roundWon ? "rapbattle.hud.round_won" : "rapbattle.hud.round_lost", v.round);
 			color = roundWon ? GREEN : RED;
 		} else {
-			title = I18n.translate(r.playersWin ? "rapbattle.hud.final_win" : (v.team.size() > 1 ? "rapbattle.hud.final_lose_team" : "rapbattle.hud.final_lose_solo"));
+			String key = r.playersWin ? "rapbattle.hud.final_win" : (v.team.size() > 1 ? "rapbattle.hud.final_lose_team" : "rapbattle.hud.final_lose_solo");
+			if (!v.allowSwearing) key += ".clean";
+			title = I18n.translate(key);
 			color = r.playersWin ? YELLOW : RED;
 		}
 		scaledText(ctx, tr, title, w / 2, 14 + top(v), roundOnly ? 2.6f : 3.5f, color, true);
@@ -607,8 +609,10 @@ public final class BattleHud {
 				BattleView.Result r = v.result;
 				if (r == null) return;
 				boolean win = r.playersWin;
+				String fkey = win ? "rapbattle.hud.spec_final_win" : "rapbattle.hud.spec_final_lose";
+				if (!v.allowSwearing) fkey += ".clean";
 				line = r.finalResult
-					? I18n.translate(win ? "rapbattle.hud.spec_final_win" : "rapbattle.hud.spec_final_lose", r.respectTeam, r.respectMob)
+					? I18n.translate(fkey, r.respectTeam, r.respectMob)
 					: I18n.translate(win ? "rapbattle.hud.spec_round_win" : "rapbattle.hud.spec_round_lose", v.round, r.respectTeam, r.respectMob);
 				if (!r.mvp.isEmpty()) line = I18n.translate("rapbattle.hud.spec_mvp_suffix", line, r.mvp);
 				color = win ? GREEN : RED;
@@ -647,14 +651,14 @@ public final class BattleHud {
 		} else if (c.allowed) {
 			l1 = I18n.translate(c.boss ? "rapbattle.hud.choice_rap_boss" : "rapbattle.hud.choice_rap");
 			l1c = c.boss ? 0xFFB48CFF : GREEN;
-			l2 = I18n.translate("rapbattle.hud.choice_fight");
+			l2 = I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
 			accent = c.boss ? Ui.BOSS : Ui.RED;
 		} else {
 			l1 = I18n.translate("rapbattle.hud.choice_refused", c.refusal);
 			l1c = RED;
 			l2 = !c.requiredOutfit.isEmpty()
-				? I18n.translate("rapbattle.hud.choice_refused_sub", c.requiredOutfit, c.yourOutfit)
-				: I18n.translate("rapbattle.hud.choice_fight");
+				? I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_refused_sub" : "rapbattle.hud.choice_refused_sub.clean", c.requiredOutfit, c.yourOutfit)
+				: I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
 			accent = 0xFF6A6A78;
 		}
 		String warn = c.allowed && !c.gateWarning.isEmpty() ? c.gateWarning : "";

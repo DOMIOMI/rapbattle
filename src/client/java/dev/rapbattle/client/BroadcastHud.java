@@ -133,7 +133,10 @@ public final class BroadcastHud {
 			prefix = team ? "rapbattle.broadcast.team_lose." : "rapbattle.broadcast.lose.";
 			count = team ? TEAM_LOSE_COUNT : LOSE_COUNT;
 		}
-		return I18n.translate(prefix + (seed % count));
+		int idx = seed % count;
+		String key = prefix + idx;
+		if (!v.allowSwearing && res.finalResult && idx == 0) key += ".clean";
+		return I18n.translate(key);
 	}
 
 	/** Last shown value per bar, and the latest drop to flash next to it. */

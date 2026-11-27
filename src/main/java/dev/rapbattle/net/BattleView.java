@@ -78,6 +78,8 @@ public class BattleView {
 	public int respectTeam, respectMob, respectMax, combo;
 	/** The real beat of this battle (see BeatTracks), or null for the note-block beat. */
 	public String beatTrack;
+	/** Server allowSwearing flag, used by client HUD/broadcast to select clean vs uncensored keys. */
+	public boolean allowSwearing = true;
 	/** Type "keys": are the server's keys set (never the keys themselves). */
 	public boolean keysLlm, keysStt;
 	/** Type "style": player's cumulative Respect and active MC style id. */

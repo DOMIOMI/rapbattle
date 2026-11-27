@@ -205,6 +205,7 @@ public final class BattleManager {
 		}
 		BattleView v = new BattleView();
 		v.type = "choice";
+		v.allowSwearing = RapConfig.get().allowSwearing;
 		v.mobEntityId = mob.getId();
 		v.mobName = o.name();
 		v.mobSpecies = o.profile().species(lang);
@@ -459,6 +460,7 @@ public final class BattleManager {
 		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + CHOICE_MS, allowed, false, fromApproach, gate));
 		BattleView v = new BattleView();
 		v.type = "choice";
+		v.allowSwearing = RapConfig.get().allowSwearing;
 		v.mobEntityId = mob.getId();
 		v.mobName = o.name();
 		v.mobSpecies = o.profile().species(lang);

@@ -256,6 +256,7 @@ public final class PvpBattle {
 		v.type = "state";
 		v.id = id;
 		v.pvp = true;
+		v.allowSwearing = RapConfig.get().allowSwearing;
 		v.beatMs = beatMs;
 		v.beatTrack = track == null ? null : track.id();
 		v.rounds = 1;
