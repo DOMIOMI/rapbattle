@@ -12,7 +12,8 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(ModelCommandRenderer.class)
 public class ModelCommandRendererMixin {
 	@WrapOperation(method = "render(Lnet/minecraft/client/render/command/OrderedRenderCommandQueueImpl$ModelCommand;Lnet/minecraft/client/render/RenderLayer;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/client/render/OutlineVertexConsumerProvider;Lnet/minecraft/client/render/VertexConsumerProvider$Immediate;)V",
-		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/model/Model;setAngles(Ljava/lang/Object;)V"))
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/model/Model;setAngles(Ljava/lang/Object;)V"),
+		require = 0)
 	private void rapbattle$dance(Model<?> model, Object state, Operation<Void> original) {
 		original.call(model, state);
 		RapDancer.after(model, state);
