@@ -195,6 +195,10 @@ public final class PvpBattle {
 		names.put(b, pb.getName().getString());
 		anchors.put(a, new Vec3d(pa.getX(), pa.getY(), pa.getZ()));
 		anchors.put(b, new Vec3d(pb.getX(), pb.getY(), pb.getZ()));
+		pa.extinguish();
+		pa.setAir(pa.getMaxAir());
+		pb.extinguish();
+		pb.setAir(pb.getMaxAir());
 		stage = new Vec3d((pa.getX() + pb.getX()) / 2, Math.min(pa.getY(), pb.getY()), (pa.getZ() + pb.getZ()) / 2);
 		List<BeatTracks.Track> pool = new ArrayList<>();
 		for (BeatTracks.Track t : BeatTracks.ALL) if (!t.id().equals("boss")) pool.add(t);
@@ -380,6 +384,10 @@ public final class PvpBattle {
 		// Both stand on their spots horizontally (gravity works) and face each other.
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
+			if (p != null && p != testPeer) {
+				if (p.getFireTicks() > 0) p.extinguish();
+				if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
+			}
 			Vec3d at = anchors.get(u);
 			if (p != testPeer && p.networkHandler != null && at != null) {
 				double dx = p.getX() - at.x, dz = p.getZ() - at.z;

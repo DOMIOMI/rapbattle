@@ -234,6 +234,8 @@ public class Battle {
 		players.add(p.getUuid());
 		names.put(p.getUuid(), p.getName().getString());
 		anchors.put(p.getUuid(), new Vec3d(p.getX(), p.getY(), p.getZ()));
+		p.extinguish();
+		p.setAir(p.getMaxAir());
 		invited.remove(p.getUuid());
 		spectators.remove(p.getUuid());
 	}
@@ -890,6 +892,8 @@ public class Battle {
 				continue;
 			}
 			if (!p.isAlive()) continue;
+			if (p.getFireTicks() > 0) p.extinguish();
+			if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
 			// Players stand still horizontally during the battle (gravity still works) and can look around.
 			Vec3d a = anchors.get(u);
 			if (a != null) {
@@ -2169,7 +2173,7 @@ public class Battle {
 				DamageSource src = new DamageSource(world.getRegistryManager().getOrThrow(RegistryKeys.DAMAGE_TYPE).getOrThrow(RAP_DEATH), mob);
 				pl.damage(world, src, Float.MAX_VALUE);
 			} else {
-				pl.addStatusEffect(new StatusEffectInstance(StatusEffects.WITHER, 20 * 30, 1));
+				BattleManager.forceStatusEffect(pl, new StatusEffectInstance(StatusEffects.WITHER, 20 * 30, 1));
 				pl.addExperienceLevels(-5);
 			}
 		});
@@ -2180,13 +2184,13 @@ public class Battle {
 			ServerPlayerEntity p = player(u);
 			if (p == null) continue;
 			switch (rank) {
-				case LEATHER, CHAIN -> p.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 60, 0));
+				case LEATHER, CHAIN -> BattleManager.forceStatusEffect(p, new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 60, 0));
 				case IRON, GOLD -> {
-					p.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 60, 0));
+					BattleManager.forceStatusEffect(p, new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 60, 0));
 					p.addExperienceLevels(rank == Rank.IRON ? -1 : -2);
 				}
 				case DIAMOND -> {
-					p.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 90, 1));
+					BattleManager.forceStatusEffect(p, new StatusEffectInstance(StatusEffects.WEAKNESS, 20 * 90, 1));
 					p.addExperienceLevels(-2);
 				}
 				case NETHERITE -> {
@@ -2201,8 +2205,8 @@ public class Battle {
 				p.damage(world, src, hp);
 				DamagePop.spawn(world, p, "-" + Math.round(hp / 2) + " ❤", 0xFF5050);
 			}
-			p.addStatusEffect(new StatusEffectInstance(StatusEffects.NAUSEA, 20 * 2, 0));
-			p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 20 * 5, 0));
+			BattleManager.forceStatusEffect(p, new StatusEffectInstance(StatusEffects.NAUSEA, 20 * 2, 0));
+			BattleManager.forceStatusEffect(p, new StatusEffectInstance(StatusEffects.SPEED, 20 * 5, 0));
 		}
 	}
 }
