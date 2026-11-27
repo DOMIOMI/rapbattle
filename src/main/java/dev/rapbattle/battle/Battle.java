@@ -328,6 +328,10 @@ public class Battle {
 			spectators.remove(uuid);
 			return;
 		}
+		if (isResolving()) {
+			resolveNow(uuid);
+			return;
+		}
 		leftPlayers.add(uuid);
 		boolean anyOnline = false;
 		for (UUID u : players) {
@@ -1895,7 +1899,12 @@ public class Battle {
 
 	/** Immediately resolves the battle (or this co-op player's participation) with the current outcome. */
 	public void resolveNow(ServerPlayerEntity p) {
-		if (finished || p == null || !hasPlayer(p.getUuid()) || !isResolving()) return;
+		if (p != null) resolveNow(p.getUuid());
+	}
+
+	/** Immediately resolves the battle (or this co-op player's participation), supporting offline players. */
+	public void resolveNow(UUID u) {
+		if (finished || u == null || !hasPlayer(u) || !isResolving()) return;
 		if (phase == Phase.JUDGING) {
 			long now = dev.rapbattle.Clock.now();
 			if (verdictFuture == null) {
@@ -1912,24 +1921,27 @@ public class Battle {
 			finish();
 			return;
 		}
-		UUID u = p.getUuid();
-		String nm = names.getOrDefault(u, p.getName().getString());
+		ServerPlayerEntity p = player(u);
+		String nm = names.getOrDefault(u, p != null ? p.getName().getString() : "Player");
 		boolean win = result != null && result.playersWin;
 		Stats stats = Stats.of(world.getServer());
 		long overworldDay = ProgressionRules.currentDay(world.getServer().getOverworld().getTime());
+		int outfitLvl = p != null ? Outfit.of(p, lang).level() : 0;
 		stats.record(List.of(u), Map.of(u, battleDealt.getOrDefault(nm, 0)), null,
-			win, opp, this.rank, Map.of(u, Outfit.of(p, lang).level()), overworldDay);
-		notifyStyleUnlock(stats, u, p);
+			win, opp, this.rank, Map.of(u, outfitLvl), overworldDay);
+		if (p != null) notifyStyleUnlock(stats, u, p);
 		resolvedPlayers.add(u);
 		if (!win) Reputation.revokeCred(u);
 		leftPlayers.add(u);
 		anchors.remove(u);
 		pushTicks.remove(u);
-		p.setGlowing(false);
-		BattleView end = new BattleView();
-		end.type = "end";
-		end.id = id;
-		send(p, end);
+		if (p != null) {
+			if (glowing.remove(p)) p.setGlowing(false);
+			BattleView end = new BattleView();
+			end.type = "end";
+			end.id = id;
+			send(p, end);
+		}
 		broadcastState();
 	}
 
