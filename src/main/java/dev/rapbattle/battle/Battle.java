@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Battle {
 	public enum Phase { LOBBY, PREP, TIMELINE, JUDGING, ROUND_RESULT, RESULT }
 
-	static final ExecutorService POOL = Executors.newCachedThreadPool(r -> {
+	static final ExecutorService POOL = Executors.newFixedThreadPool(8, r -> {
 		Thread t = new Thread(r, "rapbattle-ai");
 		t.setDaemon(true);
 		return t;
@@ -111,6 +111,7 @@ public class Battle {
 	final double dailyBonusScale;
 
 	private final Map<UUID, ByteArrayOutputStream> audio = new HashMap<>();
+	private final Map<UUID, Integer> audioSeq = new HashMap<>();
 	private final Map<UUID, CompletableFuture<String>> transcripts = new HashMap<>();
 	/** Word timestamps from speech recognition, and where each recording starts on the battle clock. */
 	private final Map<UUID, dev.rapbattle.ai.Transcriber.Result> timed = new java.util.concurrent.ConcurrentHashMap<>();
@@ -462,12 +463,16 @@ public class Battle {
 		UUID u = p.getUuid();
 		if (!hasPlayer(u) || transcripts.containsKey(u)) return;
 		if (phase != Phase.TIMELINE && phase != Phase.JUDGING) return;
+		int expectedSeq = audioSeq.getOrDefault(u, 0);
+		if (chunk.seq() != expectedSeq) return;
+		audioSeq.put(u, expectedSeq + 1);
 		ByteArrayOutputStream buf = audio.computeIfAbsent(u, k -> new ByteArrayOutputStream());
 		if (buf.size() + chunk.data().length > 8 * 1024 * 1024) return;
 		buf.writeBytes(chunk.data());
 		if (chunk.last()) {
 			byte[] wav = buf.toByteArray();
 			audio.remove(u);
+			audioSeq.remove(u);
 			recordingStart.put(u, chunk.startMs());
 			List<String> hints = rhymeWords.getOrDefault(u, List.of());
 			transcripts.put(u, CompletableFuture.supplyAsync(() -> {
@@ -486,7 +491,21 @@ public class Battle {
 
 	/** Creeper: a player stayed silent for a whole bar of their own. The fuse burns out. */
 	public void onSilentBar(ServerPlayerEntity p) {
-		if (phase != Phase.TIMELINE || !hasPlayer(p.getUuid()) || !(mob instanceof net.minecraft.entity.mob.CreeperEntity)) return;
+		if (phase != Phase.TIMELINE || view == null || !hasPlayer(p.getUuid()) || !(mob instanceof net.minecraft.entity.mob.CreeperEntity)) return;
+		String who = names.getOrDefault(p.getUuid(), p.getName().getString());
+		int curBeat = (int) Math.floorDiv(dev.rapbattle.Clock.now() - beatZero, Math.max(1L, beatMs));
+		List<BattleView.Row> myRows = playerRows(who);
+		int matchIdx = -1;
+		for (int i = 0; i < myRows.size(); i++) {
+			BattleView.Row r = myRows.get(i);
+			if (curBeat >= r.startBeat + 3 && curBeat <= r.startBeat + 5) {
+				matchIdx = i;
+				break;
+			}
+		}
+		if (matchIdx < 0) return;
+		List<Boolean> louds = playerBarLoud.getOrDefault(who, List.of());
+		if (matchIdx < louds.size() && Boolean.TRUE.equals(louds.get(matchIdx))) return;
 		broadcastChat(Text.translatable("rapbattle.battle.creeper_silent_chat", p.getName().getString()).formatted(Formatting.RED));
 		forfeit(Lang.t(lang, "rapbattle.battle.creeper_silent_comment"));
 		SoreLosers.blast(mob, 1500);
@@ -553,17 +572,34 @@ public class Battle {
 		broadcastState();
 	}
 
+	private List<BattleView.Row> playerRows(String who) {
+		if (view == null || who == null) return List.of();
+		List<BattleView.Row> out = new ArrayList<>();
+		for (BattleView.Row r : view.rows) {
+			if (!r.mob && who.equals(r.reader)) out.add(r);
+		}
+		return out;
+	}
+
 	/** One rhyme slot of a player: said loud on the beat, peak offset from beat 4 (ms), or silence. */
 	public void onBar(ServerPlayerEntity p, boolean loud) {
 		onBar(p, loud, -1, !loud);
 	}
 
 	public void onBar(ServerPlayerEntity p, boolean loud, int deltaMs, boolean silentBar) {
-		if (!hasPlayer(p.getUuid()) || phase != Phase.TIMELINE) return;
+		long now = dev.rapbattle.Clock.now();
+		boolean inWindow = phase == Phase.TIMELINE || (phase == Phase.JUDGING && now - judgingStart <= 500L);
+		if (!hasPlayer(p.getUuid()) || !inWindow || view == null) return;
 		String who = names.getOrDefault(p.getUuid(), p.getName().getString());
-		int barIdx = playerBarLoud.computeIfAbsent(who, k -> new ArrayList<>()).size();
-		playerBarLoud.get(who).add(loud);
-		playerBarDeltaMs.computeIfAbsent(who, k -> new ArrayList<>()).add(deltaMs);
+		List<BattleView.Row> myRows = playerRows(who);
+		List<Boolean> loudList = playerBarLoud.computeIfAbsent(who, k -> new ArrayList<>());
+		int barIdx = loudList.size();
+		if (barIdx >= myRows.size()) return;
+		int curBeat = (int) Math.floorDiv(now - beatZero, Math.max(1L, beatMs));
+		if (curBeat < myRows.get(barIdx).startBeat + 2) return;
+		int clampedDelta = deltaMs < 0 ? -1 : Math.min(deltaMs, (int) Math.max(1L, beatMs));
+		loudList.add(loud);
+		playerBarDeltaMs.computeIfAbsent(who, k -> new ArrayList<>()).add(clampedDelta);
 		playerBarSilent.computeIfAbsent(who, k -> new ArrayList<>()).add(silentBar);
 		// Spider web_pair: hitting bar 0/2/4 loudly unlocks the webbed 2nd bar of the pair.
 		if (loud && view != null && (opp.profile().id().equals("spider") || opp.profile().id().equals("cave_spider"))) {
@@ -972,6 +1008,7 @@ public class Battle {
 		pendingVerses = List.of();
 		transcripts.clear();
 		audio.clear();
+		audioSeq.clear();
 		verdictFuture = null;
 		result = null;
 		List<Llm.Rapper> rappers = new ArrayList<>();

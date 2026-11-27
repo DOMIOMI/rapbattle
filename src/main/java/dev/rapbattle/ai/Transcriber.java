@@ -44,7 +44,7 @@ public final class Transcriber {
 		RapConfig cfg = RapConfig.get();
 		String key = cfg.sttKey();
 		if (key.isEmpty()) {
-			RapBattle.LOG.warn("Speech-to-text key is not set (sttApiKey in config/rapbattle.json or RAPBATTLE_STT_KEY)");
+			RapBattle.LOG.warn("Speech-to-text key is not set (sttApiKey in config/rapbattle-server.json or RAPBATTLE_STT_KEY)");
 			return null;
 		}
 		if (wav == null || wav.length < 2000) return new Result("", List.of());

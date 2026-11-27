@@ -68,6 +68,7 @@ public final class PvpBattle {
 	private final Map<UUID, Integer> hitsCount = new ConcurrentHashMap<>();
 	private final Map<UUID, Integer> missesCount = new ConcurrentHashMap<>();
 	private final Map<UUID, ByteArrayOutputStream> audio = new HashMap<>();
+	private final Map<UUID, Integer> audioSeq = new HashMap<>();
 	private final Map<UUID, CompletableFuture<String>> transcripts = new ConcurrentHashMap<>();
 	private final Map<UUID, Transcriber.Result> timed = new ConcurrentHashMap<>();
 	private final Map<UUID, Integer> recordingStart = new ConcurrentHashMap<>();
@@ -262,16 +263,35 @@ public final class PvpBattle {
 
 	// ------------------------------------------------------------------ during the battle
 
+	private List<BattleView.Row> playerRows(String name) {
+		if (view == null || name == null) return List.of();
+		List<BattleView.Row> out = new ArrayList<>();
+		for (BattleView.Row r : view.rows) {
+			if (name.equals(r.reader)) out.add(r);
+		}
+		return out;
+	}
+
 	public void onBar(ServerPlayerEntity p, boolean loud) {
 		onBar(p, loud, -1, !loud);
 	}
 
 	public void onBar(ServerPlayerEntity p, boolean loud, int deltaMs, boolean silentBar) {
-		if (phase == Phase.INTRO || phase != Phase.TIMELINE) return;
+		long now = dev.rapbattle.Clock.now();
+		boolean inWindow = phase == Phase.TIMELINE || (phase == Phase.JUDGING && now - phaseStart <= 500L);
+		if (!inWindow || view == null) return;
 		UUID u = p.getUuid();
+		if (!u.equals(a) && !u.equals(b)) return;
 		String name = names.getOrDefault(u, p.getName().getString());
-		barLoud.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(loud);
-		barDeltaMs.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(deltaMs);
+		List<BattleView.Row> myRows = playerRows(name);
+		List<Boolean> loudList = barLoud.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>()));
+		int barIdx = loudList.size();
+		if (barIdx >= myRows.size()) return;
+		int curBeat = (int) Math.floorDiv(now - beatZero, Math.max(1L, beatMs));
+		if (curBeat < myRows.get(barIdx).startBeat + 2) return;
+		int clampedDelta = deltaMs < 0 ? -1 : Math.min(deltaMs, (int) Math.max(1L, beatMs));
+		loudList.add(loud);
+		barDeltaMs.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(clampedDelta);
 		barSilent.computeIfAbsent(name, k -> Collections.synchronizedList(new ArrayList<>())).add(silentBar);
 		if (loud) {
 			hitsCount.merge(u, 1, Integer::sum);
@@ -295,13 +315,18 @@ public final class PvpBattle {
 
 	public void onAudio(ServerPlayerEntity p, Payloads.AudioC2S chunk) {
 		UUID u = p.getUuid();
+		if ((!u.equals(a) && !u.equals(b)) || (phase != Phase.TIMELINE && phase != Phase.JUDGING)) return;
 		if (transcripts.containsKey(u)) return;
+		int expectedSeq = audioSeq.getOrDefault(u, 0);
+		if (chunk.seq() != expectedSeq) return;
+		audioSeq.put(u, expectedSeq + 1);
 		ByteArrayOutputStream buf = audio.computeIfAbsent(u, k -> new ByteArrayOutputStream());
 		if (buf.size() + chunk.data().length > 8 * 1024 * 1024) return;
 		buf.writeBytes(chunk.data());
 		if (!chunk.last()) return;
 		byte[] wav = buf.toByteArray();
 		audio.remove(u);
+		audioSeq.remove(u);
 		recordingStart.put(u, chunk.startMs());
 		List<String> hints = rhymes.getOrDefault(u, List.of());
 		String lang = langOf(u);

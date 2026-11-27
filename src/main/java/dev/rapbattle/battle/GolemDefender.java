@@ -48,7 +48,7 @@ public final class GolemDefender {
 			IronGolemEntity g = h.golem();
 			ServerPlayerEntity p = g.getEntityWorld().getServer() == null ? null
 				: g.getEntityWorld().getServer().getPlayerManager().getPlayer(h.player());
-			if (p == null || !g.isAlive() || now > h.until() || BattleManager.byPlayer(p.getUuid()) != null) {
+			if (p == null || !g.isAlive() || p.getEntityWorld() != g.getEntityWorld() || now > h.until() || BattleManager.byPlayer(p.getUuid()) != null) {
 				HUNTS.remove(h);
 				continue;
 			}

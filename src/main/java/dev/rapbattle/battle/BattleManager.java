@@ -312,7 +312,7 @@ public final class BattleManager {
 
 	/** A battle is running within {@code radius} blocks of this entity. */
 	public static boolean battleNear(Entity e, double radius) {
-		for (Battle b : BATTLES) if (!b.finished && b.mob.squaredDistanceTo(e) < radius * radius) return true;
+		for (Battle b : BATTLES) if (!b.finished && b.mob.getEntityWorld() == e.getEntityWorld() && b.mob.squaredDistanceTo(e) < radius * radius) return true;
 		return false;
 	}
 
@@ -589,7 +589,8 @@ public final class BattleManager {
 			for (Map.Entry<UUID, Pending> e : new ArrayList<>(PENDING.entrySet())) {
 				Pending pd = e.getValue();
 				ServerPlayerEntity pl = server.getPlayerManager().getPlayer(e.getKey());
-				boolean walkedAway = pl != null && pd.mob.isAlive() && pl.squaredDistanceTo(pd.mob) > 15 * 15;
+				boolean walkedAway = pl != null && pd.mob.isAlive()
+					&& (pl.getEntityWorld() != pd.mob.getEntityWorld() || pl.squaredDistanceTo(pd.mob) > 15 * 15);
 				if (now <= pd.until && !walkedAway) continue;
 				PENDING.remove(e.getKey());
 				if (pl != null) {
@@ -689,7 +690,8 @@ public final class BattleManager {
 					case "rap" -> {
 						Pending pending = PENDING.remove(p.getUuid());
 						if (pending == null || !pending.allowed || !pending.mob.isAlive() || byMob(pending.mob) != null
-							|| byPlayer(p.getUuid()) != null || pending.mob.squaredDistanceTo(p) > 16 * 16) {
+							|| byPlayer(p.getUuid()) != null || pending.mob.getEntityWorld() != p.getEntityWorld()
+							|| pending.mob.squaredDistanceTo(p) > 16 * 16) {
 							closeChoice(p);
 							return;
 						}

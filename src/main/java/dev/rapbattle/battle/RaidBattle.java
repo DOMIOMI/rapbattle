@@ -50,7 +50,7 @@ public final class RaidBattle {
 				if (!Acts.isFinalWaveWithCaptain(true, active, groups, maxWaves, captain != null && captain.isAlive())) {
 					continue;
 				}
-				if (captain.squaredDistanceTo(p) > 24 * 24 || BattleManager.byMob(captain) != null) continue;
+				if (captain.getEntityWorld() != w || captain.squaredDistanceTo(p) > 24 * 24 || BattleManager.byMob(captain) != null) continue;
 				if (!Progression.canAutoChallengeMob(p, captain)) continue;
 				CHALLENGED_RAIDS.add(raidKey);
 				FINAL_CAPTAINS.add(captain.getUuid());
