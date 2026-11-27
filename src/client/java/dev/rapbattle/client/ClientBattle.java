@@ -40,6 +40,7 @@ public final class ClientBattle {
 
 	public static BattleView choice;
 	private static long choiceAt;
+	private static long choiceLookAt;
 
 	private static final MicRecorder MIC = new MicRecorder();
 	private static int recordingFor = -1;
@@ -154,7 +155,9 @@ public final class ClientBattle {
 			}
 			case "choice" -> {
 				choice = v;
-				choiceAt = System.currentTimeMillis();
+				long t = System.currentTimeMillis();
+				choiceAt = t;
+				choiceLookAt = t;
 				ui(v.allowed ? SoundEvents.BLOCK_NOTE_BLOCK_BELL : SoundEvents.BLOCK_NOTE_BLOCK_BASS, v.allowed ? 1.4f : 0.6f, 0.7f);
 			}
 			case "choice_close" -> choice = null;
@@ -282,12 +285,28 @@ public final class ClientBattle {
 
 	// ------------------------------------------------------------------ per frame / tick
 
+	private static boolean isLookingAtChoiceMob() {
+		if (choice == null || choice.mobEntityId < 0) return false;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null || mc.world == null) return false;
+		Entity e = mc.world.getEntityById(choice.mobEntityId);
+		if (e == null || !e.isAlive() || e.squaredDistanceTo(mc.player) > 10.0 * 10.0) return false;
+		var eye = mc.player.getEyePos();
+		var to = e.getBoundingBox().getCenter().subtract(eye);
+		double len = to.length();
+		if (len < 1e-4) return true;
+		return mc.player.getRotationVec(1f).dotProduct(to.multiply(1.0 / len)) >= 0.72;
+	}
+
 	/** Called every frame and every tick; idempotent within a half-beat. */
 	public static void pump() {
 		BeatPlayer.update();
 		long now = System.currentTimeMillis();
 		if (invite != null && now - inviteAt > 30000) invite = null;
-		if (choice != null && now - choiceAt > Math.max(1000, choice.choiceMs)) choice = null;
+		if (choice != null) {
+			if (isLookingAtChoiceMob()) choiceLookAt = now;
+			if (now - choiceAt > Math.max(1000, choice.choiceMs) && now - choiceLookAt > 2000) choice = null;
+		}
 		if (view == null) return;
 		if (!timeline()) {
 			if (!view.spectator && !"TIMELINE".equals(view.phase)) flushTrackedRow();

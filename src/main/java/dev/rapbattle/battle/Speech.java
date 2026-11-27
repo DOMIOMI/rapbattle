@@ -93,9 +93,16 @@ public final class Speech {
 
 	// ------------------------------------------------------------------ bubbles
 
-	/** Shows {@code text} over the mob for {@code ms} milliseconds; everyone nearby sees it. */
+	/** Computes bubble display duration from text length: min 4s, +0.06s/char, max 10s. */
+	public static long durationMs(String text) {
+		int len = text == null ? 0 : text.length();
+		return Math.max(4000L, Math.min(10_000L, 4000L + len * 60L));
+	}
+
+	/** Shows {@code text} over the mob for {@code ms} milliseconds (at least {@link #durationMs(String)}); everyone nearby sees it. */
 	public static void bubble(MobEntity mob, String text, int color, long ms) {
 		if (!(mob.getEntityWorld() instanceof ServerWorld w)) return;
+		long effectiveMs = Math.max(ms, durationMs(text));
 		// One bubble per mob: the new line replaces the old one.
 		for (Bubble b : new ArrayList<>(BUBBLES)) {
 			if (b.mob() == mob) {
@@ -111,7 +118,7 @@ public final class Speech {
 		d.setLineWidth(170);
 		d.refreshPositionAndAngles(mob.getX(), mob.getY() + mob.getHeight() + 0.55, mob.getZ(), 0, 0);
 		w.spawnEntity(d);
-		BUBBLES.add(new Bubble(d, mob, dev.rapbattle.Clock.now() + ms));
+		BUBBLES.add(new Bubble(d, mob, dev.rapbattle.Clock.now() + effectiveMs));
 	}
 
 	/** Server tick: bubbles follow their mob and disappear in time. */

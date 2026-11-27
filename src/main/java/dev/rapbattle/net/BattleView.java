@@ -112,7 +112,11 @@ public class BattleView {
 	/** Challenger passes the dress code (choice) / this invitee may join (invite). */
 	public boolean allowed = true;
 	public String refusal = "";
+	public String refusalReason = "";
 	public String yourOutfit = "";
+	public boolean needsMic;
+	public int requiredArmorLevel;
+	public int yourArmorLevel;
 	/** Soft progression gate warning on the choice card (bonuses closed). */
 	public String gateWarning = "";
 	/** Formatted progression access summary for StyleScreen. */

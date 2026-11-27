@@ -34,7 +34,7 @@ final class Ui {
 	}
 
 	static int tab(DrawContext ctx, TextRenderer tr, String label, int x, int bottom, int accent, int textColor, float alpha) {
-		Text t = bold(label);
+		Text t = Text.literal(label);
 		int th = 12, tw = tr.getWidth(t) + 16;
 		for (int r = 0; r < th; r++) {
 			int cut = (th - r) / 2;

@@ -50,13 +50,13 @@ public final class GuideBook {
 		return book;
 	}
 
-	/** Formats the first line as a bold dark-blue heading and the rest as black body text. */
+	/** Formats the first line as a dark-blue heading and the rest as black body text. */
 	public static Text formatPage(String raw) {
 		int nl = raw.indexOf('\n');
 		if (nl < 0) {
-			return Text.literal(raw).formatted(Formatting.DARK_BLUE, Formatting.BOLD);
+			return Text.literal(raw).formatted(Formatting.DARK_BLUE);
 		}
-		MutableText heading = Text.literal(raw.substring(0, nl)).formatted(Formatting.DARK_BLUE, Formatting.BOLD);
+		MutableText heading = Text.literal(raw.substring(0, nl)).formatted(Formatting.DARK_BLUE);
 		MutableText body = Text.literal(raw.substring(nl)).formatted(Formatting.BLACK);
 		return heading.append(body);
 	}

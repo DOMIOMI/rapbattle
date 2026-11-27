@@ -472,22 +472,31 @@ public final class BattleManager {
 		v.tags = o.tags();
 		v.allowed = allowed;
 		v.yourOutfit = sc.score().label(lang);
-		v.requiredOutfit = !dressAllowed ? Battle.levelLabel(Outfit.required(gateRank), lang) : "";
+		v.yourArmorLevel = sc.score().level();
 		int refIdx = rnd.nextInt(REFUSALS.size());
-		if (!dressAllowed) {
+		if (!sc.micAllowed()) {
+			v.needsMic = true;
+			v.refusal = Lang.t(lang, "rapbattle.refusal.mic");
+			v.refusalReason = Lang.t(lang, "rapbattle.choice.need_mic");
+		} else if (!dressAllowed) {
+			v.requiredArmorLevel = Outfit.required(gateRank);
+			v.requiredOutfit = Battle.levelLabel(v.requiredArmorLevel, lang);
+			String yours = v.yourArmorLevel <= 0 ? Lang.t(lang, "rapbattle.choice.armor_none") : v.yourOutfit;
 			v.refusal = refusalLine(o, lang, refIdx);
+			v.refusalReason = Lang.t(lang, "rapbattle.choice.need_armor", v.requiredOutfit, yours);
 		} else if (!gate.allowed() && !gate.messageKey().isEmpty()) {
 			v.refusal = Lang.t(lang, gate.messageKey(), gate.args());
+			v.refusalReason = v.refusal;
 		} else if (!gate.bonusesAllowed() && !gate.messageKey().isEmpty()) {
 			v.gateWarning = Lang.t(lang, gate.messageKey(), gate.args());
 		}
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(v.toJson()));
 		if (!allowed) {
-			broadcastRefusal(p, mob, o, dressAllowed, gate, v.refusal, refIdx, rnd);
+			broadcastRefusal(p, mob, o, sc.micAllowed(), dressAllowed, gate, v.refusal, refIdx, rnd);
 		}
 	}
 
-	private static void broadcastRefusal(ServerPlayerEntity p, MobEntity mob, Opponent o, boolean dressAllowed,
+	private static void broadcastRefusal(ServerPlayerEntity p, MobEntity mob, Opponent o, boolean micAllowed, boolean dressAllowed,
 										 ProgressionRules.GateCheck gate, String refusal, int refIdx, Random rnd) {
 		String lang = Lang.of(p);
 		REFUSED.put(p.getUuid(), new Refused(mob, dev.rapbattle.Clock.now() + REFUSED_MS));
@@ -497,7 +506,9 @@ public final class BattleManager {
 			if (near.squaredDistanceTo(mob) < 24 * 24) {
 				String nl = Lang.of(near);
 				String nm = nl.equals(lang) ? o.name() : Opponent.nameOf(mob, o.profile(), rnd, nl);
-				String nearMsg = !dressAllowed
+				String nearMsg = !micAllowed
+					? Lang.t(nl, "rapbattle.refusal.mic")
+					: !dressAllowed
 					? refusalLine(o, nl, refIdx)
 					: Lang.t(nl, gate.messageKey(), gate.args());
 				near.sendMessage(Text.literal("<" + nm + "> " + nearMsg).formatted(Formatting.GOLD), false);
@@ -626,10 +637,12 @@ public final class BattleManager {
 				Progression.StartCheck sc = Progression.canStart(sp, mob, true, 0, rnd);
 				if (!sc.allowed()) {
 					int refIdx = rnd.nextInt(REFUSALS.size());
-					String refusal = !sc.dressAllowed()
+					String refusal = !sc.micAllowed()
+						? Lang.t(Lang.of(sp), "rapbattle.refusal.mic")
+						: !sc.dressAllowed()
 						? refusalLine(sc.opp(), Lang.of(sp), refIdx)
 						: Lang.t(Lang.of(sp), sc.gate().messageKey(), sc.gate().args());
-					broadcastRefusal(sp, mob, sc.opp(), sc.dressAllowed(), sc.gate(), refusal, refIdx, rnd);
+					broadcastRefusal(sp, mob, sc.opp(), sc.micAllowed(), sc.dressAllowed(), sc.gate(), refusal, refIdx, rnd);
 					return ActionResult.FAIL;
 				}
 				start(sp, mob, sc.gate());
@@ -786,6 +799,13 @@ public final class BattleManager {
 			for (Map.Entry<UUID, Pending> e : new ArrayList<>(PENDING.entrySet())) {
 				Pending pd = e.getValue();
 				ServerPlayerEntity pl = server.getPlayerManager().getPlayer(e.getKey());
+				if (pl != null && pd.mob.isAlive() && isLookingAt(pl, pd.mob)) {
+					long ext = now + 2000L;
+					if (ext > pd.until) {
+						pd = new Pending(pd.mob, ext, pd.allowed, pd.golem, pd.fromApproach, pd.gate);
+						PENDING.put(e.getKey(), pd);
+					}
+				}
 				boolean walkedAway = pl != null && pd.mob.isAlive()
 					&& (pl.getEntityWorld() != pd.mob.getEntityWorld() || pl.squaredDistanceTo(pd.mob) > 15 * 15);
 				if (now <= pd.until && !walkedAway) continue;
@@ -803,7 +823,10 @@ public final class BattleManager {
 					if (!pd.mob.getNavigation().isIdle()) pd.mob.getNavigation().stop();
 				}
 			}
-			if (server.getTicks() % 10 == 0) offerOnApproach(server);
+			if (server.getTicks() % 10 == 0) {
+				offerOnApproach(server);
+				sendMobBadges(server);
+			}
 			Later.tick();
 			GolemDefender.tick();
 			RaidBattle.tick(server);
@@ -819,6 +842,7 @@ public final class BattleManager {
 			UUID u = handler.player.getUuid();
 			PENDING.remove(u);
 			LAST_COMBAT.remove(u);
+			BADGE_SENT.remove(u);
 			for (Battle b : new ArrayList<>(BATTLES)) b.onPlayerLeft(u);
 			PvpBattle pvp = PvpBattle.byPlayer(u);
 			if (pvp != null) pvp.leave(u);
@@ -1128,6 +1152,54 @@ public final class BattleManager {
 		sv.playerStyle = st.mcStyle().id;
 		sv.playerGateSummary = Progression.styleSummary(p, Lang.of(p));
 		ServerPlayNetworking.send(p, new Payloads.StateS2C(sv.toJson()));
+	}
+
+	private static final Set<UUID> BADGE_SENT = new HashSet<>();
+	private static final Random BADGE_RND = new Random();
+
+	private static boolean isLookingAt(ServerPlayerEntity p, MobEntity mob) {
+		if (p == null || mob == null || p.getEntityWorld() != mob.getEntityWorld()) return false;
+		if (p.squaredDistanceTo(mob) > 10.0 * 10.0) return false;
+		net.minecraft.util.math.Vec3d eye = p.getEyePos();
+		net.minecraft.util.math.Vec3d toMob = mob.getBoundingBox().getCenter().subtract(eye);
+		double len = toMob.length();
+		if (len < 1e-4) return true;
+		return p.getRotationVec(1.0f).dotProduct(toMob.multiply(1.0 / len)) >= 0.72;
+	}
+
+	private static void sendMobBadges(net.minecraft.server.MinecraftServer server) {
+		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+			UUID u = p.getUuid();
+			if (!p.isAlive() || p.isSpectator() || byPlayer(u) != null || PvpBattle.byPlayer(u) != null) {
+				if (BADGE_SENT.remove(u)) {
+					ServerPlayNetworking.send(p, new Payloads.MobBadgesS2C(List.of(), new byte[0], new byte[0]));
+				}
+				continue;
+			}
+			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(10.0),
+				m -> m.isAlive() && m.squaredDistanceTo(p) <= 10.0 * 10.0 && byMob(m) == null && !inAnyCrowd(m));
+			if (near.isEmpty()) {
+				if (BADGE_SENT.remove(u)) {
+					ServerPlayNetworking.send(p, new Payloads.MobBadgesS2C(List.of(), new byte[0], new byte[0]));
+				}
+				continue;
+			}
+			near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
+			int count = Math.min(24, near.size());
+			List<Integer> ids = new ArrayList<>(count);
+			byte[] ranks = new byte[count];
+			byte[] statuses = new byte[count];
+			for (int i = 0; i < count; i++) {
+				MobEntity m = near.get(i);
+				Progression.StartCheck sc = Progression.canStart(p, m, true, 0, BADGE_RND);
+				Rank r = sc.ranks().battleRank();
+				ids.add(m.getId());
+				ranks[i] = (byte) ((r.level() & 0x0F) | (r.isBoss() ? 0x10 : 0));
+				statuses[i] = !sc.allowed() ? (byte) 2 : (!sc.gate().bonusesAllowed() ? (byte) 1 : (byte) 0);
+			}
+			BADGE_SENT.add(u);
+			ServerPlayNetworking.send(p, new Payloads.MobBadgesS2C(ids, ranks, statuses));
+		}
 	}
 
 	private static void closeChoice(ServerPlayerEntity p) {

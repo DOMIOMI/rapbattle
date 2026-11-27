@@ -96,11 +96,11 @@ final class FighterCard {
 		ctx.fill(0, H - 2, W, H, a(alphaOf(accent, 0.7f)));
 
 		// Banner text: the corner, and a boss badge on the portrait side.
-		Text corner = Ui.bold(I18n.translate(f.red ? "rapbattle.hud.red_corner" : "rapbattle.hud.blue_corner"));
+		Text corner = Text.literal(I18n.translate(f.red ? "rapbattle.hud.red_corner" : "rapbattle.hud.blue_corner"));
 		float ba = appear(age, 120);
 		text(ctx, tr, corner, tx + 2 + (1 - ba) * 14 * dir, 3, 1f, WHITE, ba);
 		if (f.boss) {
-			Text boss = Ui.bold(I18n.translate("rapbattle.hud.card.boss"));
+			Text boss = Text.literal(I18n.translate("rapbattle.hud.card.boss"));
 			int bw = tr.getWidth(boss) + 8;
 			int bx = f.red ? W - 6 - bw : 6;
 			ctx.fill(bx, 2, bx + bw, 12, a(0xFF1A0E2A));
@@ -203,7 +203,7 @@ final class FighterCard {
 		if (f.debut) {
 			float st = clamp01((age - 560) / 160f);
 			if (st > 0) {
-				Text stamp = Ui.bold(I18n.translate("rapbattle.hud.first_battle"));
+				Text stamp = Text.literal(I18n.translate("rapbattle.hud.first_battle"));
 				int sw = tr.getWidth(stamp) + 10;
 				ctx.getMatrices().pushMatrix();
 				ctx.getMatrices().translate(tx + tw / 2f, by + 10);

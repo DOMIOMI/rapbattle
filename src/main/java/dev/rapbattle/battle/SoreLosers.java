@@ -197,7 +197,7 @@ public final class SoreLosers {
 		String line = rnd.nextInt(3) == 0 ? generic.get(rnd.nextInt(generic.size())) : pool.get(rnd.nextInt(pool.size()));
 		for (ServerPlayerEntity p : ((ServerWorld) w).getPlayers()) {
 			if (p.squaredDistanceTo(mob) < 32 * 32) {
-				p.sendMessage(Text.translatable("rapbattle.sorelosers.refuse").formatted(Formatting.DARK_RED, Formatting.BOLD)
+				p.sendMessage(Text.translatable("rapbattle.sorelosers.refuse").formatted(Formatting.DARK_RED)
 					.append(Text.literal("<" + opp.name() + "> " + line).formatted(Formatting.RED)), false);
 			}
 		}
@@ -209,7 +209,7 @@ public final class SoreLosers {
 		if (mob instanceof CreeperEntity) {
 			// The creeper's tantrum is a blast: damage, but no broken blocks, and 1.5 s to run.
 			for (ServerPlayerEntity p : ((ServerWorld) w).getPlayers()) {
-				if (p.squaredDistanceTo(mob) < 16 * 16) p.sendMessage(Text.translatable("rapbattle.sorelosers.run").formatted(Formatting.RED, Formatting.BOLD), true);
+				if (p.squaredDistanceTo(mob) < 16 * 16) p.sendMessage(Text.translatable("rapbattle.sorelosers.run").formatted(Formatting.RED), true);
 			}
 			w.playSound(null, mob.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_CREEPER_PRIMED, net.minecraft.sound.SoundCategory.HOSTILE, 1f, 0.5f);
 			BLASTS.add(new Blast(mob, dev.rapbattle.Clock.now() + 1500));

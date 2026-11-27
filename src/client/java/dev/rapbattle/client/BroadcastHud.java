@@ -52,7 +52,7 @@ public final class BroadcastHud {
 		if (v.pvp && !v.team.isEmpty()) team.append(v.team.get(0).name);
 		else for (BattleView.Member m : v.team) team.append(team.length() == 0 ? "" : " + ").append(m.name);
 		String t = BattleHud.fit(tr, team.toString(), side - 16);
-		Text tt = bold(t);
+		Text tt = Text.literal(t);
 		dropText(ctx, tr, tt, cx0 - 8 - tr.getWidth(tt), y + 4, 1f, WHITE, BLUE, 1f, false);
 		String sub = v.team.isEmpty() ? ""
 			: v.team.get(0).streak > 1 ? I18n.translate("rapbattle.broadcast.outfit_streak", v.team.get(0).outfit, v.team.get(0).streak)
@@ -78,7 +78,7 @@ public final class BroadcastHud {
 		} else {
 			String vs = showRounds && v.rounds > 1 ? v.roundWinsPlayers + " : " + v.roundWinsMob : "VS";
 			float beat = 1 + 0.12f * (1 - ClientBattle.beatFrac()) * ("TIMELINE".equals(v.phase) ? 1 : 0);
-			dropText(ctx, tr, bold(vs), cm, y + 2, 1.5f * beat, YELLOW, RED, 1f, true);
+			dropText(ctx, tr, Text.literal(vs), cm, y + 2, 1.5f * beat, YELLOW, RED, 1f, true);
 			int mw = mid - 26, mx = cx0 + 13, my = y + 17;
 			int fill = (int) (mw * (0.5f + Math.max(-100, Math.min(100, v.hype)) / 200f));
 			ctx.fill(mx - 1, my - 1, mx + mw + 1, my + 6, 0xFF05060A);
@@ -91,14 +91,14 @@ public final class BroadcastHud {
 
 		// Mob
 		String mob = v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.and_crew", v.mobName) : v.mobName;
-		dropText(ctx, tr, bold(BattleHud.fit(tr, mob, side - 16)), rx0 + 9, y + 4, 1f, WHITE, RED, 1f, false);
+		dropText(ctx, tr, Text.literal(BattleHud.fit(tr, mob, side - 16)), rx0 + 9, y + 4, 1f, WHITE, RED, 1f, false);
 		ctx.drawText(tr, BattleHud.fit(tr, v.rankArmor + " · " + v.rankStreet, side - 22), rx0 + 14, y + 15, BattleHud.opaque(v.rankColor), false);
 		respectBar(ctx, tr, rx0 + 1 + lean + 1, y + 26, side - lean - 2 - 7, shown[1], max, false, 1, RED);
 
 		// Combo under the centre while it burns.
 		if ("TIMELINE".equals(v.phase) && v.combo >= 3) {
 			String c = I18n.translate("rapbattle.broadcast.combo", v.combo >= 6 ? "2" : "1.5", v.combo);
-			Text ct = bold(c);
+			Text ct = Text.literal(c);
 			float s = 1.1f + 0.15f * (1 - ClientBattle.beatFrac());
 			int cw = Math.round(tr.getWidth(ct) * s) + 14;
 			int col = v.combo >= 6 ? ORANGE : GOLD;
@@ -173,7 +173,7 @@ public final class BroadcastHud {
 			ctx.fill(Math.max(x, cx), y, Math.min(x + bw, cx + chunk), y + bh, (a << 24) | 0xFFFFFF);
 		}
 		// The number in a small plate on the outer end.
-		Text num = bold(String.valueOf(value));
+		Text num = Text.literal(String.valueOf(value));
 		int nw = tr.getWidth(num) + 6;
 		int nx = fromRight ? x : x + bw - nw;
 		ctx.fill(nx, y - 1, nx + nw, y + bh + 1, 0xE0000000);
@@ -349,7 +349,7 @@ public final class BroadcastHud {
 			ctx.drawText(tr, rr, rx + 5, ly - 9, GOLD, false);
 		}
 		if (rec) {
-			Text r = bold("REC");
+			Text r = Text.literal("REC");
 			int rw = tr.getWidth(r) + 18, rx = lx + lw - rw;
 			ctx.fill(rx, ly - 12, rx + rw, ly, 0xE8100A0C);
 			ctx.fill(rx, ly - 12, rx + rw, ly - 11, RED);
@@ -408,9 +408,9 @@ public final class BroadcastHud {
 		// Expanding frame from the number.
 		int r = Math.round(18 + 40 * fr);
 		ctx.drawStrokedRectangle(w / 2 - r, cy - r, r * 2, r * 2, alphaOf(color, 0.6f * (1 - fr)));
-		Text n = bold(number);
+		Text n = Text.literal(number);
 		dropText(ctx, tr, n, w / 2f, cy - 4 * s, s, color, drop, 1f, true);
-		Text c = bold(caption);
+		Text c = caption.equals(I18n.translate("rapbattle.hud.your_turn")) ? bold(caption) : Text.literal(caption);
 		int cw = tr.getWidth(c) + 20;
 		int top = cy - Math.round(4 * 5f) - 26;
 		slab(ctx, w / 2 - cw / 2, w / 2 + cw / 2, top, 13, color, mix(color, BG, 0.4f), 0.3f, -0.3f);
@@ -436,7 +436,7 @@ public final class BroadcastHud {
 		for (BattleView.Row r : rows) {
 			if (r == null) continue;
 			if (r.mob) for (int c = 0; c < 3; c++) if (r.cols[c] != null) cw[c] = Math.max(cw[c], tr.getWidth(r.cols[c]) + 10);
-			if (r.word != null) cw[3] = Math.max(cw[3], tr.getWidth(bold(r.word)) + 14);
+			if (r.word != null) cw[3] = Math.max(cw[3], tr.getWidth(r.word) + 14);
 			if (!r.mob && r.reader != null) cw[0] = Math.max(cw[0], Math.min(90, tr.getWidth(r.reader) + 10));
 		}
 		return cw;
@@ -486,7 +486,7 @@ public final class BroadcastHud {
 		ctx.fill(x, y, x + word, y + 1, 0x60FFFFFF);
 		ctx.fill(x, y + ROW - 1, x + word, y + ROW, 0x50000000);
 		if (live) ctx.drawStrokedRectangle(x - 1, y - 1, word + 2, ROW + 2, k == 3 ? YELLOW : WHITE);
-		Text wt = bold(BattleHud.fit(tr, shown, word - 8));
+		Text wt = Text.literal(BattleHud.fit(tr, shown, word - 8));
 		ctx.drawText(tr, wt, x + word / 2 - tr.getWidth(wt) / 2, y + 4, stolen ? RED : DARK, false);
 	}
 
@@ -526,7 +526,7 @@ public final class BroadcastHud {
 		beginPanel(ctx, w, h, lw);
 		tab(ctx, tr, I18n.translate("rapbattle.broadcast.judge_verdict"), lx, ly, GOLD, DARK);
 		panel(ctx, lx, ly, lw, ph, GOLD);
-		dropText(ctx, tr, bold(I18n.translate("rapbattle.broadcast.judge_thinking", dots)), lx + 10, ly + 7, 1.4f, YELLOW, 0xFF6A4A00, 1f, false);
+		dropText(ctx, tr, Text.literal(I18n.translate("rapbattle.broadcast.judge_thinking", dots)), lx + 10, ly + 7, 1.4f, YELLOW, 0xFF6A4A00, 1f, false);
 		// An indeterminate bar: a gold segment running back and forth.
 		int bx = lx + 10, bw = lw - 20, by = ly + ph - 7;
 		ctx.fill(bx, by, bx + bw, by + 2, 0xFF2A2410);
@@ -551,7 +551,7 @@ public final class BroadcastHud {
 			String how = r.knockout ? I18n.translate("rapbattle.broadcast.knockout")
 				: v.rounds > 1 ? I18n.translate("rapbattle.hud.sub_rounds", v.roundWinsPlayers, v.roundWinsMob).toUpperCase(Locale.ROOT)
 				: I18n.translate("rapbattle.broadcast.by_points", r.respectTeam, r.respectMob);
-			Text ht = bold(how);
+			Text ht = Text.literal(how);
 			int col = r.knockout ? ORANGE : (won ? YELLOW : LOSS);
 			float a = clamp01((now - verdictAt(v)) / 200f);
 			int tw = tr.getWidth(ht) + 20;
@@ -775,7 +775,7 @@ public final class BroadcastHud {
 			default -> line = "";
 		}
 		// "● LIVE" badge and the line: a broadcast lower strip under the scoreboard.
-		Text live = bold(I18n.translate("rapbattle.broadcast.live"));
+		Text live = Text.literal(I18n.translate("rapbattle.broadcast.live"));
 		int bw = tr.getWidth(live) + 18;
 		int lw = line.isEmpty() ? 0 : Math.min(w - 40 - bw, tr.getWidth(line) + 16);
 		int total = bw + lw, x = w / 2 - total / 2, y = under + 4;

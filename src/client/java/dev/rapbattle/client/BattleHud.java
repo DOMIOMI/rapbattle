@@ -631,7 +631,7 @@ public final class BattleHud {
 	private static Object choiceShown, inviteShown;
 	private static long choiceAt, inviteAt;
 
-	/** "Rap or fight" card when you hit a mob: slides up, the mob's rank with pips, the two options, a draining timer. */
+	/** "Rap or fight" card: 3 clean lines with rank/armor/mic item icons, no bold. */
 	private static void drawChoice(DrawContext ctx, TextRenderer tr, BattleView c, int w, int h) {
 		long now = System.currentTimeMillis();
 		if (choiceShown != c) {
@@ -639,58 +639,92 @@ public final class BattleHud {
 			choiceAt = now;
 		}
 		long since = now - choiceAt;
-		String name = c.mobName + " (" + c.mobSpecies + ")";
-		String l1, l2;
-		int l1c, accent;
+		String name = !c.challengeFrom.isEmpty()
+			? c.challengeFrom + ": " + c.mobName + " (" + c.mobSpecies + ")"
+			: c.mobName + " (" + c.mobSpecies + ")";
+
+		String headline, subLine, hintLine;
+		int headlineColor, accent;
 		if (!c.challengeFrom.isEmpty()) {
-			name = c.challengeFrom + ": " + c.mobName;
-			l1 = I18n.translate("rapbattle.hud.choice_answer");
-			l1c = YELLOW;
-			l2 = I18n.translate("rapbattle.hud.choice_answer_sub");
+			headline = I18n.translate("rapbattle.hud.choice_rap_short");
+			headlineColor = YELLOW;
+			subLine = I18n.translate("rapbattle.hud.choice_answer");
+			hintLine = I18n.translate("rapbattle.hud.choice_answer_sub");
 			accent = Ui.GOLD;
 		} else if (c.allowed) {
-			l1 = I18n.translate(c.boss ? "rapbattle.hud.choice_rap_boss" : "rapbattle.hud.choice_rap");
-			l1c = c.boss ? 0xFFB48CFF : GREEN;
-			l2 = I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
+			headline = I18n.translate("rapbattle.hud.choice_rap_short");
+			headlineColor = c.boss ? 0xFFB48CFF : GREEN;
+			subLine = !c.gateWarning.isEmpty() ? c.gateWarning : "";
+			hintLine = I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
 			accent = c.boss ? Ui.BOSS : Ui.RED;
 		} else {
-			l1 = I18n.translate("rapbattle.hud.choice_refused", c.refusal);
-			l1c = RED;
-			l2 = !c.requiredOutfit.isEmpty()
-				? I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_refused_sub" : "rapbattle.hud.choice_refused_sub.clean", c.requiredOutfit, c.yourOutfit)
-				: I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
+			headline = I18n.translate("rapbattle.hud.choice_refused_short");
+			headlineColor = RED;
+			subLine = !c.refusalReason.isEmpty() ? c.refusalReason : c.refusal;
+			hintLine = I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
 			accent = 0xFF6A6A78;
 		}
-		String warn = c.allowed && !c.gateWarning.isEmpty() ? c.gateWarning : "";
-		Text nameT = Ui.bold(name);
-		String rank = c.rankArmor + " · " + c.rankStreet;
+
+		float headScale = 1.3f;
+		float hintScale = 0.85f;
+		int headW = Math.round(tr.getWidth(headline) * headScale);
+		boolean hasIcons = !c.allowed && (c.needsMic || c.requiredArmorLevel > 0);
+		int subW = tr.getWidth(subLine) + (hasIcons ? (c.needsMic ? 20 : 38) : 0);
 		int bw = Math.min(w - 16, Math.max(
-			Math.max(tr.getWidth(nameT) + 30, tr.getWidth(Ui.bold(l1)) + 26),
-			Math.max(Math.max(tr.getWidth(l2), tr.getWidth(warn)) + 26, 200)));
-		int bh = warn.isEmpty() ? 58 : 70;
+			Math.max(tr.getWidth(name) + 34, headW + 24),
+			Math.max(subW + 24, Math.max(Math.round(tr.getWidth(hintLine) * hintScale) + 24, 210))));
+		int bh = subLine.isEmpty() ? 54 : 70;
 		float in = Ui.easeOutBack(since / 320f);
 		float a = Ui.clamp01(since / 150f);
 		int cx = w / 2, x = cx - bw / 2;
 		int y = Math.round(h / 2f + 22 + (1 - in) * 30);
+
 		Ui.tab(ctx, tr, I18n.translate("rapbattle.hud.choice_title"), x, y, accent, Ui.WHITE, a);
 		Ui.panel(ctx, x, y, bw, bh, accent, a);
-		Ui.dropText(ctx, tr, Ui.bold(BattleHud.fit(tr, name, bw - 16)), x + 8, y + 5, 1f, Ui.WHITE, accent, a, false);
-		// Rank in its colour with six pips.
-		int rc = opaque(c.rankColor);
-		Ui.text(ctx, tr, rank, x + 8, y + 17, 1f, rc, a, false);
-		int px = x + 12 + tr.getWidth(rank);
-		for (int i = 0; i < 6; i++) {
-			int pxi = px + i * 9;
-			if (pxi + 7 > x + bw - 6) break;
-			ctx.fill(pxi, y + 19, pxi + 7, y + 22, Ui.alphaOf(i < c.rankLevel ? rc : 0x30FFFFFF, a));
+
+		// Line 1: Rank item icon + mob name & species
+		ctx.getMatrices().pushMatrix();
+		ctx.getMatrices().translate(x + 7, y + 4);
+		ctx.getMatrices().scale(0.85f, 0.85f);
+		ctx.drawItem(MobBadgeFx.rankIcon(c.rankLevel, c.boss), 0, 0);
+		ctx.getMatrices().popMatrix();
+		Ui.dropText(ctx, tr, Text.literal(BattleHud.fit(tr, name, bw - 30)), x + 24, y + 6, 1f, Ui.WHITE, accent, a, false);
+		ctx.fill(x + 8, y + 20, x + bw - 8, y + 21, Ui.alphaOf(accent, 0.6f * a));
+
+		// Line 2: Large "R — battle" or "REFUSED" (+ reason with item icons)
+		Ui.text(ctx, tr, headline, x + 8, y + 25, headScale, headlineColor, a, true);
+		int hy = y + 41;
+		if (!subLine.isEmpty()) {
+			int textX = x + 8;
+			if (!c.allowed && c.needsMic) {
+				ctx.getMatrices().pushMatrix();
+				ctx.getMatrices().translate(x + 8, hy - 2);
+				ctx.getMatrices().scale(0.75f, 0.75f);
+				ctx.drawItem(new ItemStack(net.minecraft.item.Items.LIGHTNING_ROD), 0, 0);
+				ctx.getMatrices().popMatrix();
+				textX += 15;
+			} else if (!c.allowed && c.requiredArmorLevel > 0) {
+				ctx.getMatrices().pushMatrix();
+				ctx.getMatrices().translate(x + 8, hy - 2);
+				ctx.getMatrices().scale(0.75f, 0.75f);
+				ctx.drawItem(MobBadgeFx.rankIcon(c.requiredArmorLevel, false), 0, 0);
+				ctx.getMatrices().popMatrix();
+				ctx.getMatrices().pushMatrix();
+				ctx.getMatrices().translate(x + 22, hy - 2);
+				ctx.getMatrices().scale(0.75f, 0.75f);
+				ctx.drawItem(c.yourArmorLevel > 0 ? MobBadgeFx.rankIcon(c.yourArmorLevel, false) : new ItemStack(net.minecraft.item.Items.BARRIER), 0, 0);
+				ctx.getMatrices().popMatrix();
+				textX += 36;
+			}
+			int subColor = c.allowed ? 0xFFFFB84A : 0xFFE6C8C8;
+			Ui.text(ctx, tr, BattleHud.fit(tr, subLine, bw - (textX - x) - 8), textX, hy, 1f, subColor, a, true);
+			hy += 13;
 		}
-		ctx.fill(x + 8, y + 29, x + bw - 8, y + 30, Ui.alphaOf(accent, 0.6f * a));
-		Ui.text(ctx, tr, Ui.bold(BattleHud.fit(tr, l1, bw - 16)), x + 8, y + 34, 1f, l1c, a, true);
-		Ui.text(ctx, tr, BattleHud.fit(tr, l2, bw - 16), x + 8, y + 45, 1f, DIM, a, false);
-		if (!warn.isEmpty()) {
-			Ui.text(ctx, tr, BattleHud.fit(tr, warn, bw - 16), x + 8, y + 56, 1f, 0xFFFFB84A, a, false);
-		}
-		// Time to decide, draining along the bottom edge.
+
+		// Line 3: Small hint ("hit again — fight")
+		Ui.text(ctx, tr, BattleHud.fit(tr, hintLine, Math.round((bw - 16) / hintScale)), x + 8, hy, hintScale, DIM, a, true);
+
+		// Draining bar along bottom edge
 		float left = 1 - Ui.clamp01(since / (float) Math.max(1, c.choiceMs));
 		ctx.fill(x, y + bh - 2, x + Math.round(bw * left), y + bh, Ui.alphaOf(Ui.mix(accent, Ui.WHITE, 0.4f), a));
 		Ui.shine(ctx, x, y, bw, bh, (since - 250) / 450f, 0x22FFFFFF);
@@ -710,7 +744,7 @@ public final class BattleHud {
 			: inv.allowed ? I18n.translate(inv.boss ? "rapbattle.hud.invite_boss_keys" : "rapbattle.hud.invite_keys")
 			: I18n.translate("rapbattle.hud.invite_outfit", inv.requiredOutfit, inv.yourOutfit);
 		int accent = !inv.allowed ? Ui.RED : inv.boss ? Ui.BOSS : Ui.GOLD;
-		int bw = Math.min(w - 16, Math.max(tr.getWidth(Ui.bold(s1)), tr.getWidth(s2)) + 20);
+		int bw = Math.min(w - 16, Math.max(tr.getWidth(s1), tr.getWidth(s2)) + 20);
 		int bh = 28;
 		float in = Ui.easeOutBack(since / 320f);
 		float a = Ui.clamp01(since / 150f);
@@ -719,7 +753,7 @@ public final class BattleHud {
 		Ui.panel(ctx, x, y, bw, bh, accent, a);
 		float pulse = 0.4f + 0.4f * (float) Math.abs(Math.sin(now / 300.0));
 		ctx.drawStrokedRectangle(x - 1, y - 1, bw + 2, bh + 2, Ui.alphaOf(accent, pulse * a));
-		Ui.text(ctx, tr, Ui.bold(BattleHud.fit(tr, s1, bw - 16)), x + 8, y + 5, 1f, Ui.WHITE, a, true);
+		Ui.text(ctx, tr, BattleHud.fit(tr, s1, bw - 16), x + 8, y + 5, 1f, Ui.WHITE, a, true);
 		Ui.text(ctx, tr, BattleHud.fit(tr, s2, bw - 16), x + 8, y + 16, 1f, inv.allowed ? Ui.mix(accent, Ui.WHITE, 0.5f) : RED, a, false);
 		Ui.shine(ctx, x, y, bw, bh, (since - 250) / 450f, 0x22FFFFFF);
 	}
