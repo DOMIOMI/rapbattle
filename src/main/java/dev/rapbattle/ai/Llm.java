@@ -44,11 +44,11 @@ public final class Llm {
 		if (Lang.isRu(lang)) {
 			return RapConfig.get().allowSwearing
 				? "Можно жёстко и с матом, это взрослый юмор между друзьями, но без расизма, гомофобии и угроз реальным людям."
-				: "Без мата: жёстко, но цензурно.";
+				: "Без мата: жёстко, но цензурно. Без расизма, гомофобии и угроз реальным людям.";
 		}
 		return RapConfig.get().allowSwearing
 			? "Go hard and swearing is fine — it is adult banter between friends — but no racism, homophobia, or real-life threats."
-			: "No swearing: go hard, but keep it clean.";
+			: "No swearing: go hard, but keep it clean. No racism, homophobia, or real-life threats.";
 	}
 
 	// ---------------------------------------------------------------- round content
