@@ -216,6 +216,8 @@ public final class PvpBattle {
 		this.b = pb.getUuid();
 		names.put(a, pa.getName().getString());
 		names.put(b, pb.getName().getString());
+		if (pa.hasVehicle()) pa.stopRiding();
+		if (pb.hasVehicle()) pb.stopRiding();
 		anchors.put(a, new Vec3d(pa.getX(), pa.getY(), pa.getZ()));
 		anchors.put(b, new Vec3d(pb.getX(), pb.getY(), pb.getZ()));
 		pa.extinguish();
@@ -389,11 +391,19 @@ public final class PvpBattle {
 	private final Map<UUID, Integer> pushTicks = new HashMap<>();
 	private int truceTick = 0;
 
+	public boolean isResolving() {
+		return phase == Phase.JUDGING || phase == Phase.RESULT;
+	}
+
 	private void tick(long now) {
 		if (finished) return;
 		ServerPlayerEntity pa = player(a), pb = player(b);
 		if (pa == null || pb == null) {
 			leave(pa == null ? a : b);
+			return;
+		}
+		if (!pa.isAlive() || !pb.isAlive()) {
+			if (!isResolving()) abortNoPenalty(Text.translatable("rapbattle.battle.abort_env"));
 			return;
 		}
 		if (pa.getEntityWorld() != world) {
@@ -408,11 +418,16 @@ public final class PvpBattle {
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
 			if (p != null && p != testPeer) {
+				if (p.hasVehicle()) p.stopRiding();
 				if (p.getFireTicks() > 0) p.extinguish();
 				if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
 			}
 			Vec3d at = anchors.get(u);
 			if (p != testPeer && p.networkHandler != null && at != null) {
+				if (p.getY() - at.y > 2.0) {
+					p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
+					continue;
+				}
 				double dx = p.getX() - at.x, dz = p.getZ() - at.z;
 				double d2 = dx * dx + dz * dz;
 				if (d2 > 0.3 * 0.3) {

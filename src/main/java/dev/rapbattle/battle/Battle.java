@@ -231,6 +231,7 @@ public class Battle {
 	}
 
 	private void addPlayer(ServerPlayerEntity p) {
+		if (p.hasVehicle()) p.stopRiding();
 		players.add(p.getUuid());
 		names.put(p.getUuid(), p.getName().getString());
 		anchors.put(p.getUuid(), new Vec3d(p.getX(), p.getY(), p.getZ()));
@@ -245,6 +246,10 @@ public class Battle {
 	public boolean hasMob(Entity e) { return e instanceof MobEntity m && mobTeam.contains(m); }
 
 	public Phase phase() { return phase; }
+
+	public boolean isResolving() {
+		return phase == Phase.JUDGING || phase == Phase.ROUND_RESULT || phase == Phase.RESULT;
+	}
 
 	public ServerPlayerEntity challenger() { return player(players.get(0)); }
 
@@ -901,11 +906,16 @@ public class Battle {
 				continue;
 			}
 			if (!p.isAlive()) continue;
+			if (p.hasVehicle()) p.stopRiding();
 			if (p.getFireTicks() > 0) p.extinguish();
 			if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
 			// Players stand still horizontally during the battle (gravity still works) and can look around.
 			Vec3d a = anchors.get(u);
 			if (a != null) {
+				if (p.getY() - a.y > 2.0) {
+					p.networkHandler.requestTeleport(a.x, a.y, a.z, p.getYaw(), p.getPitch());
+					continue;
+				}
 				double dx = p.getX() - a.x, dz = p.getZ() - a.z;
 				double d2 = dx * dx + dz * dz;
 				if (d2 > 0.3 * 0.3) {

@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -108,7 +109,7 @@ public final class BattleManager {
 		return p != null && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null);
 	}
 
-	private static void micOnlyHint(ServerPlayerEntity sp) {
+	public static void micOnlyHint(ServerPlayerEntity sp) {
 		long now = dev.rapbattle.Clock.now();
 		Long until = MIC_HINT_CD.get(sp.getUuid());
 		if (until != null && now < until) return;
@@ -632,6 +633,14 @@ public final class BattleManager {
 			return ActionResult.PASS;
 		});
 
+		UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+			if (!world.isClient() && player instanceof ServerPlayerEntity sp && isBattling(sp)) {
+				micOnlyHint(sp);
+				return ActionResult.FAIL;
+			}
+			return ActionResult.PASS;
+		});
+
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
 			RegistryKey<DamageType> dmgKey = source.getTypeRegistryEntry().getKey().orElse(null);
 			boolean passesThrough = source.isIn(net.minecraft.registry.tag.DamageTypeTags.BYPASSES_INVULNERABILITY)
@@ -654,12 +663,14 @@ public final class BattleManager {
 		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, baseDamageTaken, damageTaken, blocked) -> {
 			if (damageTaken <= 0 || !(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
 			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
-			if (key == null || !BATTLE_ABORT_ENV_DAMAGE.contains(key)) return;
+			boolean envAbort = key != null && BATTLE_ABORT_ENV_DAMAGE.contains(key);
+			boolean nonModDeath = (p.isDead() || !p.isAlive()) && !Battle.RAP_DEATH.equals(key);
+			if (!envAbort && !nonModDeath) return;
 			Text msg = Text.translatable("rapbattle.battle.abort_env");
 			Battle b = byPlayer(p.getUuid());
-			if (b != null) b.abortNoPenalty(p, msg);
+			if (b != null && (nonModDeath || !b.isResolving())) b.abortNoPenalty(p, msg);
 			PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
-			if (pvp != null) pvp.abortNoPenalty(msg);
+			if (pvp != null && (nonModDeath || !pvp.isResolving())) pvp.abortNoPenalty(msg);
 		});
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {

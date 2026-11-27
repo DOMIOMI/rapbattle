@@ -6,6 +6,7 @@
     "AbstractPiglinAccessor",
     "CreeperMixin",
     "EndermanEntityMixin",
+    "EnderPearlMixin",
     "EntityProtectionMixin",
     "HoglinAccessor",
     "LivingEntityProtectionMixin",
@@ -15,7 +16,8 @@
     "MoveControlMixin",
     "PiglinBrainMixin",
     "PiglinBruteBrainMixin",
-    "SculkShriekerMixin"
+    "SculkShriekerMixin",
+    "ServerPlayNetworkHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
