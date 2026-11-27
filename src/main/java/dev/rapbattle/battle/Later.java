@@ -14,7 +14,7 @@ public final class Later {
 	public static void run(long delayMs, Runnable r) { TASKS.add(new Task(dev.rapbattle.Clock.now() + delayMs, r)); }
 
 	/** Server tick. */
-	static void tick() {
+	public static void tick() {
 		long now = dev.rapbattle.Clock.now();
 		for (Task t : new ArrayList<>(TASKS)) {
 			if (now < t.at()) continue;

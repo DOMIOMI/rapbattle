@@ -460,8 +460,6 @@ public final class ReputationScenario {
 	}
 
 	private static void testBastionLossDelay(ClientGameTestContext ctx, TestSingleplayerContext sp) {
-		PiglinBruteEntity[] brRef = new PiglinBruteEntity[1];
-		PiglinEntity[] pgRef = new PiglinEntity[1];
 		sp.getServer().runOnServer(server -> {
 			RapConfig.get().progression = "off";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
@@ -472,33 +470,28 @@ public final class ReputationScenario {
 			br.setImmuneToZombification(true);
 			br.refreshPositionAndAngles(p.getX() + 4.0, p.getY(), p.getZ() + 4.0, 180, 0);
 			w.spawnEntity(br);
-			brRef[0] = br;
 			PiglinEntity pg = EntityType.PIGLIN.create(w, SpawnReason.COMMAND);
 			pg.setImmuneToZombification(true);
 			pg.refreshPositionAndAngles(p.getX() + 5.0, p.getY(), p.getZ() + 4.0, 180, 0);
 			w.spawnEntity(pg);
-			pgRef[0] = pg;
 			Battle b = BattleManager.start(p, br);
 			b.jumpToForTest(Battle.Phase.RESULT, false, true, 0, 90);
 			BastionBattle.onLoss(w, p, br.getBlockPos());
-		});
-		ctx.waitTicks(2);
-		sp.getServer().runOnServer(server -> {
+
 			Clock.advanceForTest(9_000L);
-		});
-		ctx.waitTicks(2);
-		sp.getServer().runOnServer(server -> {
-			assertTrue(pgRef[0].getTarget() == null && brRef[0].getTarget() == null,
+			Later.tick();
+			pg.setTarget(p);
+			br.setTarget(p);
+			assertTrue(pg.getTarget() == null && br.getTarget() == null,
 				"During 9s Run! truce, bastion piglins must not attack loser");
+
 			Clock.advanceForTest(2_000L);
-		});
-		ctx.waitTicks(2);
-		sp.getServer().runOnServer(server -> {
-			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
-			assertTrue(pgRef[0].getTarget() == p || brRef[0].getTarget() == p,
+			Later.tick();
+			assertTrue(pg.getTarget() == p && br.getTarget() == p,
 				"After 10s Run! truce expires, bastion piglins must aggro loser");
-			brRef[0].discard();
-			pgRef[0].discard();
+
+			br.discard();
+			pg.discard();
 			GameTestSupport.cleanupBattles(server);
 			Reputation.clear();
 			RapConfig.get().progression = "soft";

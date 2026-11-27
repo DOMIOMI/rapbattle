@@ -86,6 +86,8 @@ public final class BastionBattle {
 				m -> m.isAlive() && m.squaredDistanceTo(pos.getX(), pos.getY(), pos.getZ()) <= 32 * 32);
 			for (AbstractPiglinEntity pig : piglins) {
 				Crowd.breakTruceFor(pig, loserId);
+				pig.getBrain().remember(net.minecraft.entity.ai.brain.MemoryModuleType.ANGRY_AT, loserId, 600L);
+				pig.getBrain().remember(net.minecraft.entity.ai.brain.MemoryModuleType.ATTACK_TARGET, p);
 				BattleManager.forceMobTarget(pig, p);
 			}
 		});
