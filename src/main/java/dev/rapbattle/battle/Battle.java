@@ -134,6 +134,7 @@ public class Battle {
 	private final Set<UUID> gazedPlayers = new HashSet<>();
 	private final Set<UUID> rerolledPlayers = new HashSet<>();
 	private final Set<UUID> wardenTriggered = new HashSet<>();
+	private final Map<UUID, Integer> playerNoise = new HashMap<>();
 	private List<String> targets = List.of();
 	private int chosenTopic;
 	private boolean hasStyleBonus;
@@ -609,7 +610,16 @@ public class Battle {
 
 	/** Warden: noise from a player's mic while he was reading. */
 	public void onNoise(ServerPlayerEntity p, int count) {
-		if (hasPlayer(p.getUuid()) && opp.profile().id().equals("warden")) noise += Math.max(0, Math.min(10, count));
+		if (phase != Phase.TIMELINE || view == null || !hasPlayer(p.getUuid()) || !opp.profile().id().equals("warden")) return;
+		int curBeat = (int) Math.floorDiv(dev.rapbattle.Clock.now() - beatZero, Math.max(1L, beatMs));
+		if (curBeat < view.mobStartBeat || curBeat >= view.mobEndBeat) return;
+		UUID u = p.getUuid();
+		int prev = playerNoise.getOrDefault(u, 0);
+		int add = Math.max(0, Math.min(10 - prev, count));
+		if (add > 0) {
+			playerNoise.put(u, prev + add);
+			noise += add;
+		}
 	}
 
 	/** Enderman: looking him in the eyes during his verse shuffles this player's upcoming rhymes on the server. */
@@ -1136,6 +1146,7 @@ public class Battle {
 		gazedPlayers.clear();
 		rerolledPlayers.clear();
 		wardenTriggered.clear();
+		playerNoise.clear();
 		targets = List.of();
 		pendingVerses = List.of();
 		transcripts.clear();
