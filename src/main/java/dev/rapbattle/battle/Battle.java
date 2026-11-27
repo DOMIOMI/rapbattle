@@ -44,8 +44,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Battle {
 	public enum Phase { LOBBY, PREP, TIMELINE, JUDGING, ROUND_RESULT, RESULT }
 
-	static final ExecutorService POOL = new ThreadPoolExecutor(4, 8, 60L, TimeUnit.SECONDS,
-		new LinkedBlockingQueue<>(64), r -> {
+	static final ExecutorService POOL = new java.util.concurrent.ThreadPoolExecutor(4, 8, 60L, java.util.concurrent.TimeUnit.SECONDS,
+		new java.util.concurrent.LinkedBlockingQueue<>(64), r -> {
 			Thread t = new Thread(r, "rapbattle-ai");
 			t.setDaemon(true);
 			return t;
@@ -1980,6 +1980,16 @@ public class Battle {
 		setPhase(Phase.RESULT, dev.rapbattle.Clock.now());
 	}
 
+	/** Test-only helper to enter Phase.ROUND_RESULT with explicit round wins and finalResult=false. */
+	public void enterRoundResultForTest(int wp, int wm) {
+		this.winsPlayers = wp;
+		this.winsMob = wm;
+		this.result = new BattleView.Result();
+		this.result.playersWin = wp > wm;
+		this.result.finalResult = false;
+		setPhase(Phase.ROUND_RESULT, dev.rapbattle.Clock.now());
+	}
+
 	/** Immediately resolves the battle (or this co-op player's participation) with the current outcome. */
 	public void resolveNow(ServerPlayerEntity p) {
 		if (p != null) resolveNow(p.getUuid());
@@ -2135,6 +2145,24 @@ public class Battle {
 					ServerPlayerEntity pl = player(u);
 					if (pl != null) pl.sendMessage(Text.translatable("rapbattle.act4.warden_quiet").formatted(Formatting.DARK_AQUA), false);
 				}
+			}
+			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
+				if (!bestLine.isEmpty()) {
+					Stats.of(world.getServer()).recordLegend(mvpPlayer != null ? mvpPlayer.getName().getString() : "", bestLine);
+				}
+				ServerPlayerEntity dragonKiller = killer;
+				if (dragonKiller == null) {
+					for (UUID u : active) {
+						ServerPlayerEntity pl = player(u);
+						if (pl != null && pl.isAlive()) { dragonKiller = pl; break; }
+					}
+				}
+				DamageSource src = dragonKiller != null
+					? world.getDamageSources().playerAttack(dragonKiller)
+					: world.getDamageSources().badRespawnPoint(pos);
+				dragon.damagePart(world, dragon.head, src, dragon.getMaxHealth() * 100f);
+				ExperienceOrbEntity.spawn(world, pos, xp * Math.max(1, active.size()));
+				return;
 			}
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.

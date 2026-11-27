@@ -753,8 +753,18 @@ public final class BattleManager {
 			if (pvp != null) pvp.abortNoPenalty(msg);
 		});
 
-		ServerLivingEntityEvents.ALLOW_CONVERSION.register((entity, convertedType, ctx) ->
-			!(entity instanceof MobEntity m && (byMob(m) != null || inAnyCrowd(m))));
+		ServerLivingEntityEvents.MOB_CONVERSION.register((previous, converted, keepEquipment) -> {
+			if (previous instanceof MobEntity prevMob && converted instanceof MobEntity nextMob) {
+				Battle b = byMob(prevMob);
+				if (b != null || inAnyCrowd(prevMob)) {
+					nextMob.setAiDisabled(false);
+					nextMob.setSilent(false);
+					if (b != null && !b.finished && !b.isResolving()) {
+						b.abort(Text.translatable("rapbattle.battle.abort_env"));
+					}
+				}
+			}
+		});
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (Battle b : new ArrayList<>(BATTLES)) {
