@@ -407,12 +407,24 @@ public final class Crowd {
 		}
 	}
 
+	private boolean isParticipantPet(MobEntity m) {
+		if (m instanceof net.minecraft.entity.passive.TameableEntity t && t.isTamed()) {
+			var owner = t.getOwnerReference();
+			if (owner != null && battle.players.contains(owner.getUuid())) return true;
+		}
+		if (m instanceof net.minecraft.entity.passive.AbstractHorseEntity h && h.isTame()) {
+			var owner = h.getOwnerReference();
+			if (owner != null && battle.players.contains(owner.getUuid())) return true;
+		}
+		return false;
+	}
+
 	/** After a player victory, a friendly fan may toss a small gift (emerald, apple, or glowstone dust). */
 	void dropGift(net.minecraft.server.network.ServerPlayerEntity winner) {
 		if (winner == null || members.isEmpty() || rnd.nextInt(100) >= 45) return;
 		MobEntity fan = null;
 		for (Map.Entry<MobEntity, Side> e : members.entrySet()) {
-			if (e.getKey().isAlive() && e.getValue() == Side.PLAYERS) {
+			if (e.getKey().isAlive() && e.getValue() == Side.PLAYERS && !isParticipantPet(e.getKey())) {
 				fan = e.getKey();
 				break;
 			}
