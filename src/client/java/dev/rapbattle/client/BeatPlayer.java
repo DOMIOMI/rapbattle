@@ -19,6 +19,8 @@ public final class BeatPlayer {
 	private static SoundInstance playing;
 	private static long loop = Long.MIN_VALUE;
 	private static int battle = -1;
+	private static int warmedBattle = -1;
+	private static SoundInstance warming;
 
 	/** The track of the current battle, if real beats are on and the track exists. */
 	public static BeatTracks.Track track() {
@@ -31,6 +33,15 @@ public final class BeatPlayer {
 	public static void update() {
 		BattleView v = ClientBattle.view;
 		BeatTracks.Track t = track();
+		if (warming != null) {
+			MinecraftClient.getInstance().getSoundManager().stop(warming);
+			warming = null;
+		}
+		if (t != null && v != null && warmedBattle != v.id && ("LOBBY".equals(v.phase) || "PREP".equals(v.phase))) {
+			warmedBattle = v.id;
+			warming = PositionedSoundInstance.ui(SoundEvent.of(Identifier.of("rapbattle", "beat." + t.id())), 1.0f, 0.001f);
+			MinecraftClient.getInstance().getSoundManager().play(warming);
+		}
 		boolean on = t != null && "TIMELINE".equals(v.phase) && v.totalBeats > 0;
 		long clock = on ? ClientBattle.clock() : -1;
 		if (!on || clock < 0 || clock >= (long) v.totalBeats * v.beatMs) {
