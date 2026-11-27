@@ -28,6 +28,46 @@ public final class Transcriber {
 	/** The text and its words with timestamps (the list may be empty if the service gives no word times). */
 	public record Result(String text, List<Word> words) {}
 
+	/** Transcription outcome distinguishing service failure (key/5xx/timeout) from valid silence or corrupt/4xx input. */
+	public record Outcome(Result result, boolean serviceFailure) {}
+
+	/** Validates a PCM 16-kHz mono 16-bit RIFF/WAVE header and chunk structure. */
+	public static boolean isValidWav16kMono16(byte[] wav) {
+		if (wav == null || wav.length < 44) return false;
+		if (wav[0] != 'R' || wav[1] != 'I' || wav[2] != 'F' || wav[3] != 'F') return false;
+		if (wav[8] != 'W' || wav[9] != 'A' || wav[10] != 'V' || wav[11] != 'E') return false;
+		boolean hasFmt = false;
+		boolean hasData = false;
+		int pos = 12;
+		while (pos + 8 <= wav.length) {
+			int id0 = wav[pos] & 0xFF, id1 = wav[pos + 1] & 0xFF, id2 = wav[pos + 2] & 0xFF, id3 = wav[pos + 3] & 0xFF;
+			int size = le32(wav, pos + 4);
+			if (size < 0 || pos + 8L + size > wav.length) return false;
+			if (id0 == 'f' && id1 == 'm' && id2 == 't' && id3 == ' ') {
+				if (size < 16) return false;
+				int audioFormat = le16(wav, pos + 8);
+				int channels = le16(wav, pos + 10);
+				int sampleRate = le32(wav, pos + 12);
+				int bitsPerSample = le16(wav, pos + 22);
+				if (audioFormat != 1 || channels != 1 || sampleRate != 16000 || bitsPerSample != 16) return false;
+				hasFmt = true;
+			} else if (id0 == 'd' && id1 == 'a' && id2 == 't' && id3 == 'a') {
+				hasData = true;
+			}
+			pos += 8 + size + (size & 1);
+		}
+		return hasFmt && hasData;
+	}
+
+	private static int le16(byte[] b, int off) {
+		return (b[off] & 0xFF) | ((b[off + 1] & 0xFF) << 8);
+	}
+
+	private static int le32(byte[] b, int off) {
+		return (b[off] & 0xFF) | ((b[off + 1] & 0xFF) << 8)
+			| ((b[off + 2] & 0xFF) << 16) | ((b[off + 3] & 0xFF) << 24);
+	}
+
 	/** Returns the recognised text, "" for silence, or null when STT is not configured / failed. */
 	public static String transcribe(byte[] wav, List<String> hintWords, String lang) {
 		Result r = transcribeTimed(wav, hintWords, lang);
@@ -41,13 +81,21 @@ public final class Transcriber {
 
 	/** Like {@link #transcribe}, with word timestamps; null when STT is not configured / failed. */
 	public static Result transcribeTimed(byte[] wav, List<String> hintWords, String lang) {
+		Outcome out = transcribeTimedChecked(wav, hintWords, lang);
+		return out.serviceFailure() ? null : out.result();
+	}
+
+	/** Transcribes a 16-kHz mono 16-bit WAV, distinguishing service errors (5xx/timeout/no key) from bad client WAV/4xx. */
+	public static Outcome transcribeTimedChecked(byte[] wav, List<String> hintWords, String lang) {
 		RapConfig cfg = RapConfig.get();
 		String key = cfg.sttKey();
 		if (key.isEmpty()) {
 			RapBattle.LOG.warn("Speech-to-text key is not set (sttApiKey in config/rapbattle-server.json or RAPBATTLE_STT_KEY)");
-			return null;
+			return new Outcome(null, true);
 		}
-		if (wav == null || wav.length < 2000) return new Result("", List.of());
+		if (wav == null || !isValidWav16kMono16(wav) || wav.length < 2000) {
+			return new Outcome(new Result("", List.of()), false);
+		}
 		try {
 			String boundary = "----rapbattle" + UUID.randomUUID().toString().replace("-", "");
 			ByteArrayOutputStream body = new ByteArrayOutputStream(wav.length + 2048);
@@ -73,9 +121,11 @@ public final class Transcriber {
 				.POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
 				.build();
 			HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-			if (resp.statusCode() / 100 != 2) {
-				RapBattle.LOG.error("STT HTTP {}: {}", resp.statusCode(), resp.body());
-				return null;
+			int status = resp.statusCode();
+			if (status / 100 != 2) {
+				RapBattle.LOG.error("STT HTTP {}: {}", status, resp.body());
+				boolean serviceErr = status / 100 != 4;
+				return new Outcome(serviceErr ? null : new Result("", List.of()), serviceErr);
 			}
 			JsonObject o = JsonParser.parseString(resp.body()).getAsJsonObject();
 			String text = o.has("text") ? o.get("text").getAsString().trim() : "";
@@ -86,10 +136,10 @@ public final class Transcriber {
 					words.add(new Word(w.get("word").getAsString().trim(), w.get("start").getAsDouble()));
 				}
 			}
-			return new Result(text, words);
+			return new Outcome(new Result(text, words), false);
 		} catch (Exception e) {
 			RapBattle.LOG.error("STT request failed", e);
-			return null;
+			return new Outcome(null, true);
 		}
 	}
 

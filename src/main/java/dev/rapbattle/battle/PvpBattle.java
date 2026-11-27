@@ -76,7 +76,7 @@ public final class PvpBattle {
 	private final Map<String, BattleView.Result> results = new LinkedHashMap<>();
 	private final Map<UUID, BattleView.Result> playerResults = new HashMap<>();
 	private long verdictAsked;
-	private volatile boolean sttMissing;
+	private final Set<UUID> sttMissingPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
 	boolean finished;
 	private final Set<UUID> spectators = new HashSet<>();
 	private ServerPlayerEntity testPeer;
@@ -375,13 +375,18 @@ public final class PvpBattle {
 		List<String> hints = rhymes.getOrDefault(u, List.of());
 		String lang = langOf(u);
 		transcripts.put(u, CompletableFuture.supplyAsync(() -> {
-			Transcriber.Result r = Transcriber.transcribeTimed(wav, hints, lang);
-			if (r == null) {
-				sttMissing = true;
+			if (finished) return "";
+			Transcriber.Outcome out = Transcriber.transcribeTimedChecked(wav, hints, lang);
+			if (finished) return "";
+			if (out.serviceFailure()) {
+				sttMissingPlayers.add(u);
 				return "";
 			}
-			timed.put(u, r);
-			return r.text();
+			if (out.result() != null) {
+				timed.put(u, out.result());
+				return out.result().text();
+			}
+			return "";
 		}, Battle.POOL));
 	}
 
@@ -545,7 +550,7 @@ public final class PvpBattle {
 			List<Llm.PlayerVerse> verses = prepareJudgingVerses(now, false);
 			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
 			barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
-			boolean noStt = sttMissing;
+			boolean noStt = sttMissingPlayers.contains(a) && sttMissingPlayers.contains(b);
 			Llm.PlayerVerse vA = verses.get(0), vB = verses.get(1);
 			String lA = langOf(a), lB = langOf(b);
 			pvpVerdictFuture = CompletableFuture.supplyAsync(() -> {
@@ -588,7 +593,7 @@ public final class PvpBattle {
 			List<Llm.BarPrompt> prompts = new ArrayList<>(sliced.size());
 			for (int i = 0; i < sliced.size(); i++) {
 				Scoring.SlicedBar sb = sliced.get(i);
-				boolean sttMiss = sttMissing || timed.get(u) == null;
+				boolean sttMiss = sttMissingPlayers.contains(u) || timed.get(u) == null;
 				int deltaMs = i < deltas.size() ? deltas.get(i) : -1;
 				int preBeat = Scoring.hybridBeat(sb.whisperDeltaBeats(), 1, sttMiss, deltaMs, beatMs);
 				if (preBeat == 0 && i < louds.size() && Boolean.TRUE.equals(louds.get(i)) && sb.whisperDeltaBeats() == null) {
@@ -618,8 +623,9 @@ public final class PvpBattle {
 	private Llm.PvpVerdict fallbackPvpVerdict() {
 		Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
 		barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
-		Llm.Verdict fRu = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.RU);
-		Llm.Verdict fEn = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.EN);
+		boolean noStt = sttMissingPlayers.contains(a) && sttMissingPlayers.contains(b);
+		Llm.Verdict fRu = Fallback.judge(0, 0, pendingVerses, loudSnapshot, noStt, rnd, Lang.RU);
+		Llm.Verdict fEn = Fallback.judge(0, 0, pendingVerses, loudSnapshot, noStt, rnd, Lang.EN);
 		return new Llm.PvpVerdict(fRu.playerLines(), fEn.playerLines(), fRu.comment(), fEn.comment());
 	}
 
@@ -652,7 +658,7 @@ public final class PvpBattle {
 				Scoring.SlicedBar sb = i < sbs.size() ? sbs.get(i) : null;
 				boolean sttSilent = sb != null && sb.silent();
 				boolean micSilent = i < silents.size() && Boolean.TRUE.equals(silents.get(i));
-				boolean barSilentFlag = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
+				boolean barSilentFlag = sttMissingPlayers.contains(u) ? micSilent : (sb != null ? sttSilent : micSilent);
 				boolean silenceForgiven = false;
 				if (barSilentFlag && perk == Trophies.TrophyPerk.WITHER && !witherForgiven) {
 					silenceForgiven = true;
@@ -660,7 +666,7 @@ public final class PvpBattle {
 				}
 				int deltaMs = i < deltas.size() ? deltas.get(i) : (i < louds.size() && Boolean.TRUE.equals(louds.get(i)) ? 0 : -1);
 				int beatState = barSilentFlag ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
-					l.rhyme(), sttMissing, deltaMs, beatMs, wWin, mWin);
+					l.rhyme(), sttMissingPlayers.contains(u), deltaMs, beatMs, wWin, mWin);
 				if (beatState == 2 && perk == Trophies.TrophyPerk.ELDER_GUARDIAN) guardianUsed = true;
 				inputs.add(style.lineInput(pName, words.get(i), l.score(), l.meaning(), l.punch(), l.rebuttal(),
 					l.note(), beatState, barSilentFlag, false, 1.0, silenceForgiven));

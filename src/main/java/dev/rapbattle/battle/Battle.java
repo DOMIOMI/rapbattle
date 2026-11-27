@@ -120,7 +120,9 @@ public class Battle {
 	/** Word timestamps from speech recognition, and where each recording starts on the battle clock. */
 	private final Map<UUID, dev.rapbattle.ai.Transcriber.Result> timed = new java.util.concurrent.ConcurrentHashMap<>();
 	private final Map<UUID, Integer> recordingStart = new java.util.concurrent.ConcurrentHashMap<>();
-	private volatile boolean sttMissing;
+	private final Set<UUID> sttMissingPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	public boolean isSttMissingForTest(UUID u) { return sttMissingPlayers.contains(u); }
 	/** Warden: noises the team made while he was reading. */
 	private int noise;
 	/** Crowd: rhyme slots players hit loudly / missed in silence this round. */
@@ -558,14 +560,20 @@ public class Battle {
 			audioSeq.remove(u);
 			recordingStart.put(u, chunk.startMs());
 			List<String> hints = rhymeWords.getOrDefault(u, List.of());
+			final int reqRound = this.round;
 			transcripts.put(u, CompletableFuture.supplyAsync(() -> {
-				Transcriber.Result r = Transcriber.transcribeTimed(wav, hints, lang);
-				if (r == null) {
-					sttMissing = true;
+				if (finished || this.round != reqRound) return "";
+				Transcriber.Outcome out = Transcriber.transcribeTimedChecked(wav, hints, lang);
+				if (finished || this.round != reqRound) return "";
+				if (out.serviceFailure()) {
+					sttMissingPlayers.add(u);
 					return "";
 				}
-				timed.put(u, r);
-				return r.text();
+				if (out.result() != null) {
+					timed.put(u, out.result());
+					return out.result().text();
+				}
+				return "";
 			}, POOL));
 		}
 	}
@@ -1107,6 +1115,7 @@ public class Battle {
 				p.networkHandler.requestTeleport(a.x, a.y, a.z, p.getYaw(), p.getPitch());
 			}
 		}
+		sttMissingPlayers.clear();
 		punchesFired.clear();
 		mobLinesFired.clear();
 		timed.clear();
@@ -1373,7 +1382,7 @@ public class Battle {
 			playerBarLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
 			List<String> mobCopy = new ArrayList<>();
 			for (Llm.MobLine l : mobLines) mobCopy.add(l.speaker() + ": " + l.text());
-			boolean noStt = sttMissing;
+			boolean noStt = !activePlayers().isEmpty() && activePlayers().stream().allMatch(sttMissingPlayers::contains);
 			String topicInfo = topicPromptText();
 			List<String> roundTargets = List.copyOf(targets);
 			verdictFuture = CompletableFuture.supplyAsync(() -> {
@@ -1403,8 +1412,9 @@ public class Battle {
 	private Llm.Verdict fallbackVerdict() {
 		Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
 		playerBarLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
-		Llm.Verdict v = Fallback.judge(rank.verseLo, rank.verseHi, pendingVerses, loudSnapshot, sttMissing, targets, rnd, lang);
-		if (sttMissing) {
+		boolean noStt = !activePlayers().isEmpty() && activePlayers().stream().allMatch(sttMissingPlayers::contains);
+		Llm.Verdict v = Fallback.judge(rank.verseLo, rank.verseHi, pendingVerses, loudSnapshot, noStt, targets, rnd, lang);
+		if (noStt) {
 			v = new Llm.Verdict(v.mobVerse(), v.playerLines(),
 				Lang.t(lang, "rapbattle.battle.no_stt_prefix") + v.comment());
 		}
@@ -1437,7 +1447,7 @@ public class Battle {
 			for (int i = 0; i < sliced.size(); i++) {
 				Scoring.SlicedBar sb = sliced.get(i);
 				boolean sttSilent = sb.silent();
-				boolean sttMiss = sttMissing || timed.get(u) == null;
+				boolean sttMiss = sttMissingPlayers.contains(u) || timed.get(u) == null;
 				int deltaMs = i < deltas.size() ? deltas.get(i) : -1;
 				int preBeat = Scoring.hybridBeat(sb.whisperDeltaBeats(), 1, sttMiss, deltaMs, beatMs);
 				if (preBeat == 0 && i < louds.size() && Boolean.TRUE.equals(louds.get(i)) && sb.whisperDeltaBeats() == null) {
@@ -1511,14 +1521,14 @@ public class Battle {
 
 				boolean sttSilent = sb != null && sb.silent();
 				boolean micSilent = idx < silents.size() && Boolean.TRUE.equals(silents.get(idx));
-				boolean barSilent = sttMissing ? micSilent : (sb != null ? sttSilent : micSilent);
+				boolean barSilent = sttMissingPlayers.contains(u) ? micSilent : (sb != null ? sttSilent : micSilent);
 				Trophies.TrophyPerk perk = playerPerks.get(u);
 				boolean silenceForgiven = barSilent && perk == Trophies.TrophyPerk.WITHER && witherForgiven.add(u);
 				double wWin = whisperOnWin + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
 				double mWin = micOnWin + (perk == Trophies.TrophyPerk.ELDER_GUARDIAN ? 0.05 : 0.0);
 				int deltaMs = idx < deltas.size() ? deltas.get(idx) : (idx < louds.size() && Boolean.TRUE.equals(louds.get(idx)) ? 0 : -1);
 				int beatState = barSilent ? 0 : Scoring.hybridBeat(sb == null ? null : sb.whisperDeltaBeats(),
-					l.rhyme(), sttMissing, deltaMs, beatMs, wWin, mWin);
+					l.rhyme(), sttMissingPlayers.contains(u), deltaMs, beatMs, wWin, mWin);
 				timedTotal++;
 				if (beatState == 2) {
 					onBeatTotal++;
