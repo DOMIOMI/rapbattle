@@ -3,7 +3,7 @@
   "id": "rapbattle",
   "version": "${version}",
   "name": "Rap Battle",
-  "description": "Рэп-баттлы с мобами: читай в микрофон под бит, нейросеть-судья решает, кто кого.",
+  "description": "Rap battles against mobs: spit bars on the beat into your mic while an AI judge scores the verse.",
   "authors": [
     "DOMI"
   ],
@@ -21,10 +21,10 @@
     ]
   },
   "depends": {
-    "fabricloader": ">=0.16.0",
+    "fabricloader": ">=0.18.6",
     "minecraft": "~1.21.11",
     "java": ">=21",
-    "fabric-api": "*"
+    "fabric-api": ">=0.141.6+1.21.11"
   },
   "mixins": [
     "rapbattle.mixins.json",
