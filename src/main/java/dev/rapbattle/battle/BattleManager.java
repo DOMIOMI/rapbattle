@@ -109,6 +109,22 @@ public final class BattleManager {
 		return p != null && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null);
 	}
 
+	public static boolean isPlayerResolving(ServerPlayerEntity p) {
+		if (p == null) return false;
+		Battle b = byPlayer(p.getUuid());
+		if (b != null && b.isResolving()) return true;
+		PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
+		return pvp != null && pvp.isResolving();
+	}
+
+	private static void resolveNow(ServerPlayerEntity p) {
+		if (p == null) return;
+		Battle b = byPlayer(p.getUuid());
+		if (b != null && b.isResolving()) b.resolveNow(p);
+		PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
+		if (pvp != null && pvp.isResolving()) pvp.resolveNow();
+	}
+
 	public static void micOnlyHint(ServerPlayerEntity sp) {
 		long now = dev.rapbattle.Clock.now();
 		Long until = MIC_HINT_CD.get(sp.getUuid());
@@ -643,10 +659,18 @@ public final class BattleManager {
 
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
 			RegistryKey<DamageType> dmgKey = source.getTypeRegistryEntry().getKey().orElse(null);
+			ServerPlayerEntity spTarget = entity instanceof ServerPlayerEntity sp ? sp : null;
+			boolean battlingTarget = spTarget != null && isBattling(spTarget);
+			boolean resolvingTarget = battlingTarget && isPlayerResolving(spTarget);
+			boolean isVoid = DamageTypes.OUT_OF_WORLD.equals(dmgKey);
+			if (resolvingTarget && isVoid) {
+				resolveNow(spTarget);
+			}
 			boolean passesThrough = source.isIn(net.minecraft.registry.tag.DamageTypeTags.BYPASSES_INVULNERABILITY)
-				|| (dmgKey != null && BATTLE_ABORT_ENV_DAMAGE.contains(dmgKey))
+				|| (!resolvingTarget && dmgKey != null && BATTLE_ABORT_ENV_DAMAGE.contains(dmgKey))
+				|| isVoid
 				|| Battle.RAP_DEATH.equals(dmgKey);
-			boolean playerProtected = entity instanceof ServerPlayerEntity p && isBattling(p) && !passesThrough;
+			boolean playerProtected = battlingTarget && !passesThrough;
 			boolean allowed = !playerProtected
 				&& !(source.getAttacker() instanceof ServerPlayerEntity sp && isBattling(sp))
 				&& byMob(entity) == null
@@ -678,6 +702,10 @@ public final class BattleManager {
 			if (!(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
 			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
 			if (Battle.RAP_DEATH.equals(key)) return;
+			if (isPlayerResolving(p)) {
+				resolveNow(p);
+				return;
+			}
 			Text msg = Text.translatable("rapbattle.battle.abort_env");
 			Battle b = byPlayer(p.getUuid());
 			if (b != null) b.abortNoPenalty(p, msg);

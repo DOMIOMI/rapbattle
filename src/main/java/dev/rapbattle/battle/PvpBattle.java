@@ -193,6 +193,12 @@ public final class PvpBattle {
 			view.result = new BattleView.Result();
 			view.result.winner = names.get(a);
 			view.result.playersWin = true;
+		} else if ("RESULT_LOSS".equals(targetPhase)) {
+			phase = Phase.RESULT;
+			phaseStart = now;
+			view.result = new BattleView.Result();
+			view.result.winner = names.get(b);
+			view.result.playersWin = false;
 		}
 	}
 
@@ -429,7 +435,7 @@ public final class PvpBattle {
 				if (p.getAir() < p.getMaxAir()) p.setAir(p.getMaxAir());
 			}
 			Vec3d at = anchors.get(u);
-			if (p != testPeer && p.networkHandler != null && at != null) {
+			if (p != testPeer && p.networkHandler != null && at != null && !isResolving()) {
 				if (p.getY() - at.y > 2.0) {
 					p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
 					continue;
@@ -521,46 +527,10 @@ public final class PvpBattle {
 			boolean done = transcripts.size() == 2 && transcripts.values().stream().allMatch(CompletableFuture::isDone);
 			if (!done && t < AUDIO_WAIT_MS + STT_WAIT_MS) return;
 			if (t < 500 && !allBarsReported()) return;
-			slicedBars.clear();
-			List<Llm.PlayerVerse> verses = new ArrayList<>();
-			for (UUID u : List.of(a, b)) {
-				String pName = names.get(u);
-				String uLang = langOf(u);
-				CompletableFuture<String> f = transcripts.get(u);
-				String raw = f == null ? "" : f.getNow("");
-				String text = raw == null ? "" : raw.trim();
-				List<Scoring.BarSlot> slots = new ArrayList<>();
-				int ln = 1;
-				for (BattleView.Row r : view.rows) {
-					if (pName.equals(r.reader)) slots.add(new Scoring.BarSlot(ln++, r.startBeat, r.word));
-				}
-				List<Scoring.SlicedBar> sliced = Scoring.sliceBars(timed.get(u), recordingStart.get(u), text, slots, beatMs, uLang);
-				slicedBars.put(u, sliced);
-				List<Boolean> louds = barLoud.getOrDefault(pName, List.of());
-				List<Integer> deltas = barDeltaMs.getOrDefault(pName, List.of());
-				List<Llm.BarPrompt> prompts = new ArrayList<>(sliced.size());
-				for (int i = 0; i < sliced.size(); i++) {
-					Scoring.SlicedBar sb = sliced.get(i);
-					boolean sttMiss = sttMissing || timed.get(u) == null;
-					int deltaMs = i < deltas.size() ? deltas.get(i) : -1;
-					int preBeat = Scoring.hybridBeat(sb.whisperDeltaBeats(), 1, sttMiss, deltaMs, beatMs);
-					if (preBeat == 0 && i < louds.size() && Boolean.TRUE.equals(louds.get(i)) && sb.whisperDeltaBeats() == null) {
-						preBeat = 1;
-					}
-					String timingLabel = sb.silent()
-						? Lang.t(uLang, "rapbattle.judge.timing.silent")
-						: preBeat == 2 ? Lang.t(uLang, "rapbattle.judge.timing.on_beat")
-						: preBeat == 1 ? Lang.t(uLang, "rapbattle.judge.timing.near")
-						: Lang.t(uLang, "rapbattle.judge.timing.off");
-					prompts.add(new Llm.BarPrompt(sb.lineIndex(), sb.targetWord(), timingLabel, sb.text(), sb.silent()));
-				}
-				verses.add(new Llm.PlayerVerse(pName, rhymes.getOrDefault(u, List.of()), text, "", prompts));
-			}
-			pendingVerses = List.copyOf(verses);
+			List<Llm.PlayerVerse> verses = prepareJudgingVerses(now, false);
 			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
 			barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
 			boolean noStt = sttMissing;
-			verdictAsked = now;
 			Llm.PlayerVerse vA = verses.get(0), vB = verses.get(1);
 			String lA = langOf(a), lB = langOf(b);
 			pvpVerdictFuture = CompletableFuture.supplyAsync(() -> {
@@ -572,24 +542,73 @@ public final class PvpBattle {
 				}
 				return pv;
 			}, Battle.POOL);
-			for (String l : new LinkedHashSet<>(List.of(lA, lB))) {
-				BattleView.Result r = new BattleView.Result();
-				for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? Lang.t(l, "rapbattle.battle.silence") : pv.transcript()));
-				results.put(l, r);
-			}
-			view.result = results.get(lA);
 			return;
 		}
 		if (t < MIN_JUDGING_MS) return;
 		if (!pvpVerdictFuture.isDone() && now - verdictAsked < JUDGE_WAIT_MS) return;
 		Llm.PvpVerdict pvpVerdict = pvpVerdictFuture.getNow(null);
-		if (pvpVerdict == null) {
-			Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
-			barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
-			Llm.Verdict fRu = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.RU);
-			Llm.Verdict fEn = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.EN);
-			pvpVerdict = new Llm.PvpVerdict(fRu.playerLines(), fEn.playerLines(), fRu.comment(), fEn.comment());
+		if (pvpVerdict == null) pvpVerdict = fallbackPvpVerdict();
+		applyVerdict(pvpVerdict, now);
+	}
+
+	private List<Llm.PlayerVerse> prepareJudgingVerses(long now, boolean fillMissing) {
+		if (fillMissing) for (UUID u : List.of(a, b)) transcripts.putIfAbsent(u, CompletableFuture.completedFuture(""));
+		slicedBars.clear();
+		List<Llm.PlayerVerse> verses = new ArrayList<>();
+		for (UUID u : List.of(a, b)) {
+			String pName = names.get(u);
+			String uLang = langOf(u);
+			CompletableFuture<String> f = transcripts.get(u);
+			String raw = f == null ? "" : f.getNow("");
+			String text = raw == null ? "" : raw.trim();
+			List<Scoring.BarSlot> slots = new ArrayList<>();
+			int ln = 1;
+			for (BattleView.Row r : view.rows) {
+				if (pName.equals(r.reader)) slots.add(new Scoring.BarSlot(ln++, r.startBeat, r.word));
+			}
+			List<Scoring.SlicedBar> sliced = Scoring.sliceBars(timed.get(u), recordingStart.get(u), text, slots, beatMs, uLang);
+			slicedBars.put(u, sliced);
+			List<Boolean> louds = barLoud.getOrDefault(pName, List.of());
+			List<Integer> deltas = barDeltaMs.getOrDefault(pName, List.of());
+			List<Llm.BarPrompt> prompts = new ArrayList<>(sliced.size());
+			for (int i = 0; i < sliced.size(); i++) {
+				Scoring.SlicedBar sb = sliced.get(i);
+				boolean sttMiss = sttMissing || timed.get(u) == null;
+				int deltaMs = i < deltas.size() ? deltas.get(i) : -1;
+				int preBeat = Scoring.hybridBeat(sb.whisperDeltaBeats(), 1, sttMiss, deltaMs, beatMs);
+				if (preBeat == 0 && i < louds.size() && Boolean.TRUE.equals(louds.get(i)) && sb.whisperDeltaBeats() == null) {
+					preBeat = 1;
+				}
+				String timingLabel = sb.silent()
+					? Lang.t(uLang, "rapbattle.judge.timing.silent")
+					: preBeat == 2 ? Lang.t(uLang, "rapbattle.judge.timing.on_beat")
+					: preBeat == 1 ? Lang.t(uLang, "rapbattle.judge.timing.near")
+					: Lang.t(uLang, "rapbattle.judge.timing.off");
+				prompts.add(new Llm.BarPrompt(sb.lineIndex(), sb.targetWord(), timingLabel, sb.text(), sb.silent()));
+			}
+			verses.add(new Llm.PlayerVerse(pName, rhymes.getOrDefault(u, List.of()), text, "", prompts));
 		}
+		pendingVerses = List.copyOf(verses);
+		verdictAsked = now;
+		String lA = langOf(a), lB = langOf(b);
+		for (String l : new LinkedHashSet<>(List.of(lA, lB))) {
+			BattleView.Result r = new BattleView.Result();
+			for (Llm.PlayerVerse pv : verses) r.players.add(new BattleView.PlayerScore(pv.name(), 0, pv.transcript().isBlank() ? Lang.t(l, "rapbattle.battle.silence") : pv.transcript()));
+			results.put(l, r);
+		}
+		view.result = results.get(lA);
+		return verses;
+	}
+
+	private Llm.PvpVerdict fallbackPvpVerdict() {
+		Map<String, List<Boolean>> loudSnapshot = new HashMap<>();
+		barLoud.forEach((k, list) -> loudSnapshot.put(k, List.copyOf(list)));
+		Llm.Verdict fRu = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.RU);
+		Llm.Verdict fEn = Fallback.judge(0, 0, pendingVerses, loudSnapshot, sttMissing, rnd, Lang.EN);
+		return new Llm.PvpVerdict(fRu.playerLines(), fEn.playerLines(), fRu.comment(), fEn.comment());
+	}
+
+	private void applyVerdict(Llm.PvpVerdict pvpVerdict, long now) {
 
 		int before0 = respectA, before1 = respectB;
 		Stats stats = Stats.of(world.getServer());
@@ -719,6 +738,19 @@ public final class PvpBattle {
 		for (BattleView.PlayerScore ps : r.players) {
 			for (UUID u : List.of(a, b)) if (names.get(u).equals(ps.name)) ps.score = dealt.getOrDefault(u, 0);
 		}
+	}
+
+	/** Immediately resolves the PvP battle with the current outcome (used on void/death during resolving). */
+	public void resolveNow() {
+		if (finished || !isResolving()) return;
+		if (phase == Phase.JUDGING) {
+			long now = dev.rapbattle.Clock.now();
+			if (pvpVerdictFuture == null) prepareJudgingVerses(now, true);
+			Llm.PvpVerdict pv = pvpVerdictFuture == null ? null : pvpVerdictFuture.getNow(null);
+			if (pv == null) pv = fallbackPvpVerdict();
+			applyVerdict(pv, now);
+		}
+		finish();
 	}
 
 	private void finish() {
