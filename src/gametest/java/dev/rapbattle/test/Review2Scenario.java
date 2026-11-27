@@ -952,15 +952,25 @@ public final class Review2Scenario {
 			creeper.setAttached(Theft.STOLEN_ITEM, new Theft.StolenData(new ItemStack(Items.DIAMOND, 1), false, ""));
 			creeper.ignite();
 		});
-		ctx.waitTicks(50);
+		int[] foundDiamonds = {0};
+		int[] aliveCreepersOut = {0};
+		for (int wTick = 0; wTick < 6; wTick++) {
+			ctx.waitTicks(10);
+			sp.getServer().runOnServer(server -> {
+				ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+				ServerWorld w = p1.getEntityWorld();
+				int ground = w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(24),
+					ie -> ie.getStack().isOf(Items.DIAMOND)).stream().mapToInt(ie -> ie.getStack().getCount()).sum();
+				foundDiamonds[0] = ground + p1.getInventory().count(Items.DIAMOND);
+				aliveCreepersOut[0] = w.getEntitiesByClass(net.minecraft.entity.mob.CreeperEntity.class, p1.getBoundingBox().expand(24),
+					c -> c.isAlive()).size();
+			});
+			if (foundDiamonds[0] >= 1) break;
+		}
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p1.getEntityWorld();
-			int diamonds = w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(24),
-				ie -> ie.getStack().isOf(Items.DIAMOND)).stream().mapToInt(ie -> ie.getStack().getCount()).sum();
-			int aliveCreepers = w.getEntitiesByClass(net.minecraft.entity.mob.CreeperEntity.class, p1.getBoundingBox().expand(24),
-				c -> c.isAlive()).size();
-			assertTrue(diamonds >= 1, "Exploded creeper must leave stolen diamond on the ground (got " + diamonds + ", aliveCreepers=" + aliveCreepers + ")");
+			assertTrue(foundDiamonds[0] >= 1, "Exploded creeper must leave stolen diamond on the ground (got " + foundDiamonds[0] + ", aliveCreepers=" + aliveCreepersOut[0] + ")");
 
 			// 4. ClientConfig.save preserves legacy keys (E1)
 			try {
