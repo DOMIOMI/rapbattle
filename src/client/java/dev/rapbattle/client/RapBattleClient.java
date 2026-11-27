@@ -51,6 +51,10 @@ public class RapBattleClient implements ClientModInitializer {
 					ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"guide\"}"));
 					return 1;
 				}))
+				.then(net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal("leave").executes(ctx -> {
+					ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"leave\"}"));
+					return 1;
+				}))
 				.executes(ctx -> {
 				var mc = net.minecraft.client.MinecraftClient.getInstance();
 				// Open on the next frame: the chat screen closes right after the command runs.
@@ -74,6 +78,17 @@ public class RapBattleClient implements ClientModInitializer {
 
 		ClientPlayNetworking.registerGlobalReceiver(Payloads.StateS2C.ID, (payload, ctx) -> ClientBattle.onPacket(payload.json()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBattle.disconnect());
+
+		ClientTickEvents.START_CLIENT_TICK.register(client -> {
+			if (client.player != null && ClientBattle.view != null && !ClientBattle.view.spectator) {
+				client.options.forwardKey.setPressed(false);
+				client.options.backKey.setPressed(false);
+				client.options.leftKey.setPressed(false);
+				client.options.rightKey.setPressed(false);
+				client.options.sprintKey.setPressed(false);
+				if (!Intro.active()) client.options.jumpKey.setPressed(false);
+			}
+		});
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (accept.wasPressed()) ClientBattle.pressAccept();

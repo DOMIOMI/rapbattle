@@ -349,6 +349,16 @@ public final class PvpBattle {
 		end((Text) null);
 	}
 
+	public void abortNoPenalty(Text reason) {
+		if (finished) return;
+		for (UUID u : List.of(a, b)) {
+			ServerPlayerEntity p = player(u);
+			if (p != null && reason != null) p.sendMessage(reason.copy().formatted(Formatting.YELLOW), false);
+		}
+		end(null);
+	}
+
+	private final Map<UUID, Integer> pushTicks = new HashMap<>();
 	private int truceTick = 0;
 
 	private void tick(long now) {
@@ -358,12 +368,32 @@ public final class PvpBattle {
 			leave(pa == null ? a : b);
 			return;
 		}
-		// Both stand on their spots and face each other.
+		if (pa.getEntityWorld() != world) {
+			leave(a);
+			return;
+		}
+		if (pb.getEntityWorld() != world) {
+			leave(b);
+			return;
+		}
+		// Both stand on their spots horizontally (gravity works) and face each other.
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
 			Vec3d at = anchors.get(u);
-			if (p != testPeer && p.networkHandler != null && p.squaredDistanceTo(at) > 0.25) {
-				p.networkHandler.requestTeleport(at.x, at.y, at.z, p.getYaw(), p.getPitch());
+			if (p != testPeer && p.networkHandler != null && at != null) {
+				double dx = p.getX() - at.x, dz = p.getZ() - at.z;
+				double d2 = dx * dx + dz * dz;
+				if (d2 > 0.3 * 0.3) {
+					int pt = pushTicks.getOrDefault(u, 0) + 1;
+					if (pt > 4 && (d2 > 0.8 * 0.8 || p.isInsideWall())) {
+						abortNoPenalty(Text.translatable("rapbattle.battle.abort_env"));
+						return;
+					}
+					pushTicks.put(u, pt);
+					p.networkHandler.requestTeleport(at.x, p.getY(), at.z, p.getYaw(), p.getPitch());
+				} else {
+					pushTicks.put(u, 0);
+				}
 			}
 		}
 		if ((truceTick++ % 5) == 0) holdMobTruce(now);

@@ -7,18 +7,26 @@ import dev.rapbattle.RapBattle;
 import dev.rapbattle.RapConfig;
 import dev.rapbattle.net.BattleView;
 import dev.rapbattle.net.Payloads;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.boss.dragon.EnderDragonPart;
+import net.minecraft.entity.damage.DamageType;
+import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.mob.Angerable;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.TameableEntity;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -71,6 +79,15 @@ public final class BattleManager {
 	static ServerPlayerEntity findPlayer(net.minecraft.server.MinecraftServer server, UUID uuid) {
 		ServerPlayerEntity tp = TEST_PLAYERS.get(uuid);
 		return tp != null ? tp : server.getPlayerManager().getPlayer(uuid);
+	}
+
+	/** Minor non-hazardous damage types (e.g. hunger tick) that do not abort a battle. */
+	public static final Set<RegistryKey<DamageType>> MINOR_ENV_DAMAGE = Set.of(
+		DamageTypes.STARVE
+	);
+
+	private static boolean isBattling(ServerPlayerEntity p) {
+		return p != null && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null);
 	}
 
 	private static void micOnlyHint(ServerPlayerEntity sp) {
@@ -557,9 +574,48 @@ public final class BattleManager {
 			return ActionResult.FAIL;
 		});
 
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+			dispatcher.register(CommandManager.literal("rapbattle")
+				.then(CommandManager.literal("leave").executes(ctx -> {
+					ServerPlayerEntity sp = ctx.getSource().getPlayer();
+					if (sp != null) {
+						Battle b = byPlayer(sp.getUuid());
+						if (b != null) b.onPlayerLeft(sp.getUuid());
+						PvpBattle pvp = PvpBattle.byPlayer(sp.getUuid());
+						if (pvp != null) pvp.leave(sp.getUuid());
+					}
+					return 1;
+				}))));
+
+		UseItemCallback.EVENT.register((player, world, hand) -> {
+			if (!world.isClient() && player instanceof ServerPlayerEntity sp && isBattling(sp)) {
+				micOnlyHint(sp);
+				return ActionResult.FAIL;
+			}
+			return ActionResult.PASS;
+		});
+
+		UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
+			if (!world.isClient() && player instanceof ServerPlayerEntity sp && isBattling(sp)) {
+				micOnlyHint(sp);
+				return ActionResult.FAIL;
+			}
+			return ActionResult.PASS;
+		});
+
+		AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) -> {
+			if (!world.isClient() && player instanceof ServerPlayerEntity sp && isBattling(sp)) {
+				micOnlyHint(sp);
+				return ActionResult.FAIL;
+			}
+			return ActionResult.PASS;
+		});
+
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
-			boolean allowed = !(entity instanceof ServerPlayerEntity p && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null))
-				&& !(source.getAttacker() instanceof ServerPlayerEntity sp && (byPlayer(sp.getUuid()) != null || PvpBattle.byPlayer(sp.getUuid()) != null))
+			boolean entityAttack = source.getAttacker() != null || source.getSource() != null;
+			boolean playerProtected = entity instanceof ServerPlayerEntity p && isBattling(p) && entityAttack;
+			boolean allowed = !playerProtected
+				&& !(source.getAttacker() instanceof ServerPlayerEntity sp && isBattling(sp))
 				&& byMob(entity) == null
 				// The crowd is a truce zone: no zombie turning its neighbour villager into a zombie villager mid-show.
 				&& !inAnyCrowd(entity) && !inAnyCrowd(source.getAttacker());
@@ -569,6 +625,18 @@ public final class BattleManager {
 				if (entity instanceof MobEntity && source.getAttacker() instanceof ServerPlayerEntity sp) LAST_COMBAT.put(sp.getUuid(), now);
 			}
 			return allowed;
+		});
+
+		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, baseDamageTaken, damageTaken, blocked) -> {
+			if (damageTaken <= 0 || !(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
+			if (source.getAttacker() != null || source.getSource() != null) return;
+			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
+			if (key != null && MINOR_ENV_DAMAGE.contains(key)) return;
+			Text msg = Text.translatable("rapbattle.battle.abort_env");
+			Battle b = byPlayer(p.getUuid());
+			if (b != null) b.abortNoPenalty(p, msg);
+			PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
+			if (pvp != null) pvp.abortNoPenalty(msg);
 		});
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {

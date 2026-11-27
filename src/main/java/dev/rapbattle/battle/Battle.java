@@ -73,9 +73,11 @@ public class Battle {
 	private final BeatTracks.Track track;
 
 	final List<UUID> players = new ArrayList<>();
+	final Set<UUID> leftPlayers = new HashSet<>();
 	final Map<UUID, String> names = new HashMap<>();
 	final Set<UUID> invited = new HashSet<>();
 	private final Map<UUID, Vec3d> anchors = new HashMap<>();
+	private final Map<UUID, Integer> pushTicks = new HashMap<>();
 	private final Set<UUID> spectators = new HashSet<>();
 
 	/** Mob team: the challenged mob first, then kin that joined. */
@@ -318,12 +320,41 @@ public class Battle {
 			spectators.remove(uuid);
 			return;
 		}
-		if (players.size() == 1 || phase == Phase.LOBBY && uuid.equals(players.get(0))) {
+		leftPlayers.add(uuid);
+		boolean anyOnline = false;
+		for (UUID u : players) {
+			if (!leftPlayers.contains(u) && player(u) != null) {
+				anyOnline = true;
+				break;
+			}
+		}
+		if (players.size() == 1 || (phase == Phase.LOBBY && uuid.equals(players.get(0))) || !anyOnline) {
 			abort(Text.translatable("rapbattle.battle.abort_player_left"));
 			return;
 		}
 		// Coop partner left mid-battle: keep going, their verse just counts as silence.
 		if (!transcripts.containsKey(uuid)) transcripts.put(uuid, CompletableFuture.completedFuture(""));
+	}
+
+	/** Cancels the battle for {@code p} without any win/loss penalties (environmental hazard or stuck). */
+	public void abortNoPenalty(ServerPlayerEntity p, Text reason) {
+		if (finished || p == null || !hasPlayer(p.getUuid())) return;
+		UUID u = p.getUuid();
+		p.sendMessage(reason.copy().formatted(Formatting.YELLOW), false);
+		long activeCount = players.stream().filter(id -> !leftPlayers.contains(id)).count();
+		if (activeCount <= 1 || (phase == Phase.LOBBY && u.equals(players.get(0)))) {
+			abort(reason);
+			return;
+		}
+		players.remove(u);
+		leftPlayers.remove(u);
+		anchors.remove(u);
+		pushTicks.remove(u);
+		BattleView end = new BattleView();
+		end.type = "end";
+		end.id = id;
+		send(p, end);
+		broadcastState();
 	}
 
 	/** Puts the mob on its mark, ~3 blocks (plus its own half-width) in front of the challenger, if there is room. */
@@ -845,20 +876,38 @@ public class Battle {
 		mobTeam.removeIf(m -> m != mob && (!m.isAlive() || m.isRemoved()));
 		for (MobEntity m : mobTeam) if (m.isOnFire()) m.extinguish();
 		if (crowd != null) for (MobEntity m : crowd.members.keySet()) if (m.isOnFire()) m.extinguish();
-		for (UUID u : players) {
-			ServerPlayerEntity p = player(u);
-			if (p != null && p.isOnFire()) p.extinguish();
-		}
 		if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
 			DragonBattle.holdHover(dragon);
 		}
 		keepThePeace();
-		for (UUID u : players) {
+		for (UUID u : new ArrayList<>(players)) {
+			if (leftPlayers.contains(u)) continue;
 			ServerPlayerEntity p = player(u);
-			if (p == null || !p.isAlive()) continue;
-			// Players stand still during the battle but can look around.
+			if (p == null) continue;
+			if (p.getEntityWorld() != world) {
+				onPlayerLeft(u);
+				if (finished) return;
+				continue;
+			}
+			if (!p.isAlive()) continue;
+			// Players stand still horizontally during the battle (gravity still works) and can look around.
 			Vec3d a = anchors.get(u);
-			if (a != null && p.squaredDistanceTo(a) > 0.25) p.networkHandler.requestTeleport(a.x, a.y, a.z, p.getYaw(), p.getPitch());
+			if (a != null) {
+				double dx = p.getX() - a.x, dz = p.getZ() - a.z;
+				double d2 = dx * dx + dz * dz;
+				if (d2 > 0.3 * 0.3) {
+					int pt = pushTicks.getOrDefault(u, 0) + 1;
+					if (pt > 4 && (d2 > 0.8 * 0.8 || p.isInsideWall())) {
+						abortNoPenalty(p, Text.translatable("rapbattle.battle.abort_env"));
+						if (finished) return;
+						continue;
+					}
+					pushTicks.put(u, pt);
+					p.networkHandler.requestTeleport(a.x, p.getY(), a.z, p.getYaw(), p.getPitch());
+				} else {
+					pushTicks.put(u, 0);
+				}
+			}
 		}
 		faceTeam();
 		if (crowd != null) crowd.tick(currentReader);
@@ -1749,6 +1798,12 @@ public class Battle {
 		String team = String.join(" + ", namesList());
 		ServerPlayerEntity mvpPlayer = playerByName(result.mvp.isEmpty() ? names.get(players.get(0)) : result.mvp);
 		if (mvpPlayer == null) mvpPlayer = challenger();
+		if (mvpPlayer == null) {
+			for (UUID u : players) {
+				mvpPlayer = player(u);
+				if (mvpPlayer != null) break;
+			}
+		}
 		recordStats(mvpPlayer);
 		if (result.playersWin) {
 			MobRecord.loss(mob);
