@@ -1278,6 +1278,14 @@ public class Battle {
 
 	private final Map<UUID, List<Scoring.SlicedBar>> slicedBarsByPlayer = new HashMap<>();
 
+	private boolean allBarsReported() {
+		for (UUID u : players) {
+			String pName = names.get(u);
+			if (playerBarLoud.getOrDefault(pName, List.of()).size() < playerRows(pName).size()) return false;
+		}
+		return true;
+	}
+
 	private void tickJudging(long now) {
 		long t = now - judgingStart;
 		if (t > AUDIO_WAIT_MS) {
@@ -1287,6 +1295,7 @@ public class Battle {
 			boolean allIn = players.stream().allMatch(transcripts::containsKey);
 			boolean allDone = allIn && players.stream().allMatch(u -> transcripts.get(u).isDone());
 			if (!allDone && t < AUDIO_WAIT_MS + STT_WAIT_MS) return;
+			if (t < 500 && !allBarsReported()) return;
 			slicedBarsByPlayer.clear();
 			List<Llm.PlayerVerse> verses = new ArrayList<>();
 			for (UUID u : players) {
