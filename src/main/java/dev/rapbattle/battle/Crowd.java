@@ -536,6 +536,8 @@ public final class Crowd {
 			if (cur instanceof net.minecraft.entity.player.PlayerEntity p && !inTruce(m, p.getUuid())) continue;
 			m.setTarget(null);
 			if (m instanceof net.minecraft.entity.mob.Angerable a) a.stopAnger();
+			m.getBrain().forget(net.minecraft.entity.ai.brain.MemoryModuleType.ATTACK_TARGET);
+			m.getBrain().forget(net.minecraft.entity.ai.brain.MemoryModuleType.ANGRY_AT);
 			if (m.isOnFire()) m.extinguish();
 		}
 		RETREATING.removeIf(r -> now > r.until() || !r.mob().isAlive());

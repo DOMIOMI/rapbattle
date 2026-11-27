@@ -1,8 +1,10 @@
 package dev.rapbattle.mixin;
 
 import dev.rapbattle.battle.BattleManager;
+import dev.rapbattle.battle.Crowd;
 import dev.rapbattle.battle.PlayerStatus;
 import dev.rapbattle.battle.PvpBattle;
+import dev.rapbattle.battle.Reputation;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.AbstractPiglinEntity;
 import net.minecraft.entity.mob.PiglinBruteBrain;
@@ -26,7 +28,9 @@ public class PiglinBruteBrainMixin {
 		if (opt != null && opt.isPresent() && opt.get() instanceof PlayerEntity p) {
 			UUID u = p.getUuid();
 			if (BattleManager.byPlayer(u) != null || PvpBattle.byPlayer(u) != null || BattleManager.hasPending(u)
-				|| PlayerStatus.has(u, PlayerStatus.BASTION_GUEST)) {
+				|| PlayerStatus.has(u, PlayerStatus.BASTION_GUEST)
+				|| Crowd.inTruce(piglin, u)
+				|| Reputation.respects(piglin, p)) {
 				cir.setReturnValue(Optional.empty());
 			}
 		}
