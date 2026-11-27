@@ -62,9 +62,11 @@ class StatsTest {
 		UUID p2 = UUID.randomUUID();
 		stats.recordPvp(p1, p2, 80, 45);
 		assertEquals(1, stats.player(p1).wins);
-		assertEquals(80, stats.player(p1).respect);
+		assertEquals(0, stats.player(p1).respect);
+		assertEquals(80, stats.player(p1).best);
 		assertEquals(1, stats.player(p2).losses);
-		assertEquals(45, stats.player(p2).respect);
+		assertEquals(0, stats.player(p2).respect);
+		assertEquals(45, stats.player(p2).best);
 		assertTrue(stats.player(p1).speciesWins.isEmpty());
 		assertArrayEquals(new int[]{0, 0}, stats.species("zombie"));
 	}

@@ -81,4 +81,52 @@ class Review2UnitTest {
 		assertFalse(ProgressionRules.checkBossGate(ProgressionRules.Mode.SOFT, "ender_dragon", 0, true, false, 1200, 0, 0, 2, 1).allowed());
 		assertTrue(ProgressionRules.checkBossGate(ProgressionRules.Mode.SOFT, "ender_dragon", 0, true, true, 1000, 0, 0, 2, 1).allowed());
 	}
+
+	@Test
+	void wavHeaderValidationChecks16kMono16Bit() {
+		byte[] valid = new byte[44 + 100];
+		java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(valid).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+		b.put("RIFF".getBytes()).putInt(36 + 100).put("WAVE".getBytes());
+		b.put("fmt ".getBytes()).putInt(16).putShort((short) 1).putShort((short) 1)
+			.putInt(16000).putInt(32000).putShort((short) 2).putShort((short) 16);
+		b.put("data".getBytes()).putInt(100);
+		assertTrue(dev.rapbattle.ai.Transcriber.isValidWav16kMono16(valid));
+
+		assertFalse(dev.rapbattle.ai.Transcriber.isValidWav16kMono16(new byte[10]));
+		byte[] garbage = "NOT_A_WAV_FILE_JUST_RANDOM_BYTES_12345678901234567890".getBytes();
+		assertFalse(dev.rapbattle.ai.Transcriber.isValidWav16kMono16(garbage));
+
+		byte[] stereo = valid.clone();
+		stereo[22] = 2; // 2 channels instead of 1
+		assertFalse(dev.rapbattle.ai.Transcriber.isValidWav16kMono16(stereo));
+	}
+
+	@Test
+	void mergeCredDoesNotShortenExistingTimer() {
+		long now = 100_000L;
+		Reputation.CredState first = Reputation.mergeCred(null, 3, 180_000L, now);
+		assertNotNull(first);
+		assertEquals(3, first.level());
+		assertEquals(now + 180_000L, first.until());
+
+		// Second win 10s later with shorter 90s (overdressed) duration must NOT shorten remaining 170s timer
+		long later = now + 10_000L;
+		Reputation.CredState second = Reputation.mergeCred(first, 2, 90_000L, later);
+		assertEquals(3, second.level());
+		assertEquals(first.until(), second.until());
+	}
+
+	@Test
+	void coopSilentPlayerDoesNotUnlockSpeciesOrDragonGates() {
+		Stats stats = new Stats();
+		UUID active = UUID.randomUUID();
+		UUID silent = UUID.randomUUID();
+		stats.record(List.of(active, silent), Map.of(active, 90, silent, 0), active, true,
+			fakeOpp("ender_dragon", 6), Map.of(active, 5, silent, 5), 1L);
+		assertTrue(stats.player(active).dragonWon);
+		assertEquals(1, stats.player(active).speciesWins.getOrDefault("ender_dragon", 0));
+		assertEquals(1, stats.player(silent).wins);
+		assertFalse(stats.player(silent).dragonWon);
+		assertEquals(0, stats.player(silent).speciesWins.getOrDefault("ender_dragon", 0));
+	}
 }

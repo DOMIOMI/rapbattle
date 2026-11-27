@@ -73,6 +73,10 @@ public final class Review2Scenario {
 		testPvpJudging500msGraceWindow(ctx, sp);
 		testCoopDailyCapPearlsUsesEffectiveScale(ctx, sp);
 
+		// 6.27 regression tests:
+		testReview3BattleAndPvpFixes(ctx, sp);
+		testReview3LootReputationAndDecisions(ctx, sp);
+
 		GameTestSupport.assertNoRawKeys("review2");
 	}
 
@@ -233,10 +237,16 @@ public final class Review2Scenario {
 				if (target != Battle.Phase.LOBBY) b.jumpToForTest(target);
 				b.onPlayerLeft(p.getUuid());
 
-				assertTrue(BattleManager.byPlayer(p.getUuid()) == null, "Solo disconnect in " + target + " must abort battle");
-				assertTrue(!z.isAiDisabled() && !z.isSilent(), "Aborted mob in " + target + " must have AI & sound restored");
-				assertTrue(z.getCustomName() == null && !Theft.hasStolen(z), "Aborted mob in " + target + " must have no crown/stolen item");
+				assertTrue(BattleManager.byPlayer(p.getUuid()) == null, "Solo disconnect in " + target + " must end battle");
+				assertTrue(!z.isAiDisabled() && !z.isSilent(), "Ended mob in " + target + " must have AI & sound restored");
+				if (target == Battle.Phase.JUDGING) {
+					// 6.27 A1: leaving in JUDGING resolves the battle (silent player loses -> mob gets crown)
+					assertTrue(z.getCustomName() != null, "Mob in JUDGING disconnect must resolve and receive crown");
+				} else {
+					assertTrue(z.getCustomName() == null && !Theft.hasStolen(z), "Aborted mob in " + target + " must have no crown/stolen item");
+				}
 				z.discard();
+				BattleManager.clearCooldownsForTest();
 			}
 			GameTestSupport.cleanupBattles(server);
 		});
@@ -380,10 +390,12 @@ public final class Review2Scenario {
 			z.discard();
 			GameTestSupport.cleanupBattles(server);
 		});
+		ctx.waitTicks(5);
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
+			if (mc.currentScreen != null) mc.setScreen(null);
 		});
-		ctx.waitTicks(65);
+		ctx.waitTicks(10);
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			assertTrue(p.isAlive() && !BattleManager.isBattling(p), "Respawned player must be alive and not in battle");
@@ -407,10 +419,12 @@ public final class Review2Scenario {
 			z2.discard();
 			GameTestSupport.cleanupBattles(server);
 		});
+		ctx.waitTicks(5);
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
+			if (mc.currentScreen != null) mc.setScreen(null);
 		});
-		ctx.waitTicks(65);
+		ctx.waitTicks(10);
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
@@ -582,10 +596,12 @@ public final class Review2Scenario {
 			z3.discard();
 			GameTestSupport.cleanupBattles(server);
 		});
+		ctx.waitTicks(5);
 		ctx.runOnClient(mc -> {
 			if (mc.player != null) mc.player.requestRespawn();
+			if (mc.currentScreen != null) mc.setScreen(null);
 		});
-		ctx.waitTicks(65);
+		ctx.waitTicks(10);
 		int[] pvpLossesBefore = new int[1];
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
@@ -753,6 +769,204 @@ public final class Review2Scenario {
 			assertTrue(rods <= 1, "Coop effectiveDailyScale=0.0 must suppress bonus Blaze Rods (got " + rods + ")");
 			st2.dailySpeciesWins.clear();
 			if (!blaze.isRemoved()) blaze.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+	}
+
+	private static void testReview3BattleAndPvpFixes(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			p1.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p1.setInvulnerable(false);
+			p1.setHealth(p1.getMaxHealth());
+			Stats stats = Stats.of(server);
+
+			// 1. Solo RESULT loss -> leave -> loss recorded, theft occurred
+			p1.getInventory().clear();
+			p1.getInventory().setStack(0, new ItemStack(Items.APPLE, 1));
+			int losses0 = stats.player(p1.getUuid()).losses;
+			ZombieEntity z1 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z1.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z1);
+			Battle b1 = BattleManager.start(p1, z1);
+			b1.enterResultForTest(false, 10, 90);
+			b1.onPlayerLeft(p1.getUuid());
+			assertTrue(!BattleManager.isBattling(p1), "Solo RESULT leave must end battle");
+			assertTrue(stats.player(p1.getUuid()).losses == losses0 + 1, "Solo RESULT leave must record loss");
+			assertTrue(Theft.hasStolen(z1), "Solo RESULT leave on decisive loss must trigger theft");
+			z1.discard();
+			p1.getInventory().clear();
+			BattleManager.clearCooldownsForTest();
+			GameTestSupport.cleanupBattles(server);
+
+			// 2. PvP RESULT -> winner leaves -> winner keeps victory, no respect gained (Zh4)
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "WinLeaver"));
+			p2.refreshPositionAndAngles(p1.getX() + 4, p1.getY(), p1.getZ(), 90, 0);
+			int w1Before = stats.player(p1.getUuid()).wins;
+			int r1Before = stats.player(p1.getUuid()).respect;
+			int l2Before = stats.player(p2.getUuid()).losses;
+			PvpBattle.challenge(p1, p2);
+			PvpBattle.answer(p2, PvpBattle.pendingInviteIdForTest(p2.getUuid()), true);
+			PvpBattle pb = PvpBattle.byPlayer(p1.getUuid());
+			pb.setTestPeerForTest(p2);
+			pb.jumpToForTest("RESULT");
+			pb.leave(p1.getUuid());
+			assertTrue(stats.player(p1.getUuid()).wins == w1Before + 1, "PvP RESULT winner leave must keep win");
+			assertTrue(stats.player(p2.getUuid()).losses == l2Before + 1, "PvP RESULT winner leave must record loser loss");
+			assertTrue(stats.player(p1.getUuid()).respect == r1Before, "PvP win must not award Respect (Zh4)");
+			GameTestSupport.cleanupBattles(server);
+
+			// 3. Coop leave in LOBBY (not in timeline) & in TIMELINE (no win); double-invite guard
+			ServerPlayerEntity p3 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "LobbyLeave"));
+			p3.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p3);
+			ZombieEntity z2 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z2.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z2);
+			Battle b2 = BattleManager.start(p1, z2);
+			b2.invite(p3);
+			b2.answerInvite(p3, true);
+			b2.onPlayerLeft(p3.getUuid());
+			b2.jumpToForTest(Battle.Phase.TIMELINE);
+			assertTrue(b2.viewForTest().segments.stream().noneMatch(s -> s.reader.equals(p3.getName().getString())),
+				"Coop LOBBY leaver must not appear in timeline segments");
+			b2.abort("cleanup");
+			z2.discard();
+			BattleManager.clearCooldownsForTest();
+
+			// Invited player starts own battle -> cannot accept old invite
+			ZombieEntity z3 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z3.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z3);
+			ZombieEntity z4 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z4.refreshPositionAndAngles(p3.getX(), p3.getY(), p3.getZ() + 4, 180, 0);
+			w.spawnEntity(z4);
+			Battle b3 = BattleManager.start(p1, z3);
+			b3.invite(p3);
+			Battle b4 = BattleManager.start(p3, z4);
+			b3.answerInvite(p3, true);
+			assertTrue(!b3.hasPlayer(p3.getUuid()) && b4.hasPlayer(p3.getUuid()),
+				"Player in own battle must not accept old coop invite");
+			b3.abort("cleanup");
+			b4.abort("cleanup");
+			z3.discard();
+			z4.discard();
+
+			// 4. Corrupt WAV -> sttMissingPlayers NOT set
+			ZombieEntity z5 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z5.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z5);
+			Battle b5 = BattleManager.start(p1, z5);
+			b5.jumpToForTest(Battle.Phase.TIMELINE);
+			b5.onAudio(p1, new dev.rapbattle.net.Payloads.AudioC2S(b5.id, 0, true, 0, "CORRUPT_NOT_WAV_12345".getBytes()));
+			assertTrue(!b5.isSttMissingForTest(p1.getUuid()), "Corrupt WAV must not mark player as sttMissing");
+			b5.abort("cleanup");
+			z5.discard();
+			GameTestSupport.cleanupBattles(server);
+
+			// 5. Dragon: 1st round won -> /kill in ROUND_RESULT -> dragonWon NOT set
+			stats.player(p1.getUuid()).dragonWon = false;
+			int dWinsBefore = stats.player(p1.getUuid()).wins;
+			EnderDragonEntity dragon = EntityType.ENDER_DRAGON.create(w, SpawnReason.COMMAND);
+			dragon.refreshPositionAndAngles(p1.getX(), p1.getY() + 10, p1.getZ() + 8, 180, 0);
+			w.spawnEntity(dragon);
+			Battle bd = BattleManager.start(p1, dragon);
+			bd.enterRoundResultForTest(1, 0);
+			p1.onTeleportationDone();
+			p1.timeUntilRegen = 0;
+			p1.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
+			assertTrue(!stats.player(p1.getUuid()).dragonWon && stats.player(p1.getUuid()).wins == dWinsBefore,
+				"Dragon /kill in ROUND_RESULT after 1 round must not count as dragon win");
+			dragon.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.waitTicks(5);
+		ctx.runOnClient(mc -> {
+			if (mc.player != null) mc.player.requestRespawn();
+			if (mc.currentScreen != null) mc.setScreen(null);
+		});
+		ctx.waitTicks(10);
+	}
+
+	private static void testReview3LootReputationAndDecisions(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			p1.setHealth(p1.getMaxHealth());
+			p1.getInventory().clear();
+
+			// 1. Golem reward once per day (Zh1)
+			var golem = EntityType.IRON_GOLEM.create(w, SpawnReason.COMMAND);
+			golem.refreshPositionAndAngles(p1.getX() + 3, p1.getY(), p1.getZ(), 0, 0);
+			w.spawnEntity(golem);
+			GolemDefender.respect(golem, p1, "ru");
+			int iron1 = p1.getInventory().count(Items.IRON_INGOT);
+			GolemDefender.respect(golem, p1, "ru");
+			int iron2 = p1.getInventory().count(Items.IRON_INGOT);
+			assertTrue(iron1 == 5 && iron2 == 5, "Golem must reward 5 iron only once per day (got " + iron1 + ", " + iron2 + ")");
+			golem.discard();
+			p1.getInventory().clear();
+
+			// 2. Loss after win revokes witness respect (D1)
+			var wMob = EntityType.SPIDER.create(w, SpawnReason.COMMAND);
+			wMob.refreshPositionAndAngles(p1.getX() + 3, p1.getY(), p1.getZ() + 2, 0, 0);
+			w.spawnEntity(wMob);
+			ZombieEntity zWin = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zWin.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(zWin);
+			Battle bw = BattleManager.start(p1, zWin);
+			bw.jumpToForTest(Battle.Phase.TIMELINE);
+			bw.jumpToForTest(Battle.Phase.RESULT);
+			assertTrue(Reputation.respects(wMob, p1), "Witness mob must respect player after win");
+
+			ZombieEntity zLoss = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zLoss.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(zLoss);
+			Battle bl = BattleManager.start(p1, zLoss);
+			bl.jumpToForTest(Battle.Phase.RESULT, false, false, 10, 90);
+			assertTrue(!Reputation.respects(wMob, p1), "Loss after win must revoke witness respect (D1)");
+			wMob.discard();
+			if (!zWin.isRemoved()) zWin.discard();
+			if (!zLoss.isRemoved()) zLoss.discard();
+
+			// 3. Creeper with stolen item explodes -> item lies on ground (G1)
+			for (var ie : w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(24), e -> true)) ie.discard();
+			var creeper = EntityType.CREEPER.create(w, SpawnReason.COMMAND);
+			creeper.refreshPositionAndAngles(p1.getX() + 8, p1.getY(), p1.getZ(), 0, 0);
+			w.spawnEntity(creeper);
+			creeper.setAttached(Theft.STOLEN_ITEM, new Theft.StolenData(new ItemStack(Items.DIAMOND, 1), false, ""));
+			creeper.ignite();
+		});
+		ctx.waitTicks(50);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			int diamonds = w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(24),
+				ie -> ie.getStack().isOf(Items.DIAMOND)).stream().mapToInt(ie -> ie.getStack().getCount()).sum();
+			int aliveCreepers = w.getEntitiesByClass(net.minecraft.entity.mob.CreeperEntity.class, p1.getBoundingBox().expand(24),
+				c -> c.isAlive()).size();
+			assertTrue(diamonds >= 1, "Exploded creeper must leave stolen diamond on the ground (got " + diamonds + ", aliveCreepers=" + aliveCreepers + ")");
+
+			// 4. ClientConfig.save preserves legacy keys (E1)
+			try {
+				java.nio.file.Path dir = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir();
+				java.nio.file.Path cfgPath = dir.resolve("rapbattle.json");
+				String backup = java.nio.file.Files.exists(cfgPath) ? java.nio.file.Files.readString(cfgPath) : null;
+				java.nio.file.Files.writeString(cfgPath, "{\"openRouterApiKey\":\"sk-test-legacy\",\"beatVolume\":0.8}");
+				dev.rapbattle.client.ClientConfig.save();
+				assertTrue("sk-test-legacy".equals(RapConfig.get().openRouterKey()),
+					"ClientConfig.save must migrate legacy key to RapConfig instead of erasing it");
+				if (backup != null) java.nio.file.Files.writeString(cfgPath, backup);
+				java.nio.file.Files.deleteIfExists(dir.resolve("rapbattle-server.json"));
+				RapConfig.load();
+			} catch (Exception e) {
+				throw new AssertionError(e);
+			}
 			GameTestSupport.cleanupBattles(server);
 		});
 	}
