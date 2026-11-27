@@ -936,8 +936,17 @@ public final class Review2Scenario {
 
 			// 3. Creeper with stolen item explodes -> item lies on ground (G1)
 			for (var ie : w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(24), e -> true)) ie.discard();
+			net.minecraft.util.math.BlockPos cPos = net.minecraft.util.math.BlockPos.ofFloored(p1.getX() + 8, p1.getY(), p1.getZ());
+			for (int dx = -2; dx <= 2; dx++) {
+				for (int dz = -2; dz <= 2; dz++) {
+					w.setBlockState(cPos.add(dx, -1, dz), net.minecraft.block.Blocks.STONE.getDefaultState());
+					for (int dy = 0; dy <= 2; dy++) {
+						w.setBlockState(cPos.add(dx, dy, dz), net.minecraft.block.Blocks.AIR.getDefaultState());
+					}
+				}
+			}
 			var creeper = EntityType.CREEPER.create(w, SpawnReason.COMMAND);
-			creeper.refreshPositionAndAngles(p1.getX() + 8, p1.getY(), p1.getZ(), 0, 0);
+			creeper.refreshPositionAndAngles(cPos.getX() + 0.5, cPos.getY(), cPos.getZ() + 0.5, 0, 0);
 			w.spawnEntity(creeper);
 			creeper.setAttached(Theft.STOLEN_ITEM, new Theft.StolenData(new ItemStack(Items.DIAMOND, 1), false, ""));
 			creeper.ignite();
