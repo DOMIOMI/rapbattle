@@ -129,4 +129,29 @@ class Review2UnitTest {
 		assertFalse(stats.player(silent).dragonWon);
 		assertEquals(0, stats.player(silent).speciesWins.getOrDefault("ender_dragon", 0));
 	}
+
+	@Test
+	void profanityKeysHaveCleanVariantsWithoutProfanity() throws Exception {
+		java.util.regex.Pattern profanity = java.util.regex.Pattern.compile(
+			"хуй|хуя|хуе|пизд|еба|ёба|ебл|ебё|бля|сук|жоп|муд|обоср|засра|высра|fuck|shit|bitch|\\bass\\b|dick|cock|cunt|pussy|bastard|whore|slut",
+			java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+		for (String code : List.of("ru_ru", "en_us")) {
+			try (var in = Review2UnitTest.class.getResourceAsStream("/assets/rapbattle/lang/" + code + ".json")) {
+				assertNotNull(in, "Missing lang file " + code);
+				com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseReader(
+					new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+				for (String key : obj.keySet()) {
+					if (key.endsWith(".clean")) continue;
+					String val = obj.get(key).getAsString();
+					if (profanity.matcher(val).find()) {
+						String cleanKey = key + ".clean";
+						assertTrue(obj.has(cleanKey), code + " missing .clean key for profanity key: " + key);
+						String cleanVal = obj.get(cleanKey).getAsString();
+						assertFalse(profanity.matcher(cleanVal).find(),
+							code + " .clean key still contains profanity (" + cleanKey + "): " + cleanVal);
+					}
+				}
+			}
+		}
+	}
 }

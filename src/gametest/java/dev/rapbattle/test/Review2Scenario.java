@@ -76,6 +76,7 @@ public final class Review2Scenario {
 		// 6.27 regression tests:
 		testReview3BattleAndPvpFixes(ctx, sp);
 		testReview3LootReputationAndDecisions(ctx, sp);
+		testReview3Followups628(ctx, sp);
 
 		GameTestSupport.assertNoRawKeys("review2");
 	}
@@ -977,6 +978,102 @@ public final class Review2Scenario {
 				throw new AssertionError(e);
 			}
 			GameTestSupport.cleanupBattles(server);
+		});
+	}
+
+	private static void testReview3Followups628(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			Stats stats = Stats.of(server);
+
+			// 1. Co-op exit in JUDGING: outcome deferred until verdict (win -> win, loss -> loss)
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "JudgeExitWin"));
+			p2.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p2);
+			int wBefore = stats.player(p2.getUuid()).wins;
+			int lBefore = stats.player(p2.getUuid()).losses;
+			ZombieEntity zWin = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zWin.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(zWin);
+			Battle bw = BattleManager.start(p1, zWin);
+			bw.invite(p2);
+			bw.answerInvite(p2, true);
+			bw.jumpToForTest(Battle.Phase.JUDGING);
+			bw.onPlayerLeft(p2.getUuid());
+			assertTrue(!BattleManager.isBattling(p2), "JUDGING leaver must immediately leave battle");
+			assertTrue(stats.player(p2.getUuid()).wins == wBefore && stats.player(p2.getUuid()).losses == lBefore,
+				"JUDGING leaver stats must be deferred until verdict");
+			bw.jumpToForTest(Battle.Phase.RESULT, true, false, 90, 10);
+			assertTrue(stats.player(p2.getUuid()).wins == wBefore + 1,
+				"Co-op JUDGING leaver must get a win when team wins (got " + stats.player(p2.getUuid()).wins + ")");
+			zWin.discard();
+			BattleManager.clearCooldownsForTest();
+			GameTestSupport.cleanupBattles(server);
+
+			// Regression: team loses -> loss recorded for JUDGING leaver
+			int lBefore2 = stats.player(p2.getUuid()).losses;
+			ZombieEntity zLoss = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zLoss.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(zLoss);
+			Battle bl = BattleManager.start(p1, zLoss);
+			bl.invite(p2);
+			bl.answerInvite(p2, true);
+			bl.jumpToForTest(Battle.Phase.JUDGING);
+			bl.onPlayerLeft(p2.getUuid());
+			bl.jumpToForTest(Battle.Phase.RESULT, false, false, 10, 90);
+			assertTrue(stats.player(p2.getUuid()).losses == lBefore2 + 1,
+				"Co-op JUDGING leaver must get a loss when team loses");
+			zLoss.discard();
+			BattleManager.clearCooldownsForTest();
+			GameTestSupport.cleanupBattles(server);
+
+			// 2. allowSwearing = false -> trophy lore (ru & en), BattleView.allowSwearing, clean keys
+			boolean prevSwear = RapConfig.get().allowSwearing;
+			try {
+				RapConfig.get().allowSwearing = false;
+				p1.getInventory().clear();
+				ZombieEntity zTrophy = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+				Opponent rank5Opp = new Opponent(zTrophy, dev.rapbattle.battle.MobProfiles.of(EntityType.ZOMBIE), Rank.NETHERITE, "ТестМоб", "neutral", java.util.List.of());
+				Trophies.give(p1, rank5Opp, "ru");
+				Trophies.give(p1, rank5Opp, "en");
+				var ruStack = p1.getInventory().getStack(0);
+				var enStack = p1.getInventory().getStack(1);
+				var ruLore = ruStack.get(net.minecraft.component.DataComponentTypes.LORE);
+				var enLore = enStack.get(net.minecraft.component.DataComponentTypes.LORE);
+				String ruLoreStr = ruLore != null ? ruLore.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
+				String enLoreStr = enLore != null ? enLore.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
+				assertTrue(ruLoreStr.contains("Разгромил") && !ruLoreStr.toLowerCase(java.util.Locale.ROOT).contains("разъеб"),
+					"allowSwearing=false RU trophy lore must use clean variant: " + ruLoreStr);
+				assertTrue(enLoreStr.contains("Crushed") && !enLoreStr.toLowerCase(java.util.Locale.ROOT).contains("fuck"),
+					"allowSwearing=false EN trophy lore must use clean variant: " + enLoreStr);
+
+				zTrophy.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+				w.spawnEntity(zTrophy);
+				Battle bs = BattleManager.start(p1, zTrophy);
+				assertTrue(!bs.viewForTest().allowSwearing, "BattleView.allowSwearing must be false when config allowSwearing=false");
+				bs.abort("cleanup");
+				zTrophy.discard();
+
+				// allowSwearing = true -> uncensored as before
+				RapConfig.get().allowSwearing = true;
+				p1.getInventory().clear();
+				Trophies.give(p1, rank5Opp, "ru");
+				Trophies.give(p1, rank5Opp, "en");
+				var ruLore2 = p1.getInventory().getStack(0).get(net.minecraft.component.DataComponentTypes.LORE);
+				var enLore2 = p1.getInventory().getStack(1).get(net.minecraft.component.DataComponentTypes.LORE);
+				String ruLoreStr2 = ruLore2 != null ? ruLore2.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
+				String enLoreStr2 = enLore2 != null ? enLore2.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
+				assertTrue(ruLoreStr2.contains("Разъебал"), "allowSwearing=true RU trophy lore must use uncensored variant");
+				assertTrue(enLoreStr2.contains("Fucked up"), "allowSwearing=true EN trophy lore must use uncensored variant");
+				p1.getInventory().clear();
+			} finally {
+				RapConfig.get().allowSwearing = prevSwear;
+				BattleManager.clearCooldownsForTest();
+				GameTestSupport.cleanupBattles(server);
+			}
 		});
 	}
 }
