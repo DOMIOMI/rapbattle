@@ -30,10 +30,18 @@ public final class SoreLosers {
 
 	/** Mob UUID → until when its death drops are doubled. */
 	private static final Map<UUID, Long> DOUBLE_DROP = new HashMap<>();
-	private static final Set<UUID> RAGED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+	private static final Map<UUID, Long> RAGED = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final long RAGED_TTL_MS = 5 * 60_000L;
 
 	public static boolean isRaged(MobEntity m) {
-		return m != null && RAGED.contains(m.getUuid());
+		if (m == null) return false;
+		Long until = RAGED.get(m.getUuid());
+		if (until == null) return false;
+		if (dev.rapbattle.Clock.now() > until) {
+			RAGED.remove(m.getUuid());
+			return false;
+		}
+		return true;
 	}
 
 	static void clear() {
@@ -117,6 +125,7 @@ public final class SoreLosers {
 	/** Called every server tick. */
 	public static void tick() {
 		long now = dev.rapbattle.Clock.now();
+		RAGED.values().removeIf(until -> now > until);
 		for (Blast b : new ArrayList<>(BLASTS)) {
 			if (now < b.at()) continue;
 			BLASTS.remove(b);
@@ -187,7 +196,7 @@ public final class SoreLosers {
 		}
 		Speech.bubble(mob, Lang.pick(lang, "НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! ", "WON'T ACCEPT DEFEAT! ") + line, 0xFF4040, 4000);
 		DOUBLE_DROP.put(mob.getUuid(), dev.rapbattle.Clock.now() + 5 * 60_000);
-		RAGED.add(mob.getUuid());
+		RAGED.put(mob.getUuid(), dev.rapbattle.Clock.now() + RAGED_TTL_MS);
 		mob.setHealth(Math.max(1, mob.getMaxHealth() / 2));
 
 		if (mob instanceof CreeperEntity) {
