@@ -774,6 +774,33 @@ public class Battle {
 	}
 
 	/** What the mob remembers about these players, for the verse prompt (empty if they never met). */
+	/** Embarrassing facts about each player for a personal roast: battle record, chickening out, deaths in this world. */
+	private String dossierText() {
+		boolean ru = Lang.isRu(lang);
+		StringBuilder sb = new StringBuilder();
+		Stats stats = Stats.of(world.getServer());
+		for (UUID u : activePlayers()) {
+			ServerPlayerEntity p = player(u);
+			if (p == null) continue;
+			Stats.Player st = stats.player(u);
+			int deaths = p.getStatHandler().getStat(net.minecraft.stat.Stats.CUSTOM.getOrCreateStat(net.minecraft.stat.Stats.DEATHS));
+			String nm = names.getOrDefault(u, p.getName().getString());
+			if (ru) {
+				sb.append("Досье на ").append(nm).append(": побед в баттлах ").append(st.wins).append(", поражений ").append(st.losses)
+					.append(", текущая серия ").append(st.streak).append(", зассал и полез в драку вместо баттла ").append(st.chickened)
+					.append(" раз, умирал в этом мире ").append(deaths).append(" раз. ");
+			} else {
+				sb.append("Dossier on ").append(nm).append(": battle wins ").append(st.wins).append(", losses ").append(st.losses)
+					.append(", current streak ").append(st.streak).append(", chickened out into a fistfight ").append(st.chickened)
+					.append(" times, died in this world ").append(deaths).append(" times. ");
+			}
+		}
+		if (sb.length() == 0) return "";
+		sb.append(ru ? "Вверни 1–2 самых позорных факта из досье, если ложатся в тему; цифры можно округлять."
+			: "Work in 1–2 of the most embarrassing facts if they fit the theme; numbers may be rounded.");
+		return sb.toString();
+	}
+
 	private String rivalryText() {
 		StringBuilder sb = new StringBuilder();
 		for (UUID u : players) {
@@ -1172,7 +1199,7 @@ public class Battle {
 		for (int i = 0; i < active.size(); i++) groups += (playerLines() + 3) / 4;
 		int groupsNeeded = groups;
 		String prev = history.toString();
-		String rivalry = rivalryText();
+		String rivalry = (rivalryText() + " " + dossierText()).trim();
 		int r = round;
 		String topicText = topicPromptText();
 		Stats stats = Stats.of(world.getServer());
