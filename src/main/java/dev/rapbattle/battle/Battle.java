@@ -1617,6 +1617,7 @@ public class Battle {
 			v.mobTeam = fresh.mobTeam;
 		}
 		v.phase = phase.name();
+		v.crowdIds.clear();
 		if (crowd != null && crowd.center != null) {
 			v.stageX = crowd.center.x;
 			v.stageY = crowd.center.y;
@@ -1634,8 +1635,12 @@ public class Battle {
 		v.topic = chosenTopic;
 		v.targets = new ArrayList<>(targets);
 		v.spectator = false;
+		BattleView sv = v.copy();
+		sv.spectator = true;
+		sv.rows = new ArrayList<>(v.rows);
 		Stats stats = Stats.of(world.getServer());
 		for (UUID u : players) {
+			if (leftPlayers.contains(u)) continue;
 			ServerPlayerEntity p = player(u);
 			if (p != null) {
 				v.canReroll = !rerolledPlayers.contains(u);
@@ -1648,11 +1653,9 @@ public class Battle {
 				send(p, v);
 			}
 		}
+		v.targets = new ArrayList<>(targets);
 		// Bystanders: beat, header and result only.
 		double r2 = cfg.spectatorRadius * cfg.spectatorRadius;
-		BattleView sv = v.copy();
-		sv.spectator = true;
-		sv.rows = new ArrayList<>(v.rows);
 		for (ServerPlayerEntity p : world.getPlayers()) {
 			if (hasPlayer(p.getUuid())) continue;
 			if (p.squaredDistanceTo(mob) <= r2) {

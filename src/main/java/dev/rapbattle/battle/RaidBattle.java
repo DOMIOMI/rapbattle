@@ -26,7 +26,7 @@ import java.util.*;
 public final class RaidBattle {
 	private RaidBattle() {}
 
-	private static final Set<Integer> CHALLENGED_RAIDS = new HashSet<>();
+	private static final Set<Raid> CHALLENGED_RAIDS = Collections.newSetFromMap(new WeakHashMap<>());
 	private static final Set<UUID> FINAL_CAPTAINS = new HashSet<>();
 
 	static void clear() {
@@ -41,8 +41,7 @@ public final class RaidBattle {
 				if (!BattleManager.canAutoChallenge(p)) continue;
 				Raid raid = w.getRaidAt(p.getBlockPos());
 				if (raid == null) continue;
-				int raidKey = System.identityHashCode(raid);
-				if (CHALLENGED_RAIDS.contains(raidKey)) continue;
+				if (CHALLENGED_RAIDS.contains(raid)) continue;
 				boolean active = !raid.isFinished() && !raid.hasStopped() && !raid.hasWon();
 				int groups = raid.getGroupsSpawned();
 				int maxWaves = raid.getMaxWaves(w.getDifficulty());
@@ -52,7 +51,7 @@ public final class RaidBattle {
 				}
 				if (captain.getEntityWorld() != w || captain.squaredDistanceTo(p) > 24 * 24 || BattleManager.byMob(captain) != null) continue;
 				if (!Progression.canAutoChallengeMob(p, captain)) continue;
-				CHALLENGED_RAIDS.add(raidKey);
+				CHALLENGED_RAIDS.add(raid);
 				FINAL_CAPTAINS.add(captain.getUuid());
 				captain.getNavigation().startMovingTo(p, 1.1);
 				Speech.bubble(captain, Lang.t(Lang.of(p), "rapbattle.act2.raid_callout"), 0xF07167, 4000);

@@ -32,9 +32,9 @@ public final class Speech {
 	private record Bubble(DisplayEntity.TextDisplayEntity display, MobEntity mob, long until) {}
 
 	private static final List<Bubble> BUBBLES = new ArrayList<>();
-	private static final Map<UUID, Long> MOB_COOLDOWN = new HashMap<>();
-	private static final Map<UUID, Long> PLAYER_COOLDOWN = new HashMap<>();
-	private static final Map<UUID, Integer> HINTS_SHOWN = new HashMap<>();
+	private static final Map<UUID, Long> MOB_COOLDOWN = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final Map<UUID, Long> PLAYER_COOLDOWN = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final Map<UUID, Integer> HINTS_SHOWN = new java.util.concurrent.ConcurrentHashMap<>();
 	private static final Random RND = new Random();
 
 	private static final Map<String, List<String>> BASE = Map.ofEntries(
@@ -87,9 +87,9 @@ public final class Speech {
 		Map.entry("silverfish", List.of("*skrr* We're in the walls.")),
 		Map.entry("endermite", List.of("*skrr* Tiny, but I bite.")));
 
-	private static final Map<String, Map<String, List<String>>> generated = new HashMap<>();
-	private static final Map<String, Long> generatedAt = new HashMap<>();
-	private static final Set<String> generating = new HashSet<>();
+	private static final Map<String, Map<String, List<String>>> generated = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final Map<String, Long> generatedAt = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final Set<String> generating = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
 	// ------------------------------------------------------------------ bubbles
 
@@ -133,6 +133,9 @@ public final class Speech {
 	public static void clearAll() {
 		for (Bubble b : BUBBLES) b.display().discard();
 		BUBBLES.clear();
+		MOB_COOLDOWN.clear();
+		PLAYER_COOLDOWN.clear();
+		HINTS_SHOWN.clear();
 	}
 
 	// ------------------------------------------------------------------ aggro lines

@@ -75,7 +75,7 @@ public final class PvpBattle {
 	private CompletableFuture<Llm.PvpVerdict> pvpVerdictFuture;
 	private final Map<String, BattleView.Result> results = new LinkedHashMap<>();
 	private long verdictAsked;
-	private boolean sttMissing;
+	private volatile boolean sttMissing;
 	boolean finished;
 	private final Set<UUID> spectators = new HashSet<>();
 	private ServerPlayerEntity testPeer;
