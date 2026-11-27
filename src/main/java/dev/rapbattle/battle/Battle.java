@@ -1919,19 +1919,19 @@ public class Battle {
 	/** Immediately resolves the battle (or this co-op player's participation), supporting offline players. */
 	public void resolveNow(UUID u) {
 		if (finished || u == null || !hasPlayer(u) || !isResolving()) return;
-		if (phase == Phase.JUDGING) {
-			long now = dev.rapbattle.Clock.now();
-			if (verdictFuture == null) {
-				prepareJudgingVerses(now, true);
-				applyJudgeVerdict(fallbackVerdict(), now);
-			} else {
-				Llm.Verdict v = verdictFuture.getNow(null);
-				if (v == null) v = fallbackVerdict();
-				applyJudgeVerdict(v, now);
-			}
-		}
 		long activeCount = players.stream().filter(id -> !leftPlayers.contains(id)).count();
 		if (activeCount <= 1) {
+			if (phase == Phase.JUDGING) {
+				long now = dev.rapbattle.Clock.now();
+				if (verdictFuture == null) {
+					prepareJudgingVerses(now, true);
+					applyJudgeVerdict(fallbackVerdict(), now);
+				} else {
+					Llm.Verdict v = verdictFuture.getNow(null);
+					if (v == null) v = fallbackVerdict();
+					applyJudgeVerdict(v, now);
+				}
+			}
 			if (result != null && !result.finalResult) {
 				result.playersWin = winsPlayers >= winsNeeded;
 				result.finalResult = true;
