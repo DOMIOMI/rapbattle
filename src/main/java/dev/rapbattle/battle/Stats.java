@@ -173,39 +173,42 @@ public class Stats extends PersistentState {
 		List<Integer> s = species.computeIfAbsent(sp, k -> new ArrayList<>(List.of(0, 0)));
 		s.set(playersWin ? 1 : 0, s.get(playersWin ? 1 : 0) + 1);
 		UUID initiator = team.isEmpty() ? null : team.get(0);
+		boolean coop = team.size() > 1;
 		for (UUID u : team) {
 			Player p = player(u);
 			List<String> before = new ArrayList<>(p.titles);
+			Integer sc = scores == null ? null : scores.get(u);
+			int gained = sc != null ? ProgressionRules.adjustRespectGain(p.respect, oppRank, sc) : 0;
+			boolean gateEligible = !coop || gained > 0;
 			if (playersWin) {
 				p.wins++;
 				p.streak = Math.max(0, p.streak) + 1;
 				p.bestStreak = Math.max(p.bestStreak, p.streak);
-				p.speciesWins.merge(sp, 1, Integer::sum);
-				Integer scDay = scores == null ? null : scores.get(u);
-				boolean contributed = scDay != null ? scDay > 0 : u.equals(initiator);
-				if (overworldDay >= 0 && contributed) {
-					p.recordDailyWin(sp, overworldDay);
+				if (gateEligible) {
+					p.speciesWins.merge(sp, 1, Integer::sum);
+					boolean contributed = sc != null ? sc > 0 : u.equals(initiator);
+					if (overworldDay >= 0 && contributed) {
+						p.recordDailyWin(sp, overworldDay);
+					}
+					if (p.speciesWins.getOrDefault("sheep", 0) >= 10) p.addTitle("Овцеубийца");
+					if (p.speciesWins.getOrDefault("zombie", 0) >= 10) p.addTitle("Гробовщик");
+					if (p.speciesWins.getOrDefault("creeper", 0) >= 5) p.addTitle("Сапёр");
+					if (oppRank >= 5 && outfitLevels.getOrDefault(u, 6) <= 1) p.addTitle("Кожаный король");
+					if (sp.equals("ender_dragon")) {
+						p.dragonWon = true;
+						p.addTitle("Укротитель дракона");
+					}
+					if (sp.equals("wither")) p.addTitle("Трёхголовый ноль");
+					if (sp.equals("warden")) p.addTitle("Громче Вардена");
+					if (opp.rank().isBoss()) p.addTitle("Босс-киллер");
 				}
-				if (p.speciesWins.getOrDefault("sheep", 0) >= 10) p.addTitle("Овцеубийца");
-				if (p.speciesWins.getOrDefault("zombie", 0) >= 10) p.addTitle("Гробовщик");
-				if (p.speciesWins.getOrDefault("creeper", 0) >= 5) p.addTitle("Сапёр");
-				if (oppRank >= 5 && outfitLevels.getOrDefault(u, 6) <= 1) p.addTitle("Кожаный король");
-				if (sp.equals("ender_dragon")) {
-					p.dragonWon = true;
-					p.addTitle("Укротитель дракона");
-				}
-				if (sp.equals("wither")) p.addTitle("Трёхголовый ноль");
-				if (sp.equals("warden")) p.addTitle("Громче Вардена");
-				if (opp.rank().isBoss()) p.addTitle("Босс-киллер");
 				if (p.streak >= 5) p.addTitle("Серийный");
 			} else {
 				p.losses++;
 				p.streak = Math.min(0, p.streak) - 1;
 			}
 			if (u.equals(mvp)) p.mvp++;
-			Integer sc = scores.get(u);
 			if (sc != null) {
-				int gained = ProgressionRules.adjustRespectGain(p.respect, oppRank, sc);
 				p.respect += gained;
 				if (sc > p.best) p.best = sc;
 			}
@@ -217,17 +220,15 @@ public class Stats extends PersistentState {
 		return earned;
 	}
 
-	/** A player battle: wins, losses, streaks and Respect for both. */
+	/** A player battle: wins, losses and streaks (no Respect awarded in PvP). */
 	public void recordPvp(UUID winner, UUID loser, int winnerDealt, int loserDealt) {
 		Player w = player(winner), l = player(loser);
 		w.wins++;
 		w.streak = Math.max(0, w.streak) + 1;
 		w.bestStreak = Math.max(w.bestStreak, w.streak);
-		w.respect += Math.max(0, winnerDealt);
 		w.best = Math.max(w.best, winnerDealt);
 		l.losses++;
 		l.streak = Math.min(0, l.streak) - 1;
-		l.respect += Math.max(0, loserDealt);
 		l.best = Math.max(l.best, loserDealt);
 		if (w.streak >= 5) w.addTitle("Серийный");
 		markDirty();
