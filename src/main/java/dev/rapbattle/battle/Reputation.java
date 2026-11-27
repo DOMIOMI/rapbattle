@@ -134,8 +134,9 @@ public final class Reputation {
 			}
 		}
 
-		// Street Cred applies only for hostile/grudge-holding mobs
+		// Street Cred applies only for hostile/grudge-holding mobs (never iron golems)
 		if (!(mob instanceof HostileEntity) && !(mob instanceof Angerable)) return;
+		if (mob instanceof net.minecraft.entity.passive.IronGolemEntity) return;
 
 		int rankLevel = battle.rank.level();
 		List<UUID> creditedPlayers = new ArrayList<>();

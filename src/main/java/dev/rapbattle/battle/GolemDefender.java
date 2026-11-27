@@ -94,11 +94,22 @@ public final class GolemDefender {
 	public static void respect(IronGolemEntity g, ServerPlayerEntity winner, String lang) {
 		g.setTarget(null);
 		g.stopAnger();
-		Speech.bubble(g, Lang.pick(lang, "*БОНГ* …Уважаю. Деревня твоя.", "*CLANG* …Respect. The village is yours."), 0xA0FFA0, 4000);
-		if (winner != null) {
+		if (winner != null && g.getEntityWorld() instanceof ServerWorld sw) {
+			long day = ProgressionRules.currentDay(sw.getServer().getOverworld().getTime());
+			Stats stats = Stats.of(sw.getServer());
+			Stats.Player st = stats.player(winner.getUuid());
+			if (st.dailyWinsFor("iron_golem_reward", day) > 0) {
+				Speech.bubble(g, Lang.pick(lang, "*БОНГ* …Мы уже в расчёте на сегодня.", "*CLANG* …We're already square for today."), 0xFFE0A0, 3500);
+				return;
+			}
+			st.recordDailyWin("iron_golem_reward", day);
+			stats.markDirty();
+			Speech.bubble(g, Lang.pick(lang, "*БОНГ* …Уважаю. Деревня твоя.", "*CLANG* …Respect. The village is yours."), 0xA0FFA0, 4000);
 			winner.giveItemStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_INGOT, 5));
 			winner.giveItemStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.POPPY, 1));
+			return;
 		}
+		Speech.bubble(g, Lang.pick(lang, "*БОНГ* …Уважаю. Деревня твоя.", "*CLANG* …Respect. The village is yours."), 0xA0FFA0, 4000);
 	}
 
 	static void clear() { HUNTS.clear(); }
