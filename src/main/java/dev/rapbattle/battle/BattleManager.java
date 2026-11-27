@@ -666,14 +666,23 @@ public final class BattleManager {
 			}
 			if (damageTaken <= 0 || !(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
 			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
-			boolean envAbort = key != null && BATTLE_ABORT_ENV_DAMAGE.contains(key);
-			boolean nonModDeath = (p.isDead() || !p.isAlive()) && !Battle.RAP_DEATH.equals(key);
-			if (!envAbort && !nonModDeath) return;
+			if (key == null || !BATTLE_ABORT_ENV_DAMAGE.contains(key)) return;
 			Text msg = Text.translatable("rapbattle.battle.abort_env");
 			Battle b = byPlayer(p.getUuid());
-			if (b != null && (nonModDeath || !b.isResolving())) b.abortNoPenalty(p, msg);
+			if (b != null && !b.isResolving()) b.abortNoPenalty(p, msg);
 			PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
-			if (pvp != null && (nonModDeath || !pvp.isResolving())) pvp.abortNoPenalty(msg);
+			if (pvp != null && !pvp.isResolving()) pvp.abortNoPenalty(msg);
+		});
+
+		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+			if (!(entity instanceof ServerPlayerEntity p) || !isBattling(p)) return;
+			RegistryKey<DamageType> key = source.getTypeRegistryEntry().getKey().orElse(null);
+			if (Battle.RAP_DEATH.equals(key)) return;
+			Text msg = Text.translatable("rapbattle.battle.abort_env");
+			Battle b = byPlayer(p.getUuid());
+			if (b != null) b.abortNoPenalty(p, msg);
+			PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
+			if (pvp != null) pvp.abortNoPenalty(msg);
 		});
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
