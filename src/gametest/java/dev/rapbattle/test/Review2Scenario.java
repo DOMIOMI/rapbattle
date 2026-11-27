@@ -61,6 +61,12 @@ public final class Review2Scenario {
 		testDisconnectInAllPhases(ctx, sp);
 		testNbtPersistenceRoundTrip(ctx, sp);
 		testResponsiveHudAndScreens(ctx, sp);
+		testItemAndEntityLocks(ctx, sp);
+		testDeathAbortsBattle(ctx, sp);
+		testVehicleAndEnderPearl(ctx, sp);
+		testLavaInTimelineVsResult(ctx, sp);
+		testPiglinTruceRespectAndArrow(ctx, sp);
+		testPvpDifferentDimensions(ctx, sp);
 
 		// Re-enabled 6.25 tests (previously @Disabled for bugs #1, #2, #7):
 		testCoopLeaveClearsIsBattling(ctx, sp);
@@ -250,25 +256,305 @@ public final class Review2Scenario {
 	}
 
 	private static void testResponsiveHudAndScreens(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		final int[] prevScale = {0};
+		ctx.runOnClient(mc -> prevScale[0] = mc.options.getGuiScale().getValue());
 		try {
 			ctx.getInput().resizeWindow(854, 480);
-			ctx.waitTicks(2);
-			ctx.setScreen(() -> new RapSettingsScreen(null));
-			ctx.waitTicks(2);
-			GameTestSupport.takeScreenshot(ctx, "review2-settings-small");
-			ctx.setScreen(() -> new StyleScreen(null));
-			ctx.waitTicks(2);
-			ctx.setScreen(() -> null);
+			for (int scale : new int[] { 2, 3, 4 }) {
+				ctx.runOnClient(mc -> {
+					mc.options.getGuiScale().setValue(scale);
+					mc.onResolutionChanged();
+				});
+				ctx.waitTicks(2);
+				ctx.setScreen(() -> new RapSettingsScreen(null));
+				ctx.waitTicks(2);
+				if (scale == 2) GameTestSupport.takeScreenshot(ctx, "review2-settings-small");
+				else GameTestSupport.takeScreenshot(ctx, "review2-settings-scale" + scale);
+				ctx.setScreen(() -> new StyleScreen(null));
+				ctx.waitTicks(2);
+				ctx.setScreen(() -> null);
+			}
 
+			ctx.runOnClient(mc -> {
+				mc.options.getGuiScale().setValue(prevScale[0]);
+				mc.onResolutionChanged();
+			});
 			ctx.getInput().resizeWindow(1920, 1080);
 			ctx.waitTicks(2);
 			ctx.setScreen(() -> new RapSettingsScreen(null));
 			ctx.waitTicks(2);
+			GameTestSupport.takeScreenshot(ctx, "review2-settings-fixed");
 			ctx.setScreen(() -> null);
 		} finally {
+			ctx.runOnClient(mc -> {
+				mc.options.getGuiScale().setValue(prevScale[0]);
+				mc.onResolutionChanged();
+			});
 			ctx.getInput().resizeWindow(1280, 720);
 			ctx.waitTicks(2);
 		}
+	}
+
+	private static void testItemAndEntityLocks(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		GameTestSupport.clearActionbarMessages();
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.getInventory().clear();
+			ItemStack apple = new ItemStack(Items.APPLE, 5);
+			ItemStack mic = new ItemStack(Items.LIGHTNING_ROD, 1);
+			p.getInventory().setStack(0, apple);
+			p.setStackInHand(Hand.OFF_HAND, mic);
+
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			var donkey = EntityType.DONKEY.create(w, SpawnReason.COMMAND);
+			donkey.refreshPositionAndAngles(p.getX() + 2, p.getY(), p.getZ(), 0, 0);
+			w.spawnEntity(donkey);
+			var villager = EntityType.VILLAGER.create(w, SpawnReason.COMMAND);
+			villager.refreshPositionAndAngles(p.getX() - 2, p.getY(), p.getZ(), 0, 0);
+			w.spawnEntity(villager);
+
+			Battle b = BattleManager.start(p, z);
+			// Q, Ctrl+Q, F via ServerPlayNetworkHandler packets
+			p.networkHandler.onPlayerAction(new net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket(
+				net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket.Action.DROP_ITEM, net.minecraft.util.math.BlockPos.ORIGIN, net.minecraft.util.math.Direction.DOWN));
+			p.networkHandler.onPlayerAction(new net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket(
+				net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket.Action.DROP_ALL_ITEMS, net.minecraft.util.math.BlockPos.ORIGIN, net.minecraft.util.math.Direction.DOWN));
+			p.networkHandler.onPlayerAction(new net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket(
+				net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, net.minecraft.util.math.BlockPos.ORIGIN, net.minecraft.util.math.Direction.DOWN));
+			// Inventory click & Shift-click
+			p.networkHandler.onClickSlot(new net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket(
+				p.currentScreenHandler.syncId, p.currentScreenHandler.getRevision(), (short) 36, (byte) 0,
+				net.minecraft.screen.slot.SlotActionType.PICKUP, it.unimi.dsi.fastutil.ints.Int2ObjectMaps.emptyMap(),
+				net.minecraft.screen.sync.ItemStackHash.EMPTY));
+			p.networkHandler.onClickSlot(new net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket(
+				p.currentScreenHandler.syncId, p.currentScreenHandler.getRevision(), (short) 36, (byte) 0,
+				net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, it.unimi.dsi.fastutil.ints.Int2ObjectMaps.emptyMap(),
+				net.minecraft.screen.sync.ItemStackHash.EMPTY));
+			// UseEntityCallback: donkey & villager
+			var rDonkey = net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.invoker()
+				.interact(p, w, Hand.MAIN_HAND, donkey, null);
+			var rVillager = net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.invoker()
+				.interact(p, w, Hand.MAIN_HAND, villager, null);
+
+			assertTrue(rDonkey == net.minecraft.util.ActionResult.FAIL && rVillager == net.minecraft.util.ActionResult.FAIL,
+				"UseEntityCallback must fail on donkey and villager during battle");
+			assertTrue(p.getInventory().getStack(0).getCount() == 5 && p.getOffHandStack().isOf(Items.LIGHTNING_ROD),
+				"Q/Ctrl+Q/F/ClickSlot must not alter inventory or offhand during battle");
+
+			b.abort("cleanup");
+			donkey.discard();
+			villager.discard();
+			z.discard();
+			p.getInventory().clear();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.waitTicks(3);
+		int hints = GameTestSupport.countActionbarContaining("микрофон") + GameTestSupport.countActionbarContaining("Mic only");
+		assertTrue(hints == 1, "Mic-only hint must show once within 3s cooldown (got " + hints + ")");
+	}
+
+	private static void testDeathAbortsBattle(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p.setInvulnerable(false);
+			p.setHealth(p.getMaxHealth());
+
+			// Solo /kill -> battle aborted without crown/theft
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			BattleManager.start(p, z);
+			p.timeUntilRegen = 0;
+			p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
+			assertTrue(!BattleManager.isBattling(p), "/kill must remove solo player from battle");
+			assertTrue(z.getCustomName() == null && !Theft.hasStolen(z), "/kill abort must not grant mob crown or steal items");
+			z.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.runOnClient(mc -> {
+			if (mc.player != null) mc.player.requestRespawn();
+		});
+		ctx.waitTicks(4);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			assertTrue(p.isAlive() && !BattleManager.isBattling(p), "Respawned player must be alive and not in battle");
+
+			// Coop /kill on p -> aborts coop battle cleanly
+			ServerWorld w = p.getEntityWorld();
+			ServerPlayerEntity p2 = net.fabricmc.fabric.api.entity.FakePlayer.get(w, new com.mojang.authlib.GameProfile(UUID.randomUUID(), "DeathCoop"));
+			p2.refreshPositionAndAngles(p.getX() + 2, p.getY(), p.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p2);
+			ZombieEntity z2 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z2.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z2);
+			Battle b2 = BattleManager.start(p, z2);
+			b2.invite(p2);
+			b2.answerInvite(p2, true);
+			p.timeUntilRegen = 0;
+			p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
+			assertTrue(!BattleManager.isBattling(p) && !BattleManager.isBattling(p2), "Coop /kill must abort battle for both");
+			z2.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.runOnClient(mc -> {
+			if (mc.player != null) mc.player.requestRespawn();
+		});
+		ctx.waitTicks(4);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+
+			// PvP /kill on p -> aborts PvP battle without winner/loser
+			ServerPlayerEntity p3 = net.fabricmc.fabric.api.entity.FakePlayer.get(w, new com.mojang.authlib.GameProfile(UUID.randomUUID(), "DeathPvp"));
+			p3.refreshPositionAndAngles(p.getX() + 3, p.getY(), p.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p3);
+			PvpBattle.challenge(p, p3);
+			int pvpId = PvpBattle.pendingInviteIdForTest(p3.getUuid());
+			PvpBattle.answer(p3, pvpId, true);
+			p.timeUntilRegen = 0;
+			p.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
+			assertTrue(!BattleManager.isBattling(p) && !BattleManager.isBattling(p3), "PvP /kill must abort battle for both");
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.runOnClient(mc -> {
+			if (mc.player != null) mc.player.requestRespawn();
+		});
+		ctx.waitTicks(4);
+	}
+
+	private static void testVehicleAndEnderPearl(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		Battle[] bRef = new Battle[1];
+		net.minecraft.entity.passive.HorseEntity[] horseRef = new net.minecraft.entity.passive.HorseEntity[1];
+		ZombieEntity[] zRef = new ZombieEntity[1];
+		net.minecraft.entity.projectile.thrown.EnderPearlEntity[] pearlRef = new net.minecraft.entity.projectile.thrown.EnderPearlEntity[1];
+		double[] startXZ = new double[2];
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			var horse = EntityType.HORSE.create(w, SpawnReason.COMMAND);
+			horse.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ(), 0, 0);
+			w.spawnEntity(horse);
+			horseRef[0] = horse;
+			p.startRiding(horse, true, true);
+			assertTrue(p.hasVehicle(), "Player must be riding horse before battle");
+
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			zRef[0] = z;
+
+			startXZ[0] = p.getX();
+			startXZ[1] = p.getZ();
+			Battle b = BattleManager.start(p, z);
+			bRef[0] = b;
+			assertTrue(!p.hasVehicle(), "Starting battle must dismount player from horse");
+
+			var pearl = new net.minecraft.entity.projectile.thrown.EnderPearlEntity(w, p, new ItemStack(Items.ENDER_PEARL));
+			pearl.setPos(startXZ[0] + 6, p.getY() + 0.5, startXZ[1] + 6);
+			pearl.setVelocity(0, -1.0, 0);
+			w.spawnEntity(pearl);
+			pearlRef[0] = pearl;
+		});
+		ctx.waitTicks(4);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			assertTrue(pearlRef[0].isRemoved() && p.squaredDistanceTo(startXZ[0], p.getY(), startXZ[1]) < 1.0,
+				"Ender pearl landing during battle must be discarded without teleporting player");
+			bRef[0].abort("cleanup");
+			horseRef[0].discard();
+			zRef[0].discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+	}
+
+	private static void testLavaInTimelineVsResult(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			p1.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p1.setInvulnerable(false);
+			p1.setHealth(p1.getMaxHealth());
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "LavaPvp"));
+			p2.refreshPositionAndAngles(p1.getX() + 4, p1.getY(), p1.getZ(), 90, 0);
+
+			// 1. TIMELINE: lava aborts without penalty
+			PvpBattle.challenge(p1, p2);
+			PvpBattle.answer(p2, PvpBattle.pendingInviteIdForTest(p2.getUuid()), true);
+			PvpBattle pb1 = PvpBattle.byPlayer(p1.getUuid());
+			pb1.setTestPeerForTest(p2);
+			pb1.jumpToForTest("TIMELINE");
+			p1.timeUntilRegen = 0;
+			p1.damage(w, w.getDamageSources().lava(), 2.0f);
+			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == null, "Lava in PvP TIMELINE must abort battle");
+
+			// 2. RESULT: lava passes damage, battle stays active to finish normally
+			p1.setHealth(p1.getMaxHealth());
+			p1.extinguish();
+			PvpBattle.challenge(p1, p2);
+			PvpBattle.answer(p2, PvpBattle.pendingInviteIdForTest(p2.getUuid()), true);
+			PvpBattle pb2 = PvpBattle.byPlayer(p1.getUuid());
+			pb2.setTestPeerForTest(p2);
+			pb2.jumpToForTest("RESULT");
+			p1.timeUntilRegen = 0;
+			p1.damage(w, w.getDamageSources().lava(), 2.0f);
+			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == pb2, "Lava in PvP RESULT must NOT abort battle");
+			pb2.forceEndForTest();
+			p1.setHealth(p1.getMaxHealth());
+			p1.extinguish();
+			GameTestSupport.cleanupBattles(server);
+		});
+	}
+
+	private static void testPiglinTruceRespectAndArrow(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			var piglin = EntityType.PIGLIN.create(w, SpawnReason.COMMAND);
+			piglin.refreshPositionAndAngles(p.getX() + 3, p.getY(), p.getZ(), 0, 0);
+			w.spawnEntity(piglin);
+
+			PlayerStatus.grant(p.getUuid(), PlayerStatus.BASTION_GUEST, 60_000L);
+			var arrow = new net.minecraft.entity.projectile.ArrowEntity(w, p, new ItemStack(Items.ARROW), null);
+			piglin.damage(w, w.getDamageSources().arrow(arrow, p), 2.0f);
+			arrow.discard();
+			assertTrue(!PlayerStatus.has(p.getUuid(), PlayerStatus.BASTION_GUEST),
+				"Shooting a Piglin with an arrow must revoke BASTION_GUEST");
+
+			// Street Cred respects piglin -> PiglinBrain.becomeAngryWith cancelled
+			PlayerStatus.grant(p.getUuid(), PlayerStatus.STREET_CRED, 60_000L);
+			Reputation.mergeCred(null, 3, 60_000L, Clock.now());
+			piglin.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+	}
+
+	private static void testPvpDifferentDimensions(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld overworld = p1.getEntityWorld();
+			ServerWorld nether = server.getWorld(net.minecraft.world.World.NETHER);
+			ServerPlayerEntity p2 = FakePlayer.get(overworld, new GameProfile(UUID.randomUUID(), "DimPvp"));
+			PvpBattle.challenge(p1, p2);
+			int invId = PvpBattle.pendingInviteIdForTest(p2.getUuid());
+			double ox = p1.getX(), oy = p1.getY(), oz = p1.getZ();
+			p1.teleport(nether, 0.5, 64, 0.5, java.util.Set.of(), 0f, 0f, false);
+			PvpBattle.answer(p2, invId, true);
+			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == null && PvpBattle.byPlayer(p2.getUuid()) == null,
+				"PvP must not start when challenger moved to another dimension");
+			p1.teleport(overworld, ox, oy, oz, java.util.Set.of(), 0f, 0f, false);
+			GameTestSupport.cleanupBattles(server);
+		});
 	}
 
 	private static void testCoopLeaveClearsIsBattling(ClientGameTestContext ctx, TestSingleplayerContext sp) {
