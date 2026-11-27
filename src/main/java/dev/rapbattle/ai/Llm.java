@@ -119,7 +119,9 @@ public final class Llm {
 				- Рифмовка AABB: строки 1-2 рифмуются между собой, 3-4 между собой и т.д.
 				- Рифмуй слова в разных формах: падежи, множественное число, глаголы в прошедшем и будущем,
 				  прилагательные в разных родах (топором/потом, сгорели/недели), а не только начальная форма.
-				- Рифма настоящая: совпадают ударный гласный и окончание (шерсть/дерзость — плохо, нуба/зуба — хорошо).
+				- Рифма настоящая: совпадают ударный гласный и ВСЁ после него (нуба/зуба, позор/топор, червяк/дурак — хорошо;
+				  шерсть/дерзость, грязь/маясь, кровати/закате — плохо). Нельзя рифмовать слово с ним же или с его искажением (вообще/воще).
+				- Перед ответом проверь каждую пару последних слов вслух: если окончания с ударной гласной не совпадают — перепиши строку.
 				- Никаких случайных слов ради рифмы и никакой бессмыслицы. Если рифма не ложится по смыслу — перестрой строку.
 				- Пары строк связаны: вторая строка отвечает на первую, развивает её или добивает панчем.
 				- Отсылки к Minecraft конкретные (крафт, алмазы, крипер, кровать, лава, Незер, дерево руками), а не общие слова.
@@ -131,12 +133,14 @@ public final class Llm {
 				  «Бе-е! Ты в кожанке, Steve, и это позор»
 				  «Даже моя шерсть дороже, чем твой топор»
 				Ещё придумай группы рифм для игроков: в каждой ровно 4 русских слова, которые точно рифмуются между собой
-				(одинаковое ударное окончание), удобные для ответного панча. Не повторяй рифмы мобов.
+				(одинаковое окончание, начиная с ударной гласной: последние 2–3 буквы у всех четырёх совпадают), удобные для ответного панча.
+				Проверь каждое слово группы: если хоть одно не рифмуется с остальными — замени его. Не повторяй рифмы мобов.
 				Слова в группе бери в разных формах, не только начальной: падежи, множественное число, глаголы
 				(например: «кирками, руками, врагами, веками» или «сгорел, умел, задел, пропел»).
 				Каждый раз новый куплет: не повторяй типовые фразы, придумывай свежие образы.
 				Также укажи targets: ровно """ + targetLimit + """
-				 существительных или ярких образов прямо из твоего куплета мобов, которые игрок может обыграть в ответ. НЕ выбирай местоимения и служебные слова (запрещены «я, ты, твой, мой, этот, как, быть» и т. п.).
+				 существительных или ярких образов прямо из твоего куплета мобов (слово должно дословно стоять в строках), которые игрок может обыграть в ответ.
+				 НЕ выбирай ник игрока, имена мобов, их фирменный звук, местоимения и служебные слова (запрещены «я, ты, твой, мой, этот, как, быть» и т. п.).
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "простые, короткие, бытовые (кот/рот/живот/компот)";
@@ -168,7 +172,9 @@ public final class Llm {
 				- Vary line lengths: 4 to 9 words, mix short snappy bars with longer ones, do not make them all the same.
 				- AABB rhyme scheme: lines 1-2 rhyme with each other, 3-4 with each other, etc.
 				- Use varied word forms: plurals, past tense, -ing verbs, adjectives (burned/learned, blocks/shocks), not just base nouns.
-				- Real rhymes: the stressed vowel and ending must match (wool/full is good, sword/world is bad).
+				- Real rhymes: the stressed vowel and everything after it must match (shame/name, wool/full are good; sword/world, dirt/bed are bad).
+				  Never rhyme a word with itself or a misspelling of itself.
+				- Before answering, check every pair of line-ending words out loud; if they do not truly rhyme, rewrite the line.
 				- No random filler words for the sake of a rhyme and no nonsense. If a rhyme does not make sense, rewrite the line.
 				- Couplets connect: the second line answers the first, builds on it, or finishes it with a punchline.
 				- Use concrete Minecraft references (crafting, diamonds, creeper, bed, lava, Nether, punching trees), not generic fluff.
@@ -180,12 +186,14 @@ public final class Llm {
 				  "Baa! You're in leather gear, Steve, what a shame"
 				  "Even my wool is worth more than your name"
 				Also invent rhyme groups for the players: each group has exactly 4 English words that truly rhyme with each other
-				(same stressed vowel and ending), easy to use for a clapback. Do not repeat the mobs' rhymes.
+				(same stressed vowel and ending), easy to use for a clapback. Check every word: if one does not rhyme with the rest, replace it.
+				Do not repeat the mobs' rhymes.
 				Use varied word forms in each group, not just base nouns: plurals, past tense, -ing verbs
 				(for example: "mining, shining, whining, dining" or "burned, turned, learned, earned").
 				Fresh verse every time: do not recycle generic lines, invent new imagery.
 				Also return targets: exactly """ + targetLimit + """
-				 concrete nouns or vivid images from the mob's verse that the player can flip in a rebuttal. NEVER pick pronouns or function words (never "I/you/your/my/this/that/is/the").
+				 concrete nouns or vivid images from the mob's verse (the word must appear verbatim in the lines) that the player can flip in a rebuttal.
+				 NEVER pick the player's username, the mobs' names, their signature sound, pronouns or function words (never "I/you/your/my/this/that/is/the").
 				""" + tone(lang);
 			diff = switch (difficulty) {
 				case 0, 1 -> "simple, short, everyday words (cat/hat/bat/flat)";
@@ -239,18 +247,23 @@ public final class Llm {
 						String word = w.getAsString().trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}-]", "");
 						if (!word.isEmpty() && !words.contains(word)) words.add(word);
 					}
+					if (ru) words = sameEnding(words);
 					if (words.size() >= 4) rhymes.add(words.subList(0, 4));
 				}
 			}
+			if (lines.size() < lineCount) return null;
+			lines = lines.subList(0, lineCount);
+			java.util.Set<String> banned = nameWords(mobs, opponents);
+			String verse = verseText(lines);
 			List<String> targets = new ArrayList<>();
 			if (o.has("targets")) {
 				for (var tw : o.getAsJsonArray("targets")) {
 					String w = cleanTarget(tw.getAsString());
-					if (!w.isEmpty() && !targets.contains(w) && targets.size() < targetLimit) targets.add(w);
+					if (!w.isEmpty() && !banned.contains(w) && verse.contains(w) && !targets.contains(w) && targets.size() < targetLimit) targets.add(w);
 				}
 			}
-			if (lines.size() < lineCount) return null;
-			return new Content(lines.subList(0, lineCount), rhymes, targets);
+			if (targets.size() < targetLimit) topUpTargets(targets, lines, banned, targetLimit);
+			return new Content(lines, rhymes, targets);
 		} catch (RuntimeException e) {
 			RapBattle.LOG.error("Bad verse JSON: {}", o, e);
 			return null;
@@ -298,6 +311,66 @@ public final class Llm {
 	}
 
 	/** Extracts one clean, significant anchor word from a target string, rejecting pronouns and function words. */
+	/** Keeps only the words that share the group's most common 2-letter ending, soft and hard vowels counted as one. */
+	static List<String> sameEnding(List<String> words) {
+		Map<String, Integer> count = new java.util.HashMap<>();
+		String best = null;
+		for (String w : words) {
+			String e = ending(w);
+			int c = count.merge(e, 1, Integer::sum);
+			if (best == null || c > count.get(best)) best = e;
+		}
+		List<String> out = new ArrayList<>();
+		for (String w : words) if (ending(w).equals(best)) out.add(w);
+		return out;
+	}
+
+	private static String ending(String w) {
+		// Soft and hard vowels sound alike in a rhyme: червяк/дурак, ловлю/беру.
+		String n = w.replace('я', 'а').replace('ю', 'у').replace('ё', 'о').replace('е', 'э').replace('ы', 'и');
+		return n.length() <= 2 ? n : n.substring(n.length() - 2);
+	}
+
+	/** Lower-case words of player and mob names and mob ad-libs: never a rebuttal target. */
+	static java.util.Set<String> nameWords(List<Rapper> mobs, List<String> opponents) {
+		java.util.Set<String> out = new java.util.HashSet<>();
+		List<String> raw = new ArrayList<>(opponents);
+		for (Rapper r : mobs) {
+			raw.add(r.name());
+			raw.add(r.adlib());
+		}
+		for (String s : raw) {
+			if (s == null) continue;
+			for (String p : s.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) if (!p.isEmpty()) out.add(p);
+		}
+		return out;
+	}
+
+	private static String verseText(List<MobLine> lines) {
+		StringBuilder b = new StringBuilder();
+		for (MobLine l : lines) b.append(' ').append(l.text().toLowerCase(Locale.ROOT));
+		return b.toString();
+	}
+
+	/** Fills missing targets with the longest content words of the verse, punchlines first. */
+	static void topUpTargets(List<String> targets, List<MobLine> lines, java.util.Set<String> banned, int limit) {
+		List<String> cand = new ArrayList<>();
+		for (int pass = 0; pass < 2; pass++) {
+			for (MobLine l : lines) {
+				if (l.punch() != (pass == 0)) continue;
+				for (String raw : l.text().split("\\s+")) {
+					String w = cleanTarget(raw);
+					if (w.length() >= 4 && !banned.contains(w) && !cand.contains(w)) cand.add(w);
+				}
+			}
+		}
+		cand.sort((a, b) -> b.length() - a.length());
+		for (String w : cand) {
+			if (targets.size() >= limit) break;
+			if (!targets.contains(w)) targets.add(w);
+		}
+	}
+
 	public static String cleanTarget(String raw) {
 		if (raw == null) return "";
 		String norm = raw.trim().toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\s-]", " ").trim();
