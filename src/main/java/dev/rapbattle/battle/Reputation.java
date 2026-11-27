@@ -169,6 +169,7 @@ public final class Reputation {
 		long truceUntil = now + RUN_TRUCE_MS;
 
 		for (UUID u : battle.players) {
+			if (battle.leftPlayers.contains(u)) continue;
 			revokeCred(u);
 			PlayerStatus.grant(u, PlayerStatus.RUN_AWAY, RUN_TRUCE_MS);
 		}

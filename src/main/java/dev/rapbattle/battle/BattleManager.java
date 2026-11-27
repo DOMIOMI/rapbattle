@@ -601,6 +601,9 @@ public final class BattleManager {
 						if (b != null) b.onPlayerLeft(sp.getUuid());
 						PvpBattle pvp = PvpBattle.byPlayer(sp.getUuid());
 						if (pvp != null) pvp.leave(sp.getUuid());
+						if (b == null && pvp == null) {
+							sp.sendMessage(Text.translatable("rapbattle.battle.not_in_battle").formatted(Formatting.GRAY), false);
+						}
 					}
 					return 1;
 				}))));
@@ -847,6 +850,9 @@ public final class BattleManager {
 						if (b != null) b.onPlayerLeft(p.getUuid());
 						PvpBattle pvp = PvpBattle.byPlayer(p.getUuid());
 						if (pvp != null) pvp.leave(p.getUuid());
+						if (b == null && pvp == null) {
+							p.sendMessage(Text.translatable("rapbattle.battle.not_in_battle").formatted(Formatting.GRAY), false);
+						}
 					}
 					default -> {}
 				}

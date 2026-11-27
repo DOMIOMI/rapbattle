@@ -240,7 +240,7 @@ public class Battle {
 		spectators.remove(p.getUuid());
 	}
 
-	public boolean hasPlayer(UUID uuid) { return players.contains(uuid); }
+	public boolean hasPlayer(UUID uuid) { return players.contains(uuid) && !leftPlayers.contains(uuid); }
 
 	public boolean hasMob(Entity e) { return e instanceof MobEntity m && mobTeam.contains(m); }
 
@@ -334,8 +334,17 @@ public class Battle {
 			abort(Text.translatable("rapbattle.battle.abort_player_left"));
 			return;
 		}
-		// Coop partner left mid-battle: keep going, their verse just counts as silence.
+		// Coop partner left mid-battle: release them cleanly, keep going for remaining players.
+		ServerPlayerEntity leaver = player(uuid);
+		if (leaver != null) {
+			if (glowing.remove(leaver)) leaver.setGlowing(false);
+			BattleView end = new BattleView();
+			end.type = "end";
+			end.id = id;
+			send(leaver, end);
+		}
 		if (!transcripts.containsKey(uuid)) transcripts.put(uuid, CompletableFuture.completedFuture(""));
+		broadcastState();
 	}
 
 	/** Cancels the battle for {@code p} without any win/loss penalties (environmental hazard or stuck). */
@@ -855,7 +864,7 @@ public class Battle {
 	private void keepThePeace() {
 		var box = mob.getBoundingBox().expand(24, 8, 24);
 		for (MobEntity m : world.getEntitiesByClass(MobEntity.class, box, m -> m.getTarget() instanceof ServerPlayerEntity)) {
-			if (players.contains(m.getTarget().getUuid())) {
+			if (hasPlayer(m.getTarget().getUuid())) {
 				m.setTarget(null);
 				m.getNavigation().stop();
 			}
@@ -1284,6 +1293,7 @@ public class Battle {
 
 	private boolean allBarsReported() {
 		for (UUID u : players) {
+			if (leftPlayers.contains(u)) continue;
 			String pName = names.get(u);
 			if (playerBarLoud.getOrDefault(pName, List.of()).size() < playerRows(pName).size()) return false;
 		}
@@ -1935,7 +1945,7 @@ public class Battle {
 			}
 			if (bonuses && opp.profile().id().equals("enderman") && !overdressed) {
 				int pearls = Acts.enderPearls(result.knockout, rnd);
-				if (dailyBonusScale < 1.0) pearls = pearls / 2;
+				if (effectiveDailyScale < 1.0) pearls = pearls / 2;
 				if (pearls > 0) {
 					var pearlDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
 						new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENDER_PEARL, pearls));
@@ -1966,7 +1976,7 @@ public class Battle {
 			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
 			if (bonuses && opp.profile().id().equals("blaze") && !overdressed) {
 				int extraRods = Acts.blazeExtraRods(lethal, rnd);
-				if (dailyBonusScale < 1.0) extraRods = extraRods / 2;
+				if (effectiveDailyScale < 1.0) extraRods = extraRods / 2;
 				if (extraRods > 0) {
 					var rodDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
 						new net.minecraft.item.ItemStack(net.minecraft.item.Items.BLAZE_ROD, extraRods));
@@ -1976,7 +1986,7 @@ public class Battle {
 			}
 			if (bonuses && opp.profile().id().equals("wither_skeleton") && !overdressed) {
 				double skullChance = Acts.witherSkullChance(result.knockout, margin);
-				if (dailyBonusScale < 1.0) skullChance /= 3.0;
+				if (effectiveDailyScale < 1.0) skullChance /= 3.0;
 				if (skullChance > 0 && rnd.nextDouble() < skullChance) {
 					var skullDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
 						new net.minecraft.item.ItemStack(net.minecraft.item.Items.WITHER_SKELETON_SKULL));
@@ -2181,6 +2191,7 @@ public class Battle {
 
 	private void punishPlayers() {
 		for (UUID u : players) {
+			if (leftPlayers.contains(u)) continue;
 			ServerPlayerEntity p = player(u);
 			if (p == null) continue;
 			switch (rank) {

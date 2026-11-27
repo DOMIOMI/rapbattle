@@ -62,10 +62,10 @@ public final class Review2Scenario {
 		testNbtPersistenceRoundTrip(ctx, sp);
 		testResponsiveHudAndScreens(ctx, sp);
 
-		// Disabled bug-repro checks (game code not modified in 6.24):
-		if (!isDisabled("testCoopLeaveClearsIsBattling")) testCoopLeaveClearsIsBattling(ctx, sp);
-		if (!isDisabled("testPvpJudging500msGraceWindow")) testPvpJudging500msGraceWindow(ctx, sp);
-		if (!isDisabled("testCoopDailyCapPearlsUsesEffectiveScale")) testCoopDailyCapPearlsUsesEffectiveScale(ctx, sp);
+		// Re-enabled 6.25 tests (previously @Disabled for bugs #1, #2, #7):
+		testCoopLeaveClearsIsBattling(ctx, sp);
+		testPvpJudging500msGraceWindow(ctx, sp);
+		testCoopDailyCapPearlsUsesEffectiveScale(ctx, sp);
 
 		GameTestSupport.assertNoRawKeys("review2");
 	}
@@ -271,42 +271,98 @@ public final class Review2Scenario {
 		}
 	}
 
-	@Disabled("баг № 1 из REVIEW-ALL-2: вышедший из коопа игрок остаётся isBattling == true")
 	private static void testCoopLeaveClearsIsBattling(ClientGameTestContext ctx, TestSingleplayerContext sp) {
 		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p1.getEntityWorld();
 			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopLeave"));
+			p2.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p2);
 			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
 			w.spawnEntity(z);
 			Battle b = BattleManager.start(p1, z);
 			b.invite(p2);
 			b.answerInvite(p2, true);
+			assertTrue(BattleManager.isBattling(p2), "p2 must be battling after joining coop");
 			b.onPlayerLeft(p2.getUuid());
 			assertTrue(!BattleManager.isBattling(p2), "Coop leaver must no longer be marked isBattling");
+			assertTrue(BattleManager.isBattling(p1), "Remaining coop player must stay in battle");
+			boolean dmgAllowed = net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.invoker()
+				.allowDamage(p2, w.getDamageSources().generic(), 2.0f);
+			assertTrue(dmgAllowed, "Coop leaver must no longer be protected by battle damage guard");
 			b.abort("cleanup");
 			z.discard();
+			GameTestSupport.cleanupBattles(server);
 		});
 	}
 
-	@Disabled("баг № 2 из REVIEW-ALL-2: PvpBattle.judging() не ждёт 500 мс для последнего bar")
 	private static void testPvpJudging500msGraceWindow(ClientGameTestContext ctx, TestSingleplayerContext sp) {
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p1.getEntityWorld();
 			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "GracePvp"));
+			p2.refreshPositionAndAngles(p1.getX() + 4, p1.getY(), p1.getZ(), 90, 0);
 			PvpBattle.challenge(p1, p2);
 			int id = PvpBattle.pendingInviteIdForTest(p2.getUuid());
 			PvpBattle.answer(p2, id, true);
 			PvpBattle pb = PvpBattle.byPlayer(p1.getUuid());
 			pb.setTestPeerForTest(p2);
-			// Would advance to JUDGING and verify 500ms grace before verdictFuture starts
+			BattleView snap = pb.snapshotForTest(p1);
+			long beatMs = Math.max(200L, snap.beatMs);
+			pb.jumpToForTest("TIMELINE");
+			// Report all 8 bars for p1 and 7 bars for p2, then jump to JUDGING and send p2's 8th bar within 500ms
+			Clock.advanceForTest(100L * beatMs);
+			for (int i = 0; i < 8; i++) pb.onBar(p1, true, 0, false);
+			for (int i = 0; i < 7; i++) pb.onBar(p2, true, 0, false);
+			pb.jumpToForTest("JUDGING");
+			Clock.advanceForTest(200L);
+			pb.onBar(p2, true, 0, false);
+			assertTrue(pb.reportedBarsCountForTest(p2.getName().getString()) == 8,
+				"8th bar of p2 within 500ms JUDGING grace must be recorded");
 			pb.forceEndForTest();
+			GameTestSupport.cleanupBattles(server);
 		});
 	}
 
-	@Disabled("баг № 7 из REVIEW-ALL-2: Battle.finish() использует this.dailyBonusScale вместо effectiveDailyScale")
 	private static void testCoopDailyCapPearlsUsesEffectiveScale(ClientGameTestContext ctx, TestSingleplayerContext sp) {
-		// Documented repro for bug #7
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CappedCoop"));
+			p2.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
+			BattleManager.registerTestPlayer(p2);
+
+			long day = ProgressionRules.currentDay(server.getOverworld().getTime());
+			Stats.Player st1 = Stats.of(server).player(p1.getUuid());
+			Stats.Player st2 = Stats.of(server).player(p2.getUuid());
+			st1.dailyDay = day;
+			st1.dailySpeciesWins.clear(); // p1 has 0 wins today -> dailyBonusScale = 1.0
+			st2.dailyDay = day;
+			st2.dailySpeciesWins.put("blaze", 3); // p2 is at daily cap (0.0)
+
+			for (var ie : w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(24), e -> true)) ie.discard();
+
+			BlazeEntity blaze = EntityType.BLAZE.create(w, SpawnReason.COMMAND);
+			blaze.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(blaze);
+			Battle b = BattleManager.start(p1, blaze);
+			b.invite(p2);
+			b.answerInvite(p2, true);
+			b.setPlayerScoreForTest(p1.getName().getString(), 60);
+			b.setPlayerScoreForTest(p2.getName().getString(), 40);
+			b.jumpToForTest(Battle.Phase.RESULT);
+			// Since p2 contributed and is at daily cap (0.0), effectiveDailyScale == 0.0 -> no bonus Blaze Rods (at most 1 vanilla drop)
+			int rods = w.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, p1.getBoundingBox().expand(16),
+				ie -> ie.getStack().isOf(Items.BLAZE_ROD)).stream().mapToInt(ie -> ie.getStack().getCount()).sum();
+			assertTrue(rods <= 1, "Coop effectiveDailyScale=0.0 must suppress bonus Blaze Rods (got " + rods + ")");
+			st2.dailySpeciesWins.clear();
+			if (!blaze.isRemoved()) blaze.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
 	}
 }

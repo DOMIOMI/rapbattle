@@ -334,6 +334,7 @@
   "rapbattle.battle.dress_code_reject": "%s: «Переоденься. Нужен прикид от %s, а у тебя %s.»",
   "rapbattle.battle.player_joined": "%s вписывается в баттл!",
   "rapbattle.battle.abort_player_left": "Баттл сорвался: игрок ушёл",
+  "rapbattle.battle.not_in_battle": "Ты не в баттле",
   "rapbattle.battle.abort_env": "Баттл прерван — выбирайся!",
   "rapbattle.battle.abort_mob_gone": "Баттл окончен: соперник пропал",
   "rapbattle.battle.crashed": "Баттл сломался, смотри лог сервера",

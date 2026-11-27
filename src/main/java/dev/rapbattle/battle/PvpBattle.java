@@ -167,6 +167,29 @@ public final class PvpBattle {
 		return transcripts.containsKey(playerId);
 	}
 
+	/** Test-only helper to check how many bar signals were recorded for a participant. */
+	public int reportedBarsCountForTest(String who) {
+		return barLoud.getOrDefault(who, List.of()).size();
+	}
+
+	/** Test-only helper to jump PvP battle into TIMELINE or JUDGING. */
+	public void jumpToForTest(String targetPhase) {
+		long now = dev.rapbattle.Clock.now();
+		if ("TIMELINE".equals(targetPhase)) {
+			phase = Phase.TIMELINE;
+			phaseStart = now;
+		} else if ("JUDGING".equals(targetPhase)) {
+			phase = Phase.JUDGING;
+			phaseStart = now;
+		} else if ("RESULT".equals(targetPhase)) {
+			phase = Phase.RESULT;
+			phaseStart = now;
+			view.result = new BattleView.Result();
+			view.result.winner = names.get(a);
+			view.result.playersWin = true;
+		}
+	}
+
 	static void tickAll() {
 		long now = dev.rapbattle.Clock.now();
 		INVITES.values().removeIf(i -> now > i.until());
@@ -462,12 +485,21 @@ public final class PvpBattle {
 	private final Map<UUID, List<Scoring.SlicedBar>> slicedBars = new HashMap<>();
 	private List<Llm.PlayerVerse> pendingVerses = List.of();
 
+	private boolean allBarsReported() {
+		for (UUID u : List.of(a, b)) {
+			String pName = names.get(u);
+			if (barLoud.getOrDefault(pName, List.of()).size() < playerRows(pName).size()) return false;
+		}
+		return true;
+	}
+
 	private void judging(long now) {
 		long t = now - phaseStart;
 		if (t > AUDIO_WAIT_MS) for (UUID u : List.of(a, b)) transcripts.putIfAbsent(u, CompletableFuture.completedFuture(""));
 		if (pvpVerdictFuture == null) {
 			boolean done = transcripts.size() == 2 && transcripts.values().stream().allMatch(CompletableFuture::isDone);
 			if (!done && t < AUDIO_WAIT_MS + STT_WAIT_MS) return;
+			if (t < 500 && !allBarsReported()) return;
 			slicedBars.clear();
 			List<Llm.PlayerVerse> verses = new ArrayList<>();
 			for (UUID u : List.of(a, b)) {

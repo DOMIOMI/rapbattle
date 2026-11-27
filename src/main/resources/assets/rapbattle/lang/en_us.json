@@ -334,6 +334,7 @@
   "rapbattle.battle.dress_code_reject": "%s: \"Change your fit. You need %s gear or better, and you\u0027re rocking %s.\"",
   "rapbattle.battle.player_joined": "%s jumps into the battle!",
   "rapbattle.battle.abort_player_left": "Battle aborted: player left",
+  "rapbattle.battle.not_in_battle": "You are not in a battle",
   "rapbattle.battle.abort_env": "Battle stopped — get out!",
   "rapbattle.battle.abort_mob_gone": "Battle ended: opponent vanished",
   "rapbattle.battle.crashed": "Battle crashed, check the server log",
