@@ -74,6 +74,7 @@ public final class PvpBattle {
 	private final Map<UUID, Integer> recordingStart = new ConcurrentHashMap<>();
 	private CompletableFuture<Llm.PvpVerdict> pvpVerdictFuture;
 	private final Map<String, BattleView.Result> results = new LinkedHashMap<>();
+	private final Map<UUID, BattleView.Result> playerResults = new HashMap<>();
 	private long verdictAsked;
 	private volatile boolean sttMissing;
 	boolean finished;
@@ -307,11 +308,6 @@ public final class PvpBattle {
 	}
 
 	/** Damage to a player's Respect; during the verses it never drops below 1 (the judge decides a knockout). */
-	private void hit(UUID target, int d, boolean live) {
-		int floor = live ? 1 : 0;
-		if (target.equals(a)) respectA = Math.max(floor, respectA - d);
-		else respectB = Math.max(floor, respectB - d);
-	}
 
 	public void onAudio(ServerPlayerEntity p, Payloads.AudioC2S chunk) {
 		UUID u = p.getUuid();
@@ -618,34 +614,45 @@ public final class PvpBattle {
 		boolean ko = respectA <= 0 || respectB <= 0;
 		UUID winner = respectB <= 0 && respectA > 0 ? a : respectA <= 0 && respectB > 0 ? b : respectA >= respectB ? a : b;
 		for (Map.Entry<String, BattleView.Result> e : results.entrySet()) {
-			BattleView.Result r = e.getValue();
-			r.teamBefore = before0;
-			r.mobBefore = before1;
-			r.respectMax = 100;
-			r.respectTeam = respectA;
-			r.respectMob = respectB;
-			r.knockout = ko;
-			r.winner = names.get(winner);
-			r.playersWin = winner.equals(a);
-			r.finalResult = true;
-			r.comment = pvpVerdict.forLang(e.getKey()).comment();
-			r.teamLabel = names.get(a);
-			r.mobLabel = names.get(b);
-			r.dealt = oA.totalToMob();
-			r.barTextTotal = oA.barTextTotal();
-			r.barBeatDelta = oA.barBeatDelta();
-			r.barRebuttalTotal = oA.barRebuttalDamage();
-			r.bonusHype = oA.bonuses().hypeBonus();
-			r.bonusTotal = oA.bonuses().total();
-			r.silenceDamage = oA.silenceDamage();
-			for (BattleView.PlayerScore ps : r.players) {
-				for (UUID u : List.of(a, b)) if (names.get(u).equals(ps.name)) ps.score = dealt.getOrDefault(u, 0);
-			}
+			fillPvpResult(e.getValue(), e.getKey(), oA, before0, before1, ko, winner, pvpVerdict);
 		}
-		view.result = results.get(langOf(a));
+		for (UUID u : List.of(a, b)) {
+			String ul = langOf(u);
+			BattleView.Result base = results.get(ul);
+			BattleView.Result copy = BattleView.GSON.fromJson(BattleView.GSON.toJson(base), BattleView.Result.class);
+			fillPvpResult(copy, ul, u.equals(a) ? oA : oB, before0, before1, ko, winner, pvpVerdict);
+			playerResults.put(u, copy);
+		}
+		view.result = playerResults.get(a);
 		phase = Phase.RESULT;
 		phaseStart = now;
 		broadcast();
+	}
+
+	private void fillPvpResult(BattleView.Result r, String langKey, Scoring.RoundOutcome own,
+							   int before0, int before1, boolean ko, UUID winner, Llm.PvpVerdict pvpVerdict) {
+		r.teamBefore = before0;
+		r.mobBefore = before1;
+		r.respectMax = 100;
+		r.respectTeam = respectA;
+		r.respectMob = respectB;
+		r.knockout = ko;
+		r.winner = names.get(winner);
+		r.playersWin = winner.equals(a);
+		r.finalResult = true;
+		r.comment = pvpVerdict.forLang(langKey).comment();
+		r.teamLabel = names.get(a);
+		r.mobLabel = names.get(b);
+		r.dealt = own.totalToMob();
+		r.barTextTotal = own.barTextTotal();
+		r.barBeatDelta = own.barBeatDelta();
+		r.barRebuttalTotal = own.barRebuttalDamage();
+		r.bonusHype = own.bonuses().hypeBonus();
+		r.bonusTotal = own.bonuses().total();
+		r.silenceDamage = own.silenceDamage();
+		for (BattleView.PlayerScore ps : r.players) {
+			for (UUID u : List.of(a, b)) if (names.get(u).equals(ps.name)) ps.score = dealt.getOrDefault(u, 0);
+		}
 	}
 
 	private void finish() {
@@ -701,20 +708,24 @@ public final class PvpBattle {
 		v.beatElapsedMs = dev.rapbattle.Clock.now() - beatZero;
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
-			if (p != null) ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, langOf(u), false).toJson()));
+			if (p != null) ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, langOf(u), false, u).toJson()));
 		}
 		double r2 = RapConfig.get().spectatorRadius * RapConfig.get().spectatorRadius;
 		for (ServerPlayerEntity p : world.getPlayers()) {
 			if (p.getUuid().equals(a) || p.getUuid().equals(b)) continue;
 			if (p.squaredDistanceTo(stage) <= r2) {
 				spectators.add(p.getUuid());
-				ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, Lang.of(p), true).toJson()));
+				ServerPlayNetworking.send(p, new Payloads.StateS2C(localized(v, Lang.of(p), true, null).toJson()));
 			}
 		}
 	}
 
 	/** The battle as one viewer sees it: labels, outfit, titles and the judge's breakdown in his language. */
 	private BattleView localized(BattleView v, String l, boolean spectator) {
+		return localized(v, l, spectator, null);
+	}
+
+	private BattleView localized(BattleView v, String l, boolean spectator, UUID viewerId) {
 		BattleView c = v.copy();
 		c.spectator = spectator;
 		c.rankArmor = Lang.t(l, "rapbattle.pvp.rank_armor");
@@ -735,7 +746,10 @@ public final class PvpBattle {
 			mm.style = st.mcStyle().label(l);
 			c.team.add(mm);
 		}
-		if (v.result != null) c.result = results.getOrDefault(l, v.result);
+		if (v.result != null) {
+			BattleView.Result pr = viewerId != null ? playerResults.get(viewerId) : null;
+			c.result = pr != null ? pr : results.getOrDefault(l, v.result);
+		}
 		return c;
 	}
 
