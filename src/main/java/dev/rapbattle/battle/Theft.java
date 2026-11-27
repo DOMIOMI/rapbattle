@@ -121,7 +121,8 @@ public final class Theft {
 		var inv = victim.getInventory();
 		List<ItemStack> list = new ArrayList<>(inv.size());
 		for (int i = 0; i < inv.size(); i++) list.add(inv.getStack(i));
-		int slot = pickStealIndex(list, inv.getSelectedSlot(), battle.rank.level(), peaceful);
+		int selectedSlot = battle.initialSelectedSlot.getOrDefault(victim.getUuid(), inv.getSelectedSlot());
+		int slot = pickStealIndex(list, selectedSlot, battle.rank.level(), peaceful);
 		if (slot < 0) return;
 
 		ItemStack src = inv.getStack(slot);

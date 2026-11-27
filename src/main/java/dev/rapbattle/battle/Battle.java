@@ -80,6 +80,7 @@ public class Battle {
 	final Map<UUID, String> names = new HashMap<>();
 	final Set<UUID> invited = new HashSet<>();
 	private final Map<UUID, Vec3d> anchors = new HashMap<>();
+	final Map<UUID, Integer> initialSelectedSlot = new HashMap<>();
 	private final Map<UUID, Integer> pushTicks = new HashMap<>();
 	private final Set<UUID> spectators = new HashSet<>();
 
@@ -241,6 +242,7 @@ public class Battle {
 		players.add(p.getUuid());
 		names.put(p.getUuid(), p.getName().getString());
 		anchors.put(p.getUuid(), new Vec3d(p.getX(), p.getY(), p.getZ()));
+		initialSelectedSlot.put(p.getUuid(), p.getInventory().getSelectedSlot());
 		p.extinguish();
 		p.setAir(p.getMaxAir());
 		invited.remove(p.getUuid());
