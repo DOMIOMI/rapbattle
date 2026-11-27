@@ -37,6 +37,7 @@ public class CalibrationScreen extends Screen {
 	protected void init() {
 		int y = height / 2 + 20;
 		start = addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.calib.start"), b -> begin()).dimensions(width / 2 - 154, y, 100, 20).build());
+		start.active = micStart < 0;
 		save = addDrawableChild(ButtonWidget.builder(Text.translatable("rapbattle.calib.save"), b -> {
 			ClientConfig.get().latencyMs = measured;
 			ClientConfig.save();
@@ -150,8 +151,13 @@ public class CalibrationScreen extends Screen {
 	}
 
 	@Override
-	public void close() {
+	public void removed() {
 		if (mic.isRunning()) mic.stop();
+		super.removed();
+	}
+
+	@Override
+	public void close() {
 		client.setScreen(parent);
 	}
 }

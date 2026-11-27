@@ -23,6 +23,7 @@ public final class MicRecorder {
 
 	/** @return null on success, or an error message (no microphone, access denied...). */
 	public String start() {
+		if (running) return null;
 		try {
 			DataLine.Info info = new DataLine.Info(TargetDataLine.class, FORMAT);
 			if (!AudioSystem.isLineSupported(info)) return I18n.translate("rapbattle.mic.not_found");
@@ -55,13 +56,13 @@ public final class MicRecorder {
 	/** Stops recording and returns the WAV bytes (empty array if nothing was recorded). */
 	public byte[] stop() {
 		running = false;
-		if (thread != null) {
-			try { thread.join(500); } catch (InterruptedException ignored) {}
-		}
 		if (line != null) {
 			line.stop();
 			line.close();
 			line = null;
+		}
+		if (thread != null) {
+			try { thread.join(500); } catch (InterruptedException ignored) {}
 		}
 		level = 0;
 		byte[] data;

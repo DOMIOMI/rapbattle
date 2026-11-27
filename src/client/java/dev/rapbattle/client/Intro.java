@@ -35,6 +35,11 @@ public final class Intro {
 
 	public static void skip() { skipped = true; }
 
+	public static void reset() {
+		battleKey = -1;
+		skipped = false;
+	}
+
 	/** 0..1 progress, or -1 when no intro is running. */
 	public static float progress() {
 		BattleView v = ClientBattle.view;

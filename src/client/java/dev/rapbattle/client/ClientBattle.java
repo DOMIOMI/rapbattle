@@ -52,6 +52,7 @@ public final class ClientBattle {
 	private static float rowPeak;
 	// Warden: the mic listens (without recording) while he reads.
 	private static boolean monitoring;
+	private static int wardenMicKey = -1;
 	private static int noiseCount;
 	private static boolean wasLoud;
 	// Enderman: looked him in the eyes this round.
@@ -209,6 +210,7 @@ public final class ClientBattle {
 
 	public static void disconnect() {
 		reset();
+		Intro.reset();
 		invite = null;
 		choice = null;
 	}
@@ -380,7 +382,9 @@ public final class ClientBattle {
 		if (!view.silence) return;
 		int b = (int) Math.floorDiv(clock, Math.max(1, view.beatMs));
 		boolean mobTurn = b >= view.mobStartBeat && b < view.mobEndBeat;
-		if (mobTurn && !monitoring && !MIC.isRunning()) {
+		int key = view.id * 100 + view.round;
+		if (mobTurn && !monitoring && !MIC.isRunning() && wardenMicKey != key) {
+			wardenMicKey = key;
 			if (MIC.start() == null) {
 				monitoring = true;
 				noiseCount = 0;
