@@ -183,7 +183,27 @@ public final class ClientBattle {
 
 	private static void reset() {
 		if (MIC.isRunning()) MIC.stop();
+		BeatPlayer.stop();
 		recordingFor = -1;
+		recordedKey = -1;
+		timelineKey = -1;
+		lastHalfBeat = Long.MIN_VALUE;
+		trackedRow = -1;
+		rowPeak = 0;
+		rhymePeak = 0;
+		nearRhymePeak = 0;
+		rhymePeakDeltaMs = -1;
+		nearPeakDeltaMs = -1;
+		smoothMic = 0;
+		silentSinceMs = 0;
+		mobPunchAt = 0;
+		mobFlinchAt = 0;
+		playerJabAt = 0;
+		scratchAt = 0;
+		monitoring = false;
+		noiseCount = 0;
+		wasLoud = false;
+		gazedKey = -1;
 		view = null;
 	}
 
@@ -268,6 +288,7 @@ public final class ClientBattle {
 		if (choice != null && now - choiceAt > Math.max(1000, choice.choiceMs)) choice = null;
 		if (view == null) return;
 		if (!timeline()) {
+			if (!view.spectator && !"TIMELINE".equals(view.phase)) flushTrackedRow();
 			if (recordingFor == view.id && !"TIMELINE".equals(view.phase)) stopAndUpload();
 			return;
 		}
@@ -400,30 +421,37 @@ public final class ClientBattle {
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.ENTITY_ENDERMAN_STARE, 1f, 0.8f));
 	}
 
+	private static void flushTrackedRow() {
+		if (view == null || trackedRow < 0 || trackedRow >= view.rows.size()) {
+			trackedRow = -1;
+			return;
+		}
+		BattleView.Row done = view.rows.get(trackedRow);
+		if (!done.mob && me().equals(done.reader) && MIC.isRunning() && !monitoring) {
+			boolean onBeatLoud = rhymePeak > 0.08f;
+			boolean anyNearLoud = onBeatLoud || nearRhymePeak > 0.08f;
+			int deltaMs = onBeatLoud ? rhymePeakDeltaMs : anyNearLoud ? nearPeakDeltaMs : -1;
+			boolean silentBar = rowPeak < 0.02f;
+			ClientPlayNetworking.send(new Payloads.ActionC2S(
+				"{\"type\":\"bar\",\"loud\":" + onBeatLoud + ",\"deltaMs\":" + deltaMs + ",\"silent\":" + silentBar + "}"));
+			if (view.fuse && silentBar) ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"silent\"}"));
+		}
+		trackedRow = -1;
+		rowPeak = 0;
+		rhymePeak = 0;
+		nearRhymePeak = 0;
+		rhymePeakDeltaMs = -1;
+		nearPeakDeltaMs = -1;
+	}
+
 	/** At the end of each of my rows: send whether the rhyme slot was loud, the voice peak offset from beat 4 (ms), and silence. */
 	private static void trackRows() {
 		BattleView.Row live = liveRow();
 		int idx = live == null ? -1 : view.rows.indexOf(live);
 		boolean mine = live != null && !live.mob && me().equals(live.reader);
 		if (idx != trackedRow) {
-			if (trackedRow >= 0 && trackedRow < view.rows.size()) {
-				BattleView.Row done = view.rows.get(trackedRow);
-				if (!done.mob && me().equals(done.reader) && MIC.isRunning() && !monitoring) {
-					boolean onBeatLoud = rhymePeak > 0.08f;
-					boolean anyNearLoud = onBeatLoud || nearRhymePeak > 0.08f;
-					int deltaMs = onBeatLoud ? rhymePeakDeltaMs : anyNearLoud ? nearPeakDeltaMs : -1;
-					boolean silentBar = rowPeak < 0.02f;
-					ClientPlayNetworking.send(new Payloads.ActionC2S(
-						"{\"type\":\"bar\",\"loud\":" + onBeatLoud + ",\"deltaMs\":" + deltaMs + ",\"silent\":" + silentBar + "}"));
-					if (view.fuse && silentBar) ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"silent\"}"));
-				}
-			}
+			flushTrackedRow();
 			trackedRow = idx;
-			rowPeak = 0;
-			rhymePeak = 0;
-			nearRhymePeak = 0;
-			rhymePeakDeltaMs = -1;
-			nearPeakDeltaMs = -1;
 		}
 		if (mine) {
 			rowPeak = Math.max(rowPeak, MIC.level);
