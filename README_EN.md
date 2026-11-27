@@ -63,7 +63,7 @@ except the services themselves.
 
 | Key | What for | Where to get it |
 |---|---|---|
-| OpenRouter | mob verses and the judge (default `deepseek/deepseek-v4-flash`, less than a cent per battle) | openrouter.ai/keys |
+| OpenRouter | mob verses and the judge (default `google/gemini-3-flash-preview`, about half a cent per battle) | openrouter.ai/keys |
 | Groq | voice recognition (Whisper), free | console.groq.com/keys |
 
 The mod works without keys too: mobs rap pre-written verses, and the judge rates the performance "by ear".

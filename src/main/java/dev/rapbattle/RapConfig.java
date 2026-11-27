@@ -24,8 +24,8 @@ public class RapConfig {
 
 	/** OpenRouter key. Empty = read OPENROUTER_API_KEY env var. */
 	public String openRouterApiKey = "";
-	/** Any OpenRouter model id. A battle costs well under a cent on cheap models. */
-	public String openRouterModel = "deepseek/deepseek-v4-flash";
+	/** Any OpenRouter model id. The default rhymes best of the fast models; a battle costs about half a cent. */
+	public String openRouterModel = DEFAULT_MODEL;
 
 
 	/** OpenAI-compatible speech-to-text endpoint (Groq, OpenAI, local whisper server...). */
@@ -61,6 +61,10 @@ public class RapConfig {
 	public dev.rapbattle.battle.ProgressionRules.Mode progressionMode() {
 		return dev.rapbattle.battle.ProgressionRules.Mode.parse(progression);
 	}
+
+	public static final String DEFAULT_MODEL = "google/gemini-3-flash-preview";
+	/** Earlier defaults: a config that still holds one of these was never changed by hand, so it follows the new default. */
+	static final Set<String> OLD_DEFAULT_MODELS = Set.of("deepseek/deepseek-v4-flash");
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 	private static final Set<String> SERVER_FIELDS = Set.of(
@@ -102,7 +106,12 @@ public class RapConfig {
 				}
 			}
 			RapConfig c = GSON.fromJson(merged, RapConfig.class);
-			if (c != null) instance = c;
+			if (c != null) {
+				if (c.openRouterModel == null || c.openRouterModel.isBlank() || OLD_DEFAULT_MODELS.contains(c.openRouterModel.trim())) {
+					c.openRouterModel = DEFAULT_MODEL;
+				}
+				instance = c;
+			}
 			// Write the new file first; only then strip the keys from the old one, so they can never get lost.
 			Files.writeString(path, GSON.toJson(instance), StandardCharsets.UTF_8);
 			if (touched) {
