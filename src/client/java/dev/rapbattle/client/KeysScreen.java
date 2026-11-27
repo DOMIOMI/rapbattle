@@ -68,7 +68,12 @@ public class KeysScreen extends Screen {
 	}
 
 	private TextFieldWidget field(int x, int y, int w, String labelKey) {
-		TextFieldWidget f = new TextFieldWidget(textRenderer, x, y, w, 18, Text.translatable(labelKey));
+		TextFieldWidget f = new TextFieldWidget(textRenderer, x, y, w, 18, Text.translatable(labelKey)) {
+			@Override
+			protected net.minecraft.text.MutableText getNarrationMessage() {
+				return Text.translatable(labelKey);
+			}
+		};
 		f.setMaxLength(300);
 		f.setEditable(editable);
 		// Typed keys show as dots: nobody looking over your shoulder (or at your stream) sees them.

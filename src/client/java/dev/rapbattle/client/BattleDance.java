@@ -18,15 +18,30 @@ public final class BattleDance {
 
 	public enum Mode { NONE, READ, LISTEN, WIN, LOSE, CROWD }
 
+	private static BattleView cachedView;
+	private static int cachedCrowdSize = -1;
+	private static final it.unimi.dsi.fastutil.ints.IntOpenHashSet CROWD_SET = new it.unimi.dsi.fastutil.ints.IntOpenHashSet();
+	private static final it.unimi.dsi.fastutil.ints.IntOpenHashSet MOB_SET = new it.unimi.dsi.fastutil.ints.IntOpenHashSet();
+	private static final it.unimi.dsi.fastutil.ints.IntOpenHashSet PLAYER_SET = new it.unimi.dsi.fastutil.ints.IntOpenHashSet();
+
 	public static Mode mode(int entityId) {
 		BattleView v = ClientBattle.view;
 		if (entityId < 0 || v == null || !ClientConfig.get().animations) return Mode.NONE;
-		boolean mob = v.mobEntityIds.contains(entityId);
-		boolean player = false;
-		for (BattleView.Member m : v.team) if (m.entityId == entityId) player = true;
+		if (v != cachedView || v.crowdIds.size() != cachedCrowdSize) {
+			cachedView = v;
+			cachedCrowdSize = v.crowdIds.size();
+			CROWD_SET.clear();
+			CROWD_SET.addAll(v.crowdIds);
+			MOB_SET.clear();
+			MOB_SET.addAll(v.mobEntityIds);
+			PLAYER_SET.clear();
+			for (BattleView.Member m : v.team) PLAYER_SET.add(m.entityId);
+		}
+		boolean mob = MOB_SET.contains(entityId);
+		boolean player = PLAYER_SET.contains(entityId);
 		if (!mob && !player) {
 			// The crowd grooves only while the beat plays; when the verses are over, it stands still and listens.
-			if (!v.crowdIds.contains(entityId)) return Mode.NONE;
+			if (!CROWD_SET.contains(entityId)) return Mode.NONE;
 			return "TIMELINE".equals(v.phase) && ClientBattle.clock() >= 0 ? Mode.CROWD : Mode.NONE;
 		}
 		switch (v.phase) {

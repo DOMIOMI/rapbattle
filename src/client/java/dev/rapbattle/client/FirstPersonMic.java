@@ -121,19 +121,28 @@ public final class FirstPersonMic {
 		}
 	}
 
+	private static ItemStack cachedOffStack;
+	private static int cachedOffCount = -1;
+	private static Trophies.TrophyPerk cachedOffPerk;
+
 	static Trophies.TrophyPerk offhandPerk(ItemStack off) {
 		if (off == null || off.isEmpty()) return null;
+		if (off == cachedOffStack && off.getCount() == cachedOffCount) return cachedOffPerk;
+		Trophies.TrophyPerk perk = null;
 		NbtComponent custom = off.get(DataComponentTypes.CUSTOM_DATA);
 		if (custom != null) {
 			NbtCompound nbt = custom.copyNbt();
 			if (nbt.contains(Trophies.NBT_KEY)) {
-				return Trophies.TrophyPerk.ofKey(nbt.getString(Trophies.NBT_KEY).orElse("default"));
+				perk = Trophies.TrophyPerk.ofKey(nbt.getString(Trophies.NBT_KEY).orElse("default"));
 			}
 		}
-		if ((off.isOf(Items.END_ROD) || off.isOf(Items.LIGHTNING_ROD))
+		if (perk == null && (off.isOf(Items.END_ROD) || off.isOf(Items.LIGHTNING_ROD))
 			&& Boolean.TRUE.equals(off.get(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE))) {
-			return Trophies.TrophyPerk.DEFAULT;
+			perk = Trophies.TrophyPerk.DEFAULT;
 		}
-		return null;
+		cachedOffStack = off;
+		cachedOffCount = off.getCount();
+		cachedOffPerk = perk;
+		return perk;
 	}
 }
