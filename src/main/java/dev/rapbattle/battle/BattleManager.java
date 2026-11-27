@@ -109,6 +109,11 @@ public final class BattleManager {
 		return p != null && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null);
 	}
 
+	public static void clearPending(ServerPlayerEntity p) {
+		if (p == null) return;
+		if (PENDING.remove(p.getUuid()) != null) closeChoice(p);
+	}
+
 	public static boolean isPlayerResolving(ServerPlayerEntity p) {
 		if (p == null) return false;
 		Battle b = byPlayer(p.getUuid());
@@ -398,13 +403,15 @@ public final class BattleManager {
 	}
 
 	public static Battle start(ServerPlayerEntity challenger, MobEntity mob, ProgressionRules.GateCheck precheckedGate) {
+		if (isBattling(challenger)) return byPlayer(challenger.getUuid());
+		clearPending(challenger);
 		Battle b = new Battle(challenger, mob, precheckedGate);
 		BATTLES.add(b);
 		double r = mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity
 			? Math.max(RapConfig.get().inviteRadius, 48.0)
 			: RapConfig.get().inviteRadius;
 		for (ServerPlayerEntity other : challenger.getEntityWorld().getPlayers()) {
-			if (other != challenger && byPlayer(other.getUuid()) == null && other.squaredDistanceTo(challenger) <= r * r) b.invite(other);
+			if (other != challenger && !isBattling(other) && other.squaredDistanceTo(challenger) <= r * r) b.invite(other);
 		}
 		b.broadcastState();
 		RapBattle.LOG.info("{} challenged {} ({}, {})", challenger.getName().getString(), b.opp.name(),
@@ -844,7 +851,7 @@ public final class BattleManager {
 					case "rap" -> {
 						Pending pending = PENDING.remove(p.getUuid());
 						if (pending == null || !pending.allowed || !pending.mob.isAlive() || byMob(pending.mob) != null
-							|| byPlayer(p.getUuid()) != null || pending.mob.getEntityWorld() != p.getEntityWorld()
+							|| isBattling(p) || pending.mob.getEntityWorld() != p.getEntityWorld()
 							|| pending.mob.squaredDistanceTo(p) > 16 * 16) {
 							closeChoice(p);
 							return;

@@ -133,6 +133,8 @@ public final class PvpBattle {
 			return true;
 		}
 		if (busy(from) || busy(p)) return true;
+		BattleManager.clearPending(from);
+		BattleManager.clearPending(p);
 		ALL.add(new PvpBattle(id, from, p));
 		return true;
 	}

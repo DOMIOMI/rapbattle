@@ -299,7 +299,10 @@ public class Battle {
 	/** Invite answer; joining is only possible while the lobby is open. */
 	public void answerInvite(ServerPlayerEntity p, boolean accept) {
 		if (!invited.contains(p.getUuid())) return;
-		if (accept && phase == Phase.LOBBY && !hasPlayer(p.getUuid())) {
+		if (accept && phase == Phase.LOBBY && !hasPlayer(p.getUuid())
+			&& !BattleManager.isBattling(p)
+			&& p.getEntityWorld() == world && p.squaredDistanceTo(mob) <= 32 * 32) {
+			BattleManager.clearPending(p);
 			String pl = Lang.of(p);
 			Outfit.Score score = Outfit.of(p, pl);
 			if (cfg.dressCode && score.level() < Outfit.requiredToJoin(rank) && !Gangs.isOwn(p, opp.profile())) {
