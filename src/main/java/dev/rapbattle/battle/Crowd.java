@@ -96,7 +96,8 @@ public final class Crowd {
 		String kin = battle.opp.profile().kin();
 		stageInWater = w.getFluidState(net.minecraft.util.math.BlockPos.ofFloored(center)).isIn(net.minecraft.registry.tag.FluidTags.WATER);
 		List<MobEntity> near = w.getEntitiesByClass(MobEntity.class, star.getBoundingBox().expand(RADIUS),
-			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null && !Opponent.isBoss(m)
+			m -> m.isAlive() && !battle.mobTeam.contains(m) && BattleManager.byMob(m) == null
+				&& !BattleManager.inAnyCrowd(m) && !Opponent.isBoss(m)
 				&& (!isAquaticOnly(m) || stageInWater));
 		near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(star)));
 		for (MobEntity m : near) {
