@@ -193,27 +193,31 @@ public final class Speech {
 		}
 		if (generating.contains(lang) || now - at < 24 * 3600_000L || !RapConfig.get().hasLlm()) return;
 		generating.add(lang);
+		generatedAt.put(lang, now);
 		Map<String, List<String>> base = Lang.isRu(lang) ? BASE : BASE_EN;
 		CompletableFuture.runAsync(() -> {
-			Map<String, List<String>> out = new HashMap<>();
-			for (String kin : base.keySet()) {
-				MobProfiles.Profile any = null;
-				for (MobProfiles.Profile p : MobProfiles.all()) if (p.kin().equals(kin) || p.id().equals(kin)) { any = p; break; }
-				if (any == null) continue;
-				List<String> lines = Llm.aggroLines(any.species(lang), any.style(lang), any.adlib(lang), base.get(kin), 10, lang);
-				if (lines != null) out.put(kin, lines);
-			}
-			if (!out.isEmpty()) {
-				long ts = dev.rapbattle.Clock.now();
-				generated.put(lang, out);
-				generatedAt.put(lang, ts);
-				try {
-					Files.writeString(cacheFile(lang), new Gson().toJson(Map.of("at", ts, "lines", out)), StandardCharsets.UTF_8);
-				} catch (Exception e) {
-					RapBattle.LOG.warn("Could not save phrase cache", e);
+			try {
+				Map<String, List<String>> out = new HashMap<>();
+				for (String kin : base.keySet()) {
+					MobProfiles.Profile any = null;
+					for (MobProfiles.Profile p : MobProfiles.all()) if (p.kin().equals(kin) || p.id().equals(kin)) { any = p; break; }
+					if (any == null) continue;
+					List<String> lines = Llm.aggroLines(any.species(lang), any.style(lang), any.adlib(lang), base.get(kin), 10, lang);
+					if (lines != null) out.put(kin, lines);
 				}
+				if (!out.isEmpty()) {
+					long ts = dev.rapbattle.Clock.now();
+					generated.put(lang, out);
+					generatedAt.put(lang, ts);
+					try {
+						Files.writeString(cacheFile(lang), new Gson().toJson(Map.of("at", ts, "lines", out)), StandardCharsets.UTF_8);
+					} catch (Exception e) {
+						RapBattle.LOG.warn("Could not save phrase cache", e);
+					}
+				}
+			} finally {
+				generating.remove(lang);
 			}
-			generating.remove(lang);
 		});
 	}
 

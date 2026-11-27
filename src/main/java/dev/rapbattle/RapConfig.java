@@ -67,7 +67,7 @@ public class RapConfig {
 		"openRouterApiKey", "openRouterModel",
 		"sttBaseUrl", "sttApiKey", "sttModel", "sttLanguage", "inviteRadius", "allowSwearing", "requireEmptyHand",
 		"bpm", "linesSolo", "linesPerPlayerCoop", "mobLines");
-	private static RapConfig instance = new RapConfig();
+	private static volatile RapConfig instance = new RapConfig();
 
 	public static RapConfig get() { return instance; }
 
@@ -120,10 +120,12 @@ public class RapConfig {
 	 */
 	public static synchronized void saveKeys(String openRouter, String stt) throws IOException {
 		load();
-		if (openRouter != null) instance.openRouterApiKey = openRouter.trim();
-		if (stt != null) instance.sttApiKey = stt.trim();
+		RapConfig next = GSON.fromJson(GSON.toJson(instance), RapConfig.class);
+		if (openRouter != null) next.openRouterApiKey = openRouter.trim();
+		if (stt != null) next.sttApiKey = stt.trim();
+		instance = next;
 		Path path = FabricLoader.getInstance().getConfigDir().resolve("rapbattle-server.json");
-		Files.writeString(path, GSON.toJson(instance), StandardCharsets.UTF_8);
+		Files.writeString(path, GSON.toJson(next), StandardCharsets.UTF_8);
 	}
 
 	/** Shows a key as "введён (…a1b2)" without revealing it. */

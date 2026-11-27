@@ -53,6 +53,7 @@ public final class BattleManager {
 	private static final List<Stage> RECENT = new ArrayList<>();
 	private static final Map<UUID, Long> MIC_HINT_CD = new HashMap<>();
 	private static final long MIC_HINT_MS = 3_000L;
+	private static final Map<UUID, Long> BAD_ACTION_LOG_CD = new HashMap<>();
 	private static final Map<UUID, Long> LEAVE_COOLDOWN = new HashMap<>();
 	private static final long LEAVE_COOLDOWN_MS = 20_000L;
 	private static final Map<UUID, ServerPlayerEntity> TEST_PLAYERS = new HashMap<>();
@@ -942,7 +943,13 @@ public final class BattleManager {
 					default -> {}
 				}
 			} catch (RuntimeException e) {
-				RapBattle.LOG.warn("Bad action from {}: {}", p.getName().getString(), payload.json());
+				long now = dev.rapbattle.Clock.now();
+				if (now >= BAD_ACTION_LOG_CD.getOrDefault(p.getUuid(), 0L)) {
+					BAD_ACTION_LOG_CD.put(p.getUuid(), now + 10_000L);
+					String raw = payload.json();
+					String trimmed = raw.length() > 120 ? raw.substring(0, 120) + "…" : raw;
+					RapBattle.LOG.warn("Bad action from {}: {}", p.getName().getString(), trimmed);
+				}
 			}
 		});
 
