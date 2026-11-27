@@ -1918,6 +1918,7 @@ public class Battle {
 			}
 			case RESULT -> {
 				this.result = new BattleView.Result();
+				this.result.finalResult = true;
 				this.result.playersWin = playersWin;
 				this.result.knockout = knockout;
 				this.respectTeam = teamRespect;
