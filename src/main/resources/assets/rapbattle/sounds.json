@@ -707,8 +707,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/breaks",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -716,8 +715,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/knock",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -725,8 +723,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/stomp",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -734,8 +731,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/trapdrums",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -743,8 +739,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/battle",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -752,8 +747,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/streets",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -761,8 +755,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/trap",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -770,8 +763,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/drill",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },
@@ -779,8 +771,7 @@
     "sounds": [
       {
         "name": "rapbattle:beat/boss",
-        "stream": false,
-        "preload": true
+        "stream": false
       }
     ]
   },

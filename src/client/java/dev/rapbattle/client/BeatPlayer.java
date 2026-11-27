@@ -21,6 +21,11 @@ public final class BeatPlayer {
 	private static int battle = -1;
 	private static int warmedBattle = -1;
 	private static SoundInstance warming;
+	private static long warmedAtMs = -1;
+	public static volatile long lastWarmupCallMs = -1;
+	public static volatile long lastBeat0PlayCallMs = -1;
+	public static volatile long lastBeat0ClockMs = -1;
+	public static volatile long lastWarmupLeadMs = -1;
 
 	/** The track of the current battle, if real beats are on and the track exists. */
 	public static BeatTracks.Track track() {
@@ -39,8 +44,11 @@ public final class BeatPlayer {
 		}
 		if (t != null && v != null && warmedBattle != v.id && ("LOBBY".equals(v.phase) || "PREP".equals(v.phase))) {
 			warmedBattle = v.id;
+			warmedAtMs = System.currentTimeMillis();
+			long t0 = System.nanoTime();
 			warming = PositionedSoundInstance.ui(SoundEvent.of(Identifier.of("rapbattle", "beat." + t.id())), 1.0f, 0.001f);
 			MinecraftClient.getInstance().getSoundManager().play(warming);
+			lastWarmupCallMs = (System.nanoTime() - t0) / 1_000_000L;
 		}
 		boolean on = t != null && "TIMELINE".equals(v.phase) && v.totalBeats > 0;
 		long clock = on ? ClientBattle.clock() : -1;
@@ -63,8 +71,16 @@ public final class BeatPlayer {
 		if (clock - idx * loopMs > v.beatMs / 2) return;
 		float vol = v.spectator ? ClientConfig.get().spectatorBeatVolume : ClientConfig.get().beatVolume;
 		if (vol <= 0) return;
+		long t0 = System.nanoTime();
 		playing = PositionedSoundInstance.ui(SoundEvent.of(Identifier.of("rapbattle", "beat." + t.id())), 1.0f, Math.min(1f, vol));
 		MinecraftClient.getInstance().getSoundManager().play(playing);
+		if (idx == 0) {
+			lastBeat0PlayCallMs = (System.nanoTime() - t0) / 1_000_000L;
+			lastBeat0ClockMs = clock;
+			lastWarmupLeadMs = warmedAtMs > 0 ? System.currentTimeMillis() - warmedAtMs : -1;
+			dev.rapbattle.RapBattle.LOG.info("BeatPlayer beat0 track={} clock={}ms playCall={}ms warmupCall={}ms warmupLead={}ms",
+				t.id(), lastBeat0ClockMs, lastBeat0PlayCallMs, lastWarmupCallMs, lastWarmupLeadMs);
+		}
 	}
 
 	public static void stop() {
