@@ -2,6 +2,7 @@ package dev.rapbattle.test;
 
 import com.mojang.authlib.GameProfile;
 import dev.rapbattle.battle.*;
+import dev.rapbattle.net.Payloads;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.entity.FakePlayer;
@@ -67,6 +68,11 @@ public final class PvpScenario {
 				&& snap.team.get(0).outfit != null && !snap.team.get(0).outfit.isEmpty()
 				&& snap.team.get(1).outfit != null && !snap.team.get(1).outfit.isEmpty(),
 				"Both players must see each other's outfit/style in PvP battle view");
+
+			// 6.22 #2: non-participant AudioC2S must be ignored and never enter transcripts
+			ServerPlayerEntity p3 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "IntruderMC"));
+			pbRef[0].onAudio(p3, new Payloads.AudioC2S(pbRef[0].id, 0, true, 0, GameTestSupport.wav()));
+			assertTrue(!pbRef[0].hasTranscriptForTest(p3.getUuid()), "Non-participant AudioC2S in PvP must be ignored");
 		});
 		ctx.waitTicks(20);
 		sp.getServer().runOnServer(server -> {

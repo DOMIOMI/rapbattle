@@ -36,6 +36,7 @@ public final class ReputationScenario {
 		testStreetCredAndWitness(ctx, sp);
 		testLossConsolidated(ctx, sp);
 		testPiglinTwoTiers(ctx, sp);
+		testBastionLossDelay(ctx, sp);
 		testTheftAllThievesAndEdgeCases(ctx, sp);
 		testCoopWorstTheftAndZeroDealt(ctx, sp);
 		testThiefChampionNameAndMapCleanup(ctx, sp);
@@ -423,6 +424,20 @@ public final class ReputationScenario {
 			assertTrue(thief.isPersistent(), "Champion must remain persistent");
 			thief.discard();
 
+			// 6.22 #17: named mob ("Бобик") keeps original name without [Item] after returning stolen item
+			p.getInventory().setStack(0, new ItemStack(Items.EMERALD, 1));
+			p.getInventory().setSelectedSlot(0);
+			ZombieEntity bobik = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			bobik.setCustomName(net.minecraft.text.Text.literal("Бобик"));
+			bobik.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+			w.spawnEntity(bobik);
+			BattleManager.start(p, bobik).jumpToForTest(Battle.Phase.RESULT, false, true, 10, 90);
+			BattleManager.start(p, bobik).jumpToForTest(Battle.Phase.RESULT, false, true, 10, 90);
+			BattleManager.start(p, bobik).jumpToForTest(Battle.Phase.RESULT, true, true, 90, 10);
+			String bobikName = bobik.getCustomName() != null ? bobik.getCustomName().getString() : "";
+			assertTrue("Бобик ♛×2".equals(bobikName), "Named champion after return must be 'Бобик ♛×2', got: " + bobikName);
+			bobik.discard();
+
 			ZombieEntity nonChamp = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
 			nonChamp.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
 			w.spawnEntity(nonChamp);
@@ -441,6 +456,49 @@ public final class ReputationScenario {
 			assertTrue(left == 0, "All expired Reputation map entries must be cleaned up (left=" + left + ")");
 			GameTestSupport.cleanupBattles(server);
 			Reputation.clear();
+		});
+	}
+
+	private static void testBastionLossDelay(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		PiglinBruteEntity[] brRef = new PiglinBruteEntity[1];
+		PiglinEntity[] pgRef = new PiglinEntity[1];
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			PiglinBruteEntity br = EntityType.PIGLIN_BRUTE.create(w, SpawnReason.COMMAND);
+			br.setImmuneToZombification(true);
+			br.refreshPositionAndAngles(p.getX() + 4.0, p.getY(), p.getZ() + 4.0, 180, 0);
+			w.spawnEntity(br);
+			brRef[0] = br;
+			PiglinEntity pg = EntityType.PIGLIN.create(w, SpawnReason.COMMAND);
+			pg.setImmuneToZombification(true);
+			pg.refreshPositionAndAngles(p.getX() + 5.0, p.getY(), p.getZ() + 4.0, 180, 0);
+			w.spawnEntity(pg);
+			pgRef[0] = pg;
+			Battle b = BattleManager.start(p, br);
+			b.jumpToForTest(Battle.Phase.RESULT, false, true, 0, 90);
+		});
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			Clock.advanceForTest(9_000L);
+		});
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			assertTrue(pgRef[0].getTarget() == null && brRef[0].getTarget() == null,
+				"During 9s Run! truce, bastion piglins must not attack loser");
+			Clock.advanceForTest(2_000L);
+		});
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			assertTrue(pgRef[0].getTarget() == p || brRef[0].getTarget() == p,
+				"After 10s Run! truce expires, bastion piglins must aggro loser");
+			brRef[0].discard();
+			pgRef[0].discard();
+			GameTestSupport.cleanupBattles(server);
+			Reputation.clear();
+			RapConfig.get().progression = "soft";
 		});
 	}
 }

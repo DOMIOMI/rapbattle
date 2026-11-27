@@ -1802,6 +1802,31 @@ public class Battle {
 		}
 	}
 
+	public int reportedBarsCountForTest(String who) {
+		return playerBarLoud.getOrDefault(who, List.of()).size();
+	}
+
+	public int lastBarDeltaForTest(String who) {
+		List<Integer> d = playerBarDeltaMs.get(who);
+		return d == null || d.isEmpty() ? -1 : d.get(d.size() - 1);
+	}
+
+	public int hypeForTest(String who) {
+		return view == null ? 0 : view.hype;
+	}
+
+	public int crowdIdsCountForTest() {
+		return view == null ? 0 : view.crowdIds.size();
+	}
+
+	public BattleView viewForTest() {
+		return view;
+	}
+
+	public void broadcastStateForTest() {
+		broadcastState();
+	}
+
 	private void finish() {
 		finished = true;
 		sendEnd();

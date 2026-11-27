@@ -86,7 +86,7 @@ public final class BattleManager {
 		DamageTypes.STARVE
 	);
 
-	private static boolean isBattling(ServerPlayerEntity p) {
+	public static boolean isBattling(ServerPlayerEntity p) {
 		return p != null && (byPlayer(p.getUuid()) != null || PvpBattle.byPlayer(p.getUuid()) != null);
 	}
 

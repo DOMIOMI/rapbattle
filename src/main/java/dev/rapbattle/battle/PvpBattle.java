@@ -162,6 +162,11 @@ public final class PvpBattle {
 		return i == null ? -1 : i.id();
 	}
 
+	/** Test-only helper to check if a player has a transcript entry. */
+	public boolean hasTranscriptForTest(UUID playerId) {
+		return transcripts.containsKey(playerId);
+	}
+
 	static void tickAll() {
 		long now = dev.rapbattle.Clock.now();
 		INVITES.values().removeIf(i -> now > i.until());

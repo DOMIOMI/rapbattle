@@ -5,10 +5,14 @@ import dev.rapbattle.Clock;
 import dev.rapbattle.RapConfig;
 import dev.rapbattle.battle.*;
 import dev.rapbattle.client.ClipRecorder;
+import dev.rapbattle.net.BattleView;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.entity.FakePlayer;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.EntityType;
@@ -27,8 +31,11 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +53,7 @@ public final class CoverageScenario {
 		testNoFightingDuringBattle(ctx, sp);
 		testSoreLosersTryRageAndGolemTickAndTwoOnOne(ctx, sp);
 		testEndermanGazeAndStyleUnlockHints(ctx, sp);
+		testReview622SecurityAndLifecycle(ctx, sp);
 		testClipRecorder(ctx);
 		GameTestSupport.assertNoRawKeys("coverage");
 	}
@@ -335,6 +343,161 @@ public final class CoverageScenario {
 			ref[0].jumpToForTest(Battle.Phase.RESULT);
 			if (emRef[0] != null && !emRef[0].isRemoved()) emRef[0].discard();
 			GameTestSupport.cleanupBattles(server);
+		});
+	}
+
+	/** 6.22: #1 bar spam cap, #3 crowdIds dedup, #8 all coop disconnect, #10 env damage abort vs mob dmg block, #10a lock & leave, #20 last bar on-beat. */
+	private static void testReview622SecurityAndLifecycle(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		Battle[] bRef = new Battle[1];
+		ZombieEntity[] zRef = new ZombieEntity[1];
+		double[] anchor = new double[2];
+
+		// #1 + #3 + #20
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			ZombieEntity crowd = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			crowd.refreshPositionAndAngles(p.getX() + 4, p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(crowd);
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			zRef[0] = z;
+			Battle b = BattleManager.start(p, z);
+			bRef[0] = b;
+			int crowdBefore = b.crowdIdsCountForTest();
+			for (int i = 0; i < 20; i++) b.broadcastStateForTest();
+			assertTrue(b.crowdIdsCountForTest() == crowdBefore, "crowdIds must not grow on repeated broadcastState()");
+			crowd.discard();
+
+			b.jumpToForTest(Battle.Phase.TIMELINE);
+			BattleView v = b.viewForTest();
+			BattleView.Row firstPlayerRow = v.rows.stream().filter(r -> !r.mob).findFirst().orElseThrow();
+			BattleView.Row lastPlayerRow = v.rows.stream().filter(r -> !r.mob).reduce((a, c) -> c).orElseThrow();
+			long beatMs = Math.max(200L, v.beatMs);
+			// Advance clock into first player row's beat window (+2 beats)
+			long targetMs = (long) (firstPlayerRow.startBeat + 2.5) * beatMs;
+			Clock.advanceForTest(Math.max(0L, targetMs));
+			for (int i = 0; i < 50; i++) {
+				b.onBar(p, true, 0, false);
+			}
+			String pName = p.getName().getString();
+			assertTrue(b.reportedBarsCountForTest(pName) == 1, "50 bar packets in 1 tick must record only 1 bar");
+			assertTrue(b.hypeForTest(pName) <= 18, "Hype must be capped when spamming bar packets");
+
+			// #20: Advance to last bar and report on-beat right at JUDGING grace window
+			int playerRowCount = (int) v.rows.stream().filter(r -> !r.mob).count();
+			for (int idx = 1; idx < playerRowCount - 1; idx++) {
+				Clock.advanceForTest(4L * beatMs);
+				b.onBar(p, true, 0, false);
+			}
+			Clock.advanceForTest(4L * beatMs);
+			b.jumpToForTest(Battle.Phase.JUDGING);
+			b.onBar(p, true, 0, false);
+			assertTrue(b.reportedBarsCountForTest(pName) == playerRowCount, "Last bar within 500ms JUDGING grace must be recorded");
+			int lastDelta = b.lastBarDeltaForTest(pName);
+			assertTrue(Scoring.hybridBeat(null, 1, false, lastDelta, (int) beatMs) == 2,
+				"Last bar on-beat within 500ms JUDGING grace must yield beatState=2 (delta=" + lastDelta + ")");
+			GameTestSupport.cleanupBattles(server);
+			z.discard();
+		});
+		ctx.waitTicks(2);
+
+		// #8: 3 coop players all disconnect -> battle aborted, mob has no crown or stolen item
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			p1.getInventory().setStack(0, new ItemStack(Items.EMERALD, 1));
+			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopA"));
+			ServerPlayerEntity p3 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "CoopB"));
+			p2.refreshPositionAndAngles(p1.getX() + 1, p1.getY(), p1.getZ(), 0, 0);
+			p3.refreshPositionAndAngles(p1.getX() + 2, p1.getY(), p1.getZ(), 0, 0);
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			Battle b = BattleManager.start(p1, z);
+			b.invite(p2);
+			b.answerInvite(p2, true);
+			b.invite(p3);
+			b.answerInvite(p3, true);
+			b.onPlayerLeft(p1.getUuid());
+			b.onPlayerLeft(p2.getUuid());
+			b.onPlayerLeft(p3.getUuid());
+			assertTrue(!BattleManager.isBattling(p1), "Coop battle must abort when all players leave");
+			assertTrue(z.getCustomName() == null && !Theft.hasStolen(z), "Aborted coop battle mob must have no crown or stolen item");
+			z.discard();
+			p1.getInventory().clear();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.waitTicks(2);
+
+		// #10: zombie hit blocked (0 dmg), lava damage passes & aborts battle without penalty
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p.setInvulnerable(false);
+			p.setHealth(p.getMaxHealth());
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			zRef[0] = z;
+			bRef[0] = BattleManager.start(p, z);
+			boolean allowMob = ServerLivingEntityEvents.ALLOW_DAMAGE.invoker().allowDamage(p, w.getDamageSources().mobAttack(z), 4.0f);
+			assertTrue(!allowMob && BattleManager.isBattling(p), "Mob attack during battle must be blocked and battle continue");
+			float hpBefore = p.getHealth();
+			p.damage(w, w.getDamageSources().lava(), 4.0f);
+			assertTrue(p.getHealth() < hpBefore, "Lava damage must pass through during battle");
+			assertTrue(!BattleManager.isBattling(p), "Non-minor environmental damage must abort battle");
+			assertTrue(z.getCustomName() == null && !Theft.hasStolen(z), "Env abort must not grant mob crown or steal items");
+			p.setHealth(p.getMaxHealth());
+			p.extinguish();
+			z.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.waitTicks(2);
+
+		// #10a: block/item/container lock + anchor + /rapbattle leave
+		GameTestSupport.clearActionbarMessages();
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			anchor[0] = p.getX();
+			anchor[1] = p.getZ();
+			p.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.ENDER_PEARL, 1));
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			zRef[0] = z;
+			bRef[0] = BattleManager.start(p, z);
+			BlockPos chestPos = p.getBlockPos().south(1);
+			ActionResult blk = UseBlockCallback.EVENT.invoker().interact(p, w, Hand.MAIN_HAND,
+				new BlockHitResult(Vec3d.ofCenter(chestPos), Direction.UP, chestPos, false));
+			ActionResult itm = UseItemCallback.EVENT.invoker().interact(p, w, Hand.MAIN_HAND);
+			assertTrue(blk == ActionResult.FAIL && itm == ActionResult.FAIL,
+				"UseBlockCallback and UseItemCallback must fail during battle");
+			p.setPos(anchor[0] + 2.0, p.getY(), anchor[1]);
+		});
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			double dx = p.getX() - anchor[0];
+			double dz = p.getZ() - anchor[1];
+			assertTrue(dx * dx + dz * dz <= 0.31 * 0.31, "Anchor must keep player within +-0.3 blocks during battle");
+		});
+		ctx.waitTicks(1);
+		sp.getServer().runCommand("execute as " + sp.getServer().computeOnServer(s -> s.getPlayerManager().getPlayerList().get(0).getName().getString()) + " run rapbattle leave");
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			assertTrue(!BattleManager.isBattling(p), "/rapbattle leave must end the active battle");
+			ActionResult itmAfter = UseItemCallback.EVENT.invoker().interact(p, p.getEntityWorld(), Hand.MAIN_HAND);
+			assertTrue(itmAfter != ActionResult.FAIL, "After /rapbattle leave, item use must no longer be cancelled");
+			p.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
+			GameTestSupport.cleanupBattles(server);
+			RapConfig.get().progression = "soft";
 		});
 	}
 
