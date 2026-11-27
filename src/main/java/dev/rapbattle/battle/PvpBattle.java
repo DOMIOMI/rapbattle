@@ -385,6 +385,14 @@ public final class PvpBattle {
 
 	public void leave(UUID u) {
 		if (finished) return;
+		if (phase == Phase.RESULT) {
+			finish();
+			return;
+		}
+		if (phase == Phase.JUDGING) {
+			resolveNow();
+			return;
+		}
 		String who = names.getOrDefault(u, "?");
 		broadcastChat(Text.translatable("rapbattle.pvp.player_left", who, names.get(other(u))).formatted(Formatting.GRAY));
 		recordStats(other(u));
