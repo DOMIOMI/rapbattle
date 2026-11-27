@@ -1038,17 +1038,14 @@ public final class Review2Scenario {
 				ZombieEntity zTrophy = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
 				Opponent rank5Opp = new Opponent(zTrophy, dev.rapbattle.battle.MobProfiles.of(EntityType.ZOMBIE), Rank.NETHERITE, "ТестМоб", "neutral", java.util.List.of());
 				Trophies.give(p1, rank5Opp, "ru");
-				Trophies.give(p1, rank5Opp, "en");
 				var ruStack = p1.getInventory().getStack(0);
-				var enStack = p1.getInventory().getStack(1);
 				var ruLore = ruStack.get(net.minecraft.component.DataComponentTypes.LORE);
-				var enLore = enStack.get(net.minecraft.component.DataComponentTypes.LORE);
 				String ruLoreStr = ruLore != null ? ruLore.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
-				String enLoreStr = enLore != null ? enLore.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
 				assertTrue(ruLoreStr.contains("Разгромил") && !ruLoreStr.toLowerCase(java.util.Locale.ROOT).contains("разъеб"),
 					"allowSwearing=false RU trophy lore must use clean variant: " + ruLoreStr);
-				assertTrue(enLoreStr.contains("Crushed") && !enLoreStr.toLowerCase(java.util.Locale.ROOT).contains("fuck"),
-					"allowSwearing=false EN trophy lore must use clean variant: " + enLoreStr);
+				String enCleanLore = dev.rapbattle.Lang.t("en_us", "rapbattle.trophies.lore.crushed.clean", "TestMob", "Zombie");
+				assertTrue(enCleanLore.contains("Crushed") && !enCleanLore.toLowerCase(java.util.Locale.ROOT).contains("fuck"),
+					"allowSwearing=false EN trophy lore must use clean variant: " + enCleanLore);
 
 				zTrophy.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
 				w.spawnEntity(zTrophy);
@@ -1061,13 +1058,11 @@ public final class Review2Scenario {
 				RapConfig.get().allowSwearing = true;
 				p1.getInventory().clear();
 				Trophies.give(p1, rank5Opp, "ru");
-				Trophies.give(p1, rank5Opp, "en");
 				var ruLore2 = p1.getInventory().getStack(0).get(net.minecraft.component.DataComponentTypes.LORE);
-				var enLore2 = p1.getInventory().getStack(1).get(net.minecraft.component.DataComponentTypes.LORE);
 				String ruLoreStr2 = ruLore2 != null ? ruLore2.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
-				String enLoreStr2 = enLore2 != null ? enLore2.lines().stream().map(net.minecraft.text.Text::getString).reduce("", (a, b) -> a + " " + b) : "";
 				assertTrue(ruLoreStr2.contains("Разъебал"), "allowSwearing=true RU trophy lore must use uncensored variant");
-				assertTrue(enLoreStr2.contains("Fucked up"), "allowSwearing=true EN trophy lore must use uncensored variant");
+				String enRawLore = dev.rapbattle.Lang.t("en_us", "rapbattle.trophies.lore.crushed", "TestMob", "Zombie");
+				assertTrue(enRawLore.contains("Fucked up"), "allowSwearing=true EN trophy lore must use uncensored variant");
 				p1.getInventory().clear();
 			} finally {
 				RapConfig.get().allowSwearing = prevSwear;
