@@ -24,10 +24,14 @@ public abstract class MobEntityTargetMixin {
 		if (!BattleManager.isModForcedTarget()) {
 			java.util.UUID targetId = target instanceof PlayerEntity p ? p.getUuid() : null;
 			if (target != null && Crowd.inTruce(self, targetId)) {
+				if (self instanceof Angerable ang) ang.stopAnger();
+				if (self.getTarget() != null) BattleManager.forceMobTarget(self, null);
 				ci.cancel();
 				return;
 			}
 			if (target instanceof PlayerEntity p && Reputation.respects(self, p)) {
+				if (self instanceof Angerable ang) ang.stopAnger();
+				if (self.getTarget() != null) BattleManager.forceMobTarget(self, null);
 				ci.cancel();
 				return;
 			}
