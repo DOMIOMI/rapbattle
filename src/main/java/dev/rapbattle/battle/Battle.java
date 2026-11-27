@@ -927,6 +927,8 @@ public class Battle {
 	 * Nobody near the stage goes for the battlers until the battle is over: a zombie that walks up (or a villager the
 	 * crowd turned into a zombie villager) drops its target instead of swinging at someone who is busy rapping.
 	 */
+	private int peaceTick = 0;
+
 	private void keepThePeace() {
 		var box = mob.getBoundingBox().expand(24, 8, 24);
 		for (MobEntity m : world.getEntitiesByClass(MobEntity.class, box, m -> m.getTarget() instanceof ServerPlayerEntity)) {
@@ -956,7 +958,7 @@ public class Battle {
 		if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
 			DragonBattle.holdHover(dragon);
 		}
-		keepThePeace();
+		if ((peaceTick++ % 5) == 0) keepThePeace();
 		for (UUID u : new ArrayList<>(players)) {
 			if (leftPlayers.contains(u)) continue;
 			ServerPlayerEntity p = player(u);
@@ -2134,58 +2136,9 @@ public class Battle {
 					if (pl != null) pl.sendMessage(Text.translatable("rapbattle.act4.warden_quiet").formatted(Formatting.DARK_AQUA), false);
 				}
 			}
-			if (bonuses && opp.profile().id().equals("enderman") && !overdressed) {
-				int pearls = Acts.enderPearls(result.knockout, rnd);
-				if (effectiveDailyScale < 1.0) pearls = pearls / 2;
-				if (pearls > 0) {
-					var pearlDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
-						new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENDER_PEARL, pearls));
-					pearlDrop.setToDefaultPickupDelay();
-					world.spawnEntity(pearlDrop);
-				}
-			}
-			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon) {
-				if (!bestLine.isEmpty()) {
-					Stats.of(world.getServer()).recordLegend(mvpPlayer != null ? mvpPlayer.getName().getString() : "", bestLine);
-				}
-				ServerPlayerEntity dragonKiller = killer;
-				if (dragonKiller == null) {
-					for (UUID u : players) {
-						ServerPlayerEntity pl = player(u);
-						if (pl != null && pl.isAlive()) { dragonKiller = pl; break; }
-					}
-				}
-				DamageSource src = dragonKiller != null
-					? world.getDamageSources().playerAttack(dragonKiller)
-					: world.getDamageSources().badRespawnPoint(pos);
-				dragon.damagePart(world, dragon.head, src, dragon.getMaxHealth() * 100f);
-				ExperienceOrbEntity.spawn(world, pos, xp * Math.max(1, players.size()));
-				return;
-			}
 			int margin = respectTeam - respectMob;
 			// A knockout, boss, or >= 25% margin finishes the mob; a close win hurts it and sends it packing.
 			boolean lethal = Scoring.isLethalWin(result.playersWin, result.knockout, respectTeam, respectMob, boss);
-			if (bonuses && opp.profile().id().equals("blaze") && !overdressed) {
-				int extraRods = Acts.blazeExtraRods(lethal, rnd);
-				if (effectiveDailyScale < 1.0) extraRods = extraRods / 2;
-				if (extraRods > 0) {
-					var rodDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
-						new net.minecraft.item.ItemStack(net.minecraft.item.Items.BLAZE_ROD, extraRods));
-					rodDrop.setToDefaultPickupDelay();
-					world.spawnEntity(rodDrop);
-				}
-			}
-			if (bonuses && opp.profile().id().equals("wither_skeleton") && !overdressed) {
-				double skullChance = Acts.witherSkullChance(result.knockout, margin);
-				if (effectiveDailyScale < 1.0) skullChance /= 3.0;
-				if (skullChance > 0 && rnd.nextDouble() < skullChance) {
-					var skullDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
-						new net.minecraft.item.ItemStack(net.minecraft.item.Items.WITHER_SKELETON_SKULL));
-					skullDrop.setToDefaultPickupDelay();
-					world.spawnEntity(skullDrop);
-					broadcastChat(Text.translatable("rapbattle.act3.wither_skull", opp.name()).formatted(Formatting.GOLD));
-				}
-			}
 			if (raid != null) {
 				Vec3d awayFrom = killer != null ? new Vec3d(killer.getX(), killer.getY(), killer.getZ()) : pos;
 				RaidBattle.onWin(world, raid, players, lethal, pos, awayFrom, mob, rnd);
@@ -2218,13 +2171,48 @@ public class Battle {
 			boolean nightHunt = Acts.isNightHuntDoubleLoot(rank, isNight, mobTeam.size(), overdressed);
 			boolean raged = SoreLosers.tryRage(opp, MobRecord.of(mob), margin, killer, rnd, lang);
 			// The battle is already marked finished, so the damage guard no longer protects the mob team.
+			Set<UUID> doubledDrops = new HashSet<>();
 			for (MobEntity m : new ArrayList<>(mobTeam)) {
 				if (raged && m == mob) continue;
 				DamageSource src = killer != null ? world.getDamageSources().playerAttack(killer) : world.getDamageSources().generic();
 				Vec3d at = new Vec3d(m.getX(), m.getY(), m.getZ());
 				m.damage(world, src, m.getMaxHealth() * 100f);
 				// Street level and up, or Act 1 Night Hunt (solo mob, ranks 1-2): the loot comes doubled.
-				if (((rank.level() >= 3 && !overdressed && fullBonuses) || (nightHunt && bonuses)) && !m.isAlive()) SoreLosers.doubleFreshDrops(world, at);
+				if (((rank.level() >= 3 && !overdressed && fullBonuses) || (nightHunt && bonuses)) && !m.isAlive()) {
+					SoreLosers.doubleFreshDrops(world, at, doubledDrops);
+				}
+			}
+			// Spawn act bonus drops after mob-kill doubling so they are never duplicated by doubleFreshDrops.
+			if (bonuses && opp.profile().id().equals("enderman") && !overdressed) {
+				int pearls = Acts.enderPearls(result.knockout, rnd);
+				if (effectiveDailyScale < 1.0) pearls = pearls / 2;
+				if (pearls > 0) {
+					var pearlDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.ENDER_PEARL, pearls));
+					pearlDrop.setToDefaultPickupDelay();
+					world.spawnEntity(pearlDrop);
+				}
+			}
+			if (bonuses && opp.profile().id().equals("blaze") && !overdressed) {
+				int extraRods = Acts.blazeExtraRods(lethal, rnd);
+				if (effectiveDailyScale < 1.0) extraRods = extraRods / 2;
+				if (extraRods > 0) {
+					var rodDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.BLAZE_ROD, extraRods));
+					rodDrop.setToDefaultPickupDelay();
+					world.spawnEntity(rodDrop);
+				}
+			}
+			if (bonuses && opp.profile().id().equals("wither_skeleton") && !overdressed) {
+				double skullChance = Acts.witherSkullChance(result.knockout, margin);
+				if (effectiveDailyScale < 1.0) skullChance /= 3.0;
+				if (skullChance > 0 && rnd.nextDouble() < skullChance) {
+					var skullDrop = new net.minecraft.entity.ItemEntity(world, pos.x, pos.y, pos.z,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.WITHER_SKELETON_SKULL));
+					skullDrop.setToDefaultPickupDelay();
+					world.spawnEntity(skullDrop);
+					broadcastChat(Text.translatable("rapbattle.act3.wither_skull", opp.name()).formatted(Formatting.GOLD));
+				}
 			}
 			int finalXp = Acts.applyNightHuntXp(xp, rank, isNight);
 			ExperienceOrbEntity.spawn(world, pos, finalXp * Math.max(1, players.size()));
