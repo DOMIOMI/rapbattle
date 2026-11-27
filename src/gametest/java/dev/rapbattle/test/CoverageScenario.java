@@ -546,7 +546,7 @@ public final class CoverageScenario {
 				w, blaze, new net.minecraft.util.math.Vec3d(0, 0, -1));
 			p.damage(w, w.getDamageSources().fireball(fb, blaze), 5.0f);
 			p.setOnFireFor(5.0f);
-			assertTrue(p.getFireTicks() == 0, "Blaze fireball must not ignite battling player");
+			assertTrue(!p.isOnFire() && p.getFireTicks() <= 0, "Blaze fireball must not ignite battling player (fireTicks=" + p.getFireTicks() + ")");
 			assertTrue(p.getHealth() >= p.getMaxHealth(), "Blaze fireball must deal 0 damage during battle");
 			assertTrue(BattleManager.isBattling(p), "Blaze fireball must not abort battle");
 			blaze.discard();
@@ -580,7 +580,7 @@ public final class CoverageScenario {
 			// Fire under feet (inFire)
 			p.damage(w, w.getDamageSources().inFire(), 2.0f);
 			p.setOnFireFor(5.0f);
-			assertTrue(p.getHealth() >= p.getMaxHealth() && p.getFireTicks() == 0 && BattleManager.isBattling(p),
+			assertTrue(p.getHealth() >= p.getMaxHealth() && !p.isOnFire() && p.getFireTicks() <= 0 && BattleManager.isBattling(p),
 				"inFire must deal 0 damage, not ignite, and not abort battle");
 		});
 		// Simulate >30s underwater air check across ticks
@@ -599,35 +599,42 @@ public final class CoverageScenario {
 			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.WEAKNESS), "Mod loss Weakness must apply");
 			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.NAUSEA), "Mod loss Nausea must apply");
 			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.SPEED), "Mod loss Run! Speed I must apply");
-			assertTrue(p.getFireTicks() == 0, "Player must not burn after battle ends");
+			assertTrue(!p.isOnFire() && p.getFireTicks() <= 0, "Player must not burn after battle ends");
 			p.clearStatusEffects();
 			p.setHealth(p.getMaxHealth());
 
 			// Void (outOfWorld) aborts battle
-			Battle bVoid = BattleManager.start(p, zRef[0]);
+			ZombieEntity zClean = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			zClean.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(zClean);
+			Battle bVoid = BattleManager.start(p, zClean);
+			p.timeUntilRegen = 0;
 			p.damage(w, w.getDamageSources().outOfWorld(), 4.0f);
 			assertTrue(!BattleManager.isBattling(p) && p.getHealth() < p.getMaxHealth(),
 				"Void damage must pass and abort battle");
 			p.setHealth(p.getMaxHealth());
 
 			// Lava aborts battle without penalty
-			Battle bLava = BattleManager.start(p, zRef[0]);
+			Battle bLava = BattleManager.start(p, zClean);
+			p.timeUntilRegen = 0;
 			p.damage(w, w.getDamageSources().lava(), 4.0f);
 			assertTrue(!BattleManager.isBattling(p) && p.getHealth() < p.getMaxHealth(),
 				"Lava damage must pass and abort battle");
-			assertTrue(zRef[0].getCustomName() == null && !Theft.hasStolen(zRef[0]),
+			assertTrue(zClean.getCustomName() == null && !Theft.hasStolen(zClean),
 				"Lava abort must not grant mob crown or steal items");
 			p.setHealth(p.getMaxHealth());
 			p.extinguish();
 
 			// /kill (genericKill / BYPASSES_INVULNERABILITY) passes damage
-			Battle bKill = BattleManager.start(p, zRef[0]);
+			Battle bKill = BattleManager.start(p, zClean);
 			float hpBeforeKill = p.getHealth();
+			p.timeUntilRegen = 0;
 			p.damage(w, w.getDamageSources().genericKill(), 4.0f);
 			assertTrue(p.getHealth() < hpBeforeKill, "/kill (BYPASSES_INVULNERABILITY) must pass during battle");
 
 			p.setHealth(p.getMaxHealth());
 			p.clearStatusEffects();
+			zClean.discard();
 			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
 			GameTestSupport.cleanupBattles(server);
 			RapConfig.get().progression = "soft";

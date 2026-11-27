@@ -18,6 +18,20 @@ public abstract class EntityProtectionMixin {
 		}
 	}
 
+	@Inject(method = "setOnFireForTicks", at = @At("HEAD"), cancellable = true)
+	private void rapbattle$preventSetOnFireForTicks(int ticks, CallbackInfo ci) {
+		if ((Object) this instanceof ServerPlayerEntity sp && ticks > 0 && BattleManager.isBattling(sp)) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "setOnFireFor", at = @At("HEAD"), cancellable = true)
+	private void rapbattle$preventSetOnFireFor(float seconds, CallbackInfo ci) {
+		if ((Object) this instanceof ServerPlayerEntity sp && seconds > 0 && BattleManager.isBattling(sp)) {
+			ci.cancel();
+		}
+	}
+
 	@Inject(method = "setAir", at = @At("HEAD"), cancellable = true)
 	private void rapbattle$keepFullAir(int air, CallbackInfo ci) {
 		if ((Object) this instanceof ServerPlayerEntity sp && air < sp.getMaxAir() && BattleManager.isBattling(sp)) {
