@@ -39,6 +39,7 @@ public final class GuideBookScenario {
 			p.getInventory().clear();
 			GuideBook.giveOnFirstJoin(p, server);
 			GameTestSupport.assertTrue(countGuideBooks(p) == 0, "Re-join must not give a second handbook");
+			dev.rapbattle.Clock.advanceForTest(5_500L);
 		});
 		ctx.runOnClient(c -> ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"guide\"}")));
 		ctx.waitTicks(4);
