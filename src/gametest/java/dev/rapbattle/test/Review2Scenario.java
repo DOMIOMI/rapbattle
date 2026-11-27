@@ -483,39 +483,140 @@ public final class Review2Scenario {
 	}
 
 	private static void testLavaInTimelineVsResult(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		Battle[] mobBattleRef = new Battle[1];
+		ZombieEntity[] mobRef = new ZombieEntity[1];
+		double[] startX = new double[1];
+		int[] baseLosses = new int[1];
 		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			RapConfig.get().dressCode = false;
 			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p1.getEntityWorld();
 			p1.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
 			p1.setInvulnerable(false);
 			p1.setHealth(p1.getMaxHealth());
+			p1.extinguish();
+			Stats stats = Stats.of(server);
+			int losses0 = stats.player(p1.getUuid()).losses;
+			int wins0 = stats.player(p1.getUuid()).wins;
+
+			// 1. TIMELINE (mob + PvP): lava aborts without penalty
+			ZombieEntity z0 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z0.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z0);
+			Battle b0 = BattleManager.start(p1, z0);
+			b0.jumpToForTest(Battle.Phase.TIMELINE, false, false, 50, 50);
+			p1.timeUntilRegen = 0;
+			p1.damage(w, w.getDamageSources().lava(), 2.0f);
+			assertTrue(!BattleManager.isBattling(p1), "Lava in mob TIMELINE must abort battle");
+			assertTrue(stats.player(p1.getUuid()).losses == losses0 && stats.player(p1.getUuid()).wins == wins0,
+				"Lava abort in TIMELINE must not record win/loss");
+			z0.discard();
+			p1.setHealth(p1.getMaxHealth());
+			p1.extinguish();
+
+			// 2. RESULT (mob): lava deals 0 damage, no fire, anchor released (can move 3 blocks away), loss recorded on finish
+			ZombieEntity z1 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z1.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z1);
+			Battle b1 = BattleManager.start(p1, z1);
+			b1.enterResultForTest(false, 20, 80);
+			p1.timeUntilRegen = 0;
+			boolean lavaDmg = p1.damage(w, w.getDamageSources().lava(), 4.0f);
+			assertTrue(!lavaDmg && p1.getHealth() == p1.getMaxHealth() && !p1.isOnFire(),
+				"Lava in RESULT must deal 0 damage and not ignite player");
+			assertTrue(BattleManager.isBattling(p1), "Lava in RESULT must not abort battle");
+			startX[0] = p1.getX();
+			p1.refreshPositionAndAngles(startX[0] + 3.0, p1.getY(), p1.getZ(), p1.getYaw(), p1.getPitch());
+			mobBattleRef[0] = b1;
+			mobRef[0] = z1;
+			baseLosses[0] = losses0;
+		});
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			Stats stats = Stats.of(server);
+			assertTrue(Math.abs(p1.getX() - (startX[0] + 3.0)) < 0.5,
+				"Player in RESULT must be freed from anchor and not pulled back (dx=" + (p1.getX() - startX[0]) + ")");
+			Clock.advanceForTest(12_000L);
+			mobBattleRef[0].tick();
+			assertTrue(!BattleManager.isBattling(p1), "Battle must finish after RESULT duration");
+			assertTrue(stats.player(p1.getUuid()).losses == baseLosses[0] + 1,
+				"Mob battle loss must be recorded after RESULT lava");
+			mobRef[0].discard();
+			GameTestSupport.cleanupBattles(server);
+
+			// 3. JUDGING + void: immediately resolves with current outcome, then void damage passes
+			int totalBefore = stats.player(p1.getUuid()).wins + stats.player(p1.getUuid()).losses;
+			ZombieEntity z2 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z2.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z2);
+			Battle b2 = BattleManager.start(p1, z2);
+			b2.jumpToForTest(Battle.Phase.JUDGING, false, false, 50, 50);
+			p1.timeUntilRegen = 0;
+			boolean voidDmg = p1.damage(w, w.getDamageSources().outOfWorld(), 10.0f);
+			assertTrue(voidDmg && p1.getHealth() < p1.getMaxHealth(),
+				"Void damage in JUDGING must pass through (voidDmg=" + voidDmg + ", hp=" + p1.getHealth()
+					+ ", max=" + p1.getMaxHealth() + ", abs=" + p1.getAbsorptionAmount() + ")");
+			assertTrue(!BattleManager.isBattling(p1), "Void in JUDGING must immediately finish battle");
+			assertTrue(stats.player(p1.getUuid()).wins + stats.player(p1.getUuid()).losses == totalBefore + 1,
+				"Void in JUDGING must record win or loss by current points");
+			z2.discard();
+			p1.setHealth(p1.getMaxHealth());
+			GameTestSupport.cleanupBattles(server);
+
+			// 4. RESULT + /kill: records outcome instead of abortNoPenalty
+			int lossesBeforeKill = stats.player(p1.getUuid()).losses;
+			ZombieEntity z3 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z3.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
+			w.spawnEntity(z3);
+			Battle b3 = BattleManager.start(p1, z3);
+			b3.enterResultForTest(false, 20, 80);
+			p1.onTeleportationDone();
+			p1.timeUntilRegen = 0;
+			boolean killed = p1.damage(w, w.getDamageSources().genericKill(), Float.MAX_VALUE);
+			assertTrue(killed && !BattleManager.isBattling(p1), "/kill in RESULT must finish battle");
+			assertTrue(stats.player(p1.getUuid()).losses == lossesBeforeKill + 1,
+				"/kill in RESULT must record loss (no abortNoPenalty)");
+			z3.discard();
+			GameTestSupport.cleanupBattles(server);
+		});
+		ctx.runOnClient(mc -> {
+			if (mc.player != null) mc.player.requestRespawn();
+		});
+		ctx.waitTicks(65);
+		int[] pvpLossesBefore = new int[1];
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p1.getEntityWorld();
+			p1.setHealth(p1.getMaxHealth());
+			p1.extinguish();
 			ServerPlayerEntity p2 = FakePlayer.get(w, new GameProfile(UUID.randomUUID(), "LavaPvp"));
 			p2.refreshPositionAndAngles(p1.getX() + 4, p1.getY(), p1.getZ(), 90, 0);
 
-			// 1. TIMELINE: lava aborts without penalty
+			// 5. PvP RESULT_LOSS + lava under loser: 0 damage, alive, loss recorded on finish
+			Stats stats = Stats.of(server);
+			pvpLossesBefore[0] = stats.player(p1.getUuid()).losses;
 			PvpBattle.challenge(p1, p2);
 			PvpBattle.answer(p2, PvpBattle.pendingInviteIdForTest(p2.getUuid()), true);
-			PvpBattle pb1 = PvpBattle.byPlayer(p1.getUuid());
-			pb1.setTestPeerForTest(p2);
-			pb1.jumpToForTest("TIMELINE");
+			PvpBattle pb = PvpBattle.byPlayer(p1.getUuid());
+			pb.setTestPeerForTest(p2);
+			pb.jumpToForTest("RESULT_LOSS");
 			p1.timeUntilRegen = 0;
-			p1.damage(w, w.getDamageSources().lava(), 2.0f);
-			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == null, "Lava in PvP TIMELINE must abort battle");
-
-			// 2. RESULT: lava passes damage, battle stays active to finish normally
-			p1.setHealth(p1.getMaxHealth());
-			p1.extinguish();
-			PvpBattle.challenge(p1, p2);
-			PvpBattle.answer(p2, PvpBattle.pendingInviteIdForTest(p2.getUuid()), true);
-			PvpBattle pb2 = PvpBattle.byPlayer(p1.getUuid());
-			pb2.setTestPeerForTest(p2);
-			pb2.jumpToForTest("RESULT");
-			p1.timeUntilRegen = 0;
-			p1.damage(w, w.getDamageSources().lava(), 2.0f);
-			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == pb2, "Lava in PvP RESULT must NOT abort battle");
-			pb2.forceEndForTest();
-			p1.setHealth(p1.getMaxHealth());
-			p1.extinguish();
+			boolean pvpLava = p1.damage(w, w.getDamageSources().lava(), 4.0f);
+			assertTrue(!pvpLava && p1.isAlive() && p1.getHealth() == p1.getMaxHealth() && !p1.isOnFire(),
+				"Lava under loser in PvP RESULT must deal 0 damage and keep player alive");
+			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == pb, "Lava in PvP RESULT must not abort battle");
+			Clock.advanceForTest(13_000L);
+		});
+		ctx.waitTicks(2);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p1 = server.getPlayerManager().getPlayerList().get(0);
+			Stats stats = Stats.of(server);
+			assertTrue(PvpBattle.byPlayer(p1.getUuid()) == null, "PvP battle must finish after RESULT duration");
+			assertTrue(stats.player(p1.getUuid()).losses == pvpLossesBefore[0] + 1,
+				"PvP loss must be recorded after RESULT lava");
 			GameTestSupport.cleanupBattles(server);
 		});
 	}
