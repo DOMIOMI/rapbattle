@@ -101,6 +101,40 @@ public final class ProgressionRules {
 		return count;
 	}
 
+	/** Counts distinct species with at least 1 win at the exact battle {@code rank} (keys formatted as {@code "species:rank"}). */
+	public static int countRankedSpeciesWinsAtExactRank(Map<String, Integer> rankedWins, int rank) {
+		if (rankedWins == null || rankedWins.isEmpty()) return 0;
+		java.util.Set<String> species = new java.util.HashSet<>();
+		for (var e : rankedWins.entrySet()) {
+			if (e.getValue() == null || e.getValue() <= 0 || e.getKey() == null) continue;
+			int sep = e.getKey().lastIndexOf(':');
+			if (sep <= 0 || sep >= e.getKey().length() - 1) continue;
+			try {
+				if (Integer.parseInt(e.getKey().substring(sep + 1)) == rank) {
+					species.add(e.getKey().substring(0, sep));
+				}
+			} catch (NumberFormatException ignored) {}
+		}
+		return species.size();
+	}
+
+	/** Counts distinct species with at least 1 win at battle rank {@code >= minRank} (keys formatted as {@code "species:rank"}). */
+	public static int countRankedSpeciesWinsAtLeastRank(Map<String, Integer> rankedWins, int minRank) {
+		if (rankedWins == null || rankedWins.isEmpty()) return 0;
+		java.util.Set<String> species = new java.util.HashSet<>();
+		for (var e : rankedWins.entrySet()) {
+			if (e.getValue() == null || e.getValue() <= 0 || e.getKey() == null) continue;
+			int sep = e.getKey().lastIndexOf(':');
+			if (sep <= 0 || sep >= e.getKey().length() - 1) continue;
+			try {
+				if (Integer.parseInt(e.getKey().substring(sep + 1)) >= minRank) {
+					species.add(e.getKey().substring(0, sep));
+				}
+			} catch (NumberFormatException ignored) {}
+		}
+		return species.size();
+	}
+
 	public static int respectThreshold(int targetRank, boolean ownGangGear) {
 		int base = switch (targetRank) {
 			case 4 -> RANK4_RESPECT;

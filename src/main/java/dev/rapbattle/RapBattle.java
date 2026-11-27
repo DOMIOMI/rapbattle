@@ -19,6 +19,7 @@ public class RapBattle implements ModInitializer {
 		Payloads.register();
 		dev.rapbattle.battle.CrowdSounds.register();
 		dev.rapbattle.battle.Theft.register();
+		dev.rapbattle.battle.StarterGear.register();
 		BattleManager.register();
 	}
 }

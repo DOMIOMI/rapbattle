@@ -239,7 +239,7 @@ public final class Reputation {
 		}
 		CredState st = CRED.get(p.getUuid());
 		if (st == null || now >= st.until()) return false;
-		int mobRank = MobProfiles.of(m.getType()).baseRank();
+		int mobRank = Opponent.levelWithArmor(m);
 		return mobRank <= st.level();
 	}
 

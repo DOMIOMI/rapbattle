@@ -39,6 +39,7 @@ public class Stats extends PersistentState {
 		public boolean hinted500, hinted1500, guideGiven, dragonWon;
 		public long dailyDay;
 		public Map<String, Integer> speciesWins = new HashMap<>();
+		public Map<String, Integer> rankedSpeciesWins = new HashMap<>();
 		public Map<String, Integer> dailySpeciesWins = new HashMap<>();
 		public List<String> titles = new ArrayList<>();
 
@@ -56,24 +57,47 @@ public class Stats extends PersistentState {
 			Codec.BOOL.optionalFieldOf("hinted1500", false).forGetter(p -> p.hinted1500),
 			Codec.BOOL.optionalFieldOf("guideGiven", false).forGetter(p -> p.guideGiven),
 			Codec.BOOL.optionalFieldOf("dragonWon", false).forGetter(p -> p.dragonWon),
-			Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("species", Map.of()).forGetter(p -> p.speciesWins),
+			Codec.mapPair(
+				Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("species", Map.of()),
+				Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("rankedSpecies", Map.of())
+			).forGetter(p -> com.mojang.datafixers.util.Pair.of(p.speciesWins, p.rankedSpeciesWins)),
 			Codec.STRING.listOf().optionalFieldOf("titles", List.of()).forGetter(p -> p.titles),
 			Codec.mapPair(
 				Codec.LONG.optionalFieldOf("dailyDay", 0L),
 				Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("dailySpeciesWins", Map.of())
 			).forGetter(p -> com.mojang.datafixers.util.Pair.of(p.dailyDay, p.dailySpeciesWins))
-		).apply(i, (w, l, s, bs, m, b, r, c, st, h500, h1500, gg, dw, sp, t, daily) -> {
+		).apply(i, (w, l, s, bs, m, b, r, c, st, h500, h1500, gg, dw, spPair, t, daily) -> {
 			Player p = new Player();
 			p.wins = w; p.losses = l; p.streak = s; p.bestStreak = bs; p.mvp = m; p.best = b; p.respect = r; p.chickened = c;
 			McStyle ms = McStyle.of(st);
 			p.style = ms.isUnlocked(r) ? ms.id : McStyle.PUNCHER.id;
 			p.hinted500 = h500; p.hinted1500 = h1500; p.guideGiven = gg; p.dragonWon = dw;
-			p.speciesWins = new HashMap<>(sp);
+			p.speciesWins = new HashMap<>(spPair.getFirst());
 			p.titles = new ArrayList<>(t);
 			p.dailyDay = daily.getFirst();
 			p.dailySpeciesWins = new HashMap<>(daily.getSecond());
+			p.rankedSpeciesWins = new HashMap<>(spPair.getSecond());
+			if (p.rankedSpeciesWins.isEmpty() && !p.speciesWins.isEmpty()) {
+				for (var e : p.speciesWins.entrySet()) {
+					if (e.getValue() != null && e.getValue() > 0) {
+						p.rankedSpeciesWins.put(e.getKey() + ":" + MobProfiles.baseRankOf(e.getKey()), e.getValue());
+					}
+				}
+			}
 			return p;
 		}));
+
+		/** Returns ranked wins map, falling back to legacy {@link #speciesWins} if not yet migrated. */
+		public Map<String, Integer> effectiveRankedSpeciesWins() {
+			if (!rankedSpeciesWins.isEmpty() || speciesWins.isEmpty()) return rankedSpeciesWins;
+			Map<String, Integer> migrated = new HashMap<>();
+			for (var e : speciesWins.entrySet()) {
+				if (e.getValue() != null && e.getValue() > 0) {
+					migrated.put(e.getKey() + ":" + MobProfiles.baseRankOf(e.getKey()), e.getValue());
+				}
+			}
+			return migrated;
+		}
 
 		public int dailyWinsFor(String speciesId, long day) {
 			if (dailyDay != day) return 0;
@@ -186,6 +210,7 @@ public class Stats extends PersistentState {
 				p.bestStreak = Math.max(p.bestStreak, p.streak);
 				if (gateEligible) {
 					p.speciesWins.merge(sp, 1, Integer::sum);
+					p.rankedSpeciesWins.merge(sp + ":" + oppRank, 1, Integer::sum);
 					boolean contributed = sc != null ? sc > 0 : u.equals(initiator);
 					if (overworldDay >= 0 && contributed) {
 						p.recordDailyWin(sp, overworldDay);

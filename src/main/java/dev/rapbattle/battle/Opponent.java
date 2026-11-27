@@ -46,6 +46,10 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 		}
 
 		int r = p.baseRank();
+		if ("spider".equals(p.id())) {
+			List<String> moods = ru ? MOODS : MOODS_EN;
+			return new Opponent(mob, p, Rank.LEATHER, name, moods.get(rnd.nextInt(moods.size())), tags);
+		}
 		// Slimes and magma cubes rank by size.
 		if (mob instanceof SlimeEntity slime) {
 			int size = slime.getSize();
@@ -73,11 +77,11 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 		World w = mob.getEntityWorld();
 		Difficulty d = w.getDifficulty();
 		if (d == Difficulty.PEACEFUL) r--;
-		if (d == Difficulty.HARD) {
+		if (d == Difficulty.HARD && p.baseRank() > 1) {
 			r++;
 			tags.add(ru ? "ХАРД" : "HARD");
 		}
-		if (mob.getType().isIn(net.minecraft.registry.tag.EntityTypeTags.UNDEAD)) {
+		if (mob.getType().isIn(net.minecraft.registry.tag.EntityTypeTags.UNDEAD) && p.baseRank() > 1) {
 			if (isNight(w)) {
 				r++;
 				tags.add(ru ? "НОЧЬ" : "NIGHT");
@@ -171,6 +175,25 @@ public record Opponent(MobEntity mob, MobProfiles.Profile profile, Rank rank, St
 	@Deprecated
 	public static String nameOf(MobEntity mob, MobProfiles.Profile p, Random rnd) {
 		return nameOf(mob, p, rnd, Lang.RU);
+	}
+
+	/** Side-effect-free effective rank level (base rank + equipped armor / boss / slime size). */
+	public static int levelWithArmor(MobEntity mob) {
+		if (mob == null) return 1;
+		if (isBoss(mob)) return Rank.NETHERITE.level();
+		MobProfiles.Profile p = MobProfiles.of(mob.getType());
+		if ("spider".equals(p.id())) return 1;
+		int r = p.baseRank();
+		if (mob instanceof SlimeEntity slime) {
+			int size = slime.getSize();
+			r = size >= 4 ? 3 : size >= 2 ? 2 : 1;
+			if (mob instanceof MagmaCubeEntity) r++;
+		}
+		int armour = 0;
+		for (EquipmentSlot s : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+			armour = Math.max(armour, Outfit.material(mob.getEquippedStack(s)));
+		}
+		return Math.max(1, Math.min(5, Math.max(r, armour)));
 	}
 
 	/** Night by the clock (World#isNight lags behind /time set on the server). */

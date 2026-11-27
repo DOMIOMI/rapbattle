@@ -18,7 +18,7 @@ public final class Progression {
 
 	public record EffectiveRanks(Rank battleRank, Rank gateRank, boolean gangRival, boolean canBribe, Raid raid) {}
 
-	public record StartCheck(boolean allowed, boolean dressAllowed, ProgressionRules.GateCheck gate,
+	public record StartCheck(boolean allowed, boolean micAllowed, boolean dressAllowed, ProgressionRules.GateCheck gate,
 							 EffectiveRanks ranks, Opponent opp, Outfit.Score score) {}
 
 	public static boolean isBribable(String mobId) {
@@ -51,9 +51,10 @@ public final class Progression {
 		ProgressionRules.Mode mode = RapConfig.get().progressionMode();
 		if (mode == ProgressionRules.Mode.OFF) return ProgressionRules.GateCheck.OK;
 		Stats.Player st = Stats.of(p.getEntityWorld().getServer()).player(p.getUuid());
+		var ranked = st.effectiveRankedSpeciesWins();
 		if (gateRank.isBoss() || o.rank().isBoss()) {
-			int rank4Plus = ProgressionRules.countSpeciesWinsAtLeastRank(st.speciesWins, 4, MobProfiles::baseRankOf);
-			int rank5Plus = ProgressionRules.countSpeciesWinsAtLeastRank(st.speciesWins, 5, MobProfiles::baseRankOf);
+			int rank4Plus = ProgressionRules.countRankedSpeciesWinsAtLeastRank(ranked, 4);
+			int rank5Plus = ProgressionRules.countRankedSpeciesWinsAtLeastRank(ranked, 5);
 			return ProgressionRules.checkBossGate(
 				mode,
 				o.profile().id(),
@@ -68,7 +69,7 @@ public final class Progression {
 		}
 		int prevRank = gateRank.level() - 1;
 		int prevWins = prevRank >= 1
-			? ProgressionRules.countSpeciesWinsAtExactRank(st.speciesWins, prevRank, MobProfiles::baseRankOf)
+			? ProgressionRules.countRankedSpeciesWinsAtExactRank(ranked, prevRank)
 			: 0;
 		boolean ownGang = Gangs.isOwn(p, o.profile());
 		return ProgressionRules.checkRankGate(mode, gateRank.level(), false, st.respect, prevWins, ownGang);
@@ -81,10 +82,11 @@ public final class Progression {
 		Opponent o = Opponent.of(mob, rnd, p, lang);
 		EffectiveRanks ranks = computeRanks(p, mob, o);
 		Outfit.Score score = Outfit.of(p, lang);
+		boolean micAllowed = Trophies.hasAnyMic(p);
 		boolean dressAllowed = !checkDressCode || !RapConfig.get().dressCode
 			|| score.level() >= Outfit.required(ranks.gateRank()) || Gangs.isOwn(p, o.profile());
 		ProgressionRules.GateCheck gate = check(p, mob, o, ranks.gateRank(), precomputedCrystals);
-		return new StartCheck(dressAllowed && gate.allowed(), dressAllowed, gate, ranks, o, score);
+		return new StartCheck(micAllowed && dressAllowed && gate.allowed(), micAllowed, dressAllowed, gate, ranks, o, score);
 	}
 
 	/** Whether an automatic callout (bastion brute, raid captain, champion, rematch) may trigger for {@code p}. */
@@ -101,9 +103,10 @@ public final class Progression {
 			return Lang.t(lang, "rapbattle.progression.style_summary_off");
 		}
 		Stats.Player st = Stats.of(p.getEntityWorld().getServer()).player(p.getUuid());
-		int r3Wins = ProgressionRules.countSpeciesWinsAtExactRank(st.speciesWins, 3, MobProfiles::baseRankOf);
-		int r4Wins = ProgressionRules.countSpeciesWinsAtExactRank(st.speciesWins, 4, MobProfiles::baseRankOf);
-		int r5PlusWins = ProgressionRules.countSpeciesWinsAtLeastRank(st.speciesWins, 5, MobProfiles::baseRankOf);
+		var ranked = st.effectiveRankedSpeciesWins();
+		int r3Wins = ProgressionRules.countRankedSpeciesWinsAtExactRank(ranked, 3);
+		int r4Wins = ProgressionRules.countRankedSpeciesWinsAtExactRank(ranked, 4);
+		int r5PlusWins = ProgressionRules.countRankedSpeciesWinsAtLeastRank(ranked, 5);
 
 		String r4 = (st.respect >= ProgressionRules.RANK4_RESPECT || r3Wins >= ProgressionRules.SPECIES_NEEDED)
 			? Lang.t(lang, "rapbattle.progression.rank_open", 4)

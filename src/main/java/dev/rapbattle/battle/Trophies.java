@@ -51,12 +51,10 @@ public final class Trophies {
 		}
 	}
 
-	/** Returns the perk of the trophy microphone held in the player's off-hand, or null if none. */
-	public static TrophyPerk equippedPerk(ServerPlayerEntity player) {
-		if (player == null) return null;
-		ItemStack off = player.getOffHandStack();
-		if (off.isEmpty()) return null;
-		NbtComponent custom = off.get(DataComponentTypes.CUSTOM_DATA);
+	/** Returns the perk of the given microphone stack, or null if it is not a microphone. */
+	public static TrophyPerk perkOf(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return null;
+		NbtComponent custom = stack.get(DataComponentTypes.CUSTOM_DATA);
 		if (custom != null) {
 			NbtCompound nbt = custom.copyNbt();
 			if (nbt.contains(NBT_KEY)) {
@@ -64,16 +62,28 @@ public final class Trophies {
 			}
 		}
 		// Fallback for trophy mics crafted before Part 4 (glinted end_rod / lightning_rod).
-		if ((off.isOf(Items.END_ROD) || off.isOf(Items.LIGHTNING_ROD))
-			&& Boolean.TRUE.equals(off.get(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE))) {
+		if ((stack.isOf(Items.END_ROD) || stack.isOf(Items.LIGHTNING_ROD))
+			&& Boolean.TRUE.equals(stack.get(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE))) {
 			return TrophyPerk.DEFAULT;
 		}
 		return null;
 	}
 
-	/** Returns true if the player holds any microphone (including homemade) in the off-hand. */
+	/** Returns the perk of the trophy microphone held in the player's off-hand, or null if none. */
+	public static TrophyPerk equippedPerk(ServerPlayerEntity player) {
+		if (player == null) return null;
+		return perkOf(player.getOffHandStack());
+	}
+
+	/** Returns true if the player has any microphone (including homemade) in the off-hand or inventory. */
 	public static boolean hasAnyMic(ServerPlayerEntity player) {
-		return equippedPerk(player) != null;
+		if (player == null) return false;
+		if (perkOf(player.getOffHandStack()) != null) return true;
+		var inv = player.getInventory();
+		for (int i = 0; i < inv.size(); i++) {
+			if (perkOf(inv.getStack(i)) != null) return true;
+		}
+		return false;
 	}
 
 	/** Returns true if the player holds a non-homemade trophy microphone in the off-hand. */
