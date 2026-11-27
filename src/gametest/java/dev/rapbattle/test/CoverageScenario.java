@@ -21,6 +21,7 @@ import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.mob.BlazeEntity;
 import net.minecraft.entity.mob.EndermanEntity;
 import net.minecraft.entity.mob.SkeletonEntity;
+import net.minecraft.entity.mob.WitchEntity;
 import net.minecraft.entity.mob.ZombieEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.passive.VillagerEntity;
@@ -54,6 +55,7 @@ public final class CoverageScenario {
 		testSoreLosersTryRageAndGolemTickAndTwoOnOne(ctx, sp);
 		testEndermanGazeAndStyleUnlockHints(ctx, sp);
 		testReview622SecurityAndLifecycle(ctx, sp);
+		testBattleProtection623(ctx, sp);
 		testClipRecorder(ctx);
 		GameTestSupport.assertNoRawKeys("coverage");
 	}
@@ -495,6 +497,137 @@ public final class CoverageScenario {
 			ActionResult itmAfter = UseItemCallback.EVENT.invoker().interact(p, p.getEntityWorld(), Hand.MAIN_HAND);
 			assertTrue(itmAfter != ActionResult.FAIL, "After /rapbattle leave, item use must no longer be cancelled");
 			p.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
+			GameTestSupport.cleanupBattles(server);
+			RapConfig.get().progression = "soft";
+		});
+	}
+
+	/** 6.23: Blaze fireball, Elder Guardian underwater air & Mining Fatigue, Witch potions, Warden Darkness, mod loss effects, pre-battle effects, inFire, lava, void, /kill bypass. */
+	private static void testBattleProtection623(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		Battle[] bRef = new Battle[1];
+		ZombieEntity[] zRef = new ZombieEntity[1];
+		BlockPos[] waterPosRef = new BlockPos[2];
+
+		sp.getServer().runOnServer(server -> {
+			RapConfig.get().progression = "off";
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			p.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+			p.setInvulnerable(false);
+			p.setHealth(p.getMaxHealth());
+			p.clearStatusEffects();
+
+			// Pre-battle beneficial + harmful effects
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.STRENGTH, 400, 0));
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.SLOWNESS, 80, 0));
+
+			// Submerge player in water to test underwater air + Elder Guardian
+			BlockPos feet = p.getBlockPos();
+			BlockPos head = feet.up();
+			waterPosRef[0] = feet;
+			waterPosRef[1] = head;
+			w.setBlockState(feet, Blocks.WATER.getDefaultState());
+			w.setBlockState(head, Blocks.WATER.getDefaultState());
+
+			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
+			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			w.spawnEntity(z);
+			zRef[0] = z;
+			bRef[0] = BattleManager.start(p, z);
+
+			// Blaze fireball + setOnFireFor
+			BlazeEntity blaze = EntityType.BLAZE.create(w, SpawnReason.COMMAND);
+			blaze.refreshPositionAndAngles(p.getX() + 3, p.getY(), p.getZ() + 3, 180, 0);
+			w.spawnEntity(blaze);
+			net.minecraft.entity.projectile.SmallFireballEntity fb = new net.minecraft.entity.projectile.SmallFireballEntity(
+				w, blaze, new net.minecraft.util.math.Vec3d(0, 0, -1));
+			p.damage(w, w.getDamageSources().fireball(fb, blaze), 5.0f);
+			p.setOnFireFor(5.0f);
+			assertTrue(p.getFireTicks() == 0, "Blaze fireball must not ignite battling player");
+			assertTrue(p.getHealth() >= p.getMaxHealth(), "Blaze fireball must deal 0 damage during battle");
+			assertTrue(BattleManager.isBattling(p), "Blaze fireball must not abort battle");
+			blaze.discard();
+
+			// Elder Guardian Mining Fatigue, Witch harm+poison, Warden Darkness, mob trying to extend pre-battle Slowness
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.MINING_FATIGUE, 6000, 2));
+			assertTrue(!p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.MINING_FATIGUE),
+				"Elder Guardian Mining Fatigue must be blocked during battle");
+
+			WitchEntity witch = EntityType.WITCH.create(w, SpawnReason.COMMAND);
+			witch.refreshPositionAndAngles(p.getX() - 3, p.getY(), p.getZ() + 3, 180, 0);
+			w.spawnEntity(witch);
+			p.damage(w, w.getDamageSources().indirectMagic(witch, witch), 6.0f);
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.POISON, 200, 0));
+			assertTrue(!p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.POISON), "Witch Poison must be blocked");
+			assertTrue(p.getHealth() >= p.getMaxHealth(), "Witch Harming potion must deal 0 damage");
+			witch.discard();
+
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.DARKNESS, 200, 0));
+			assertTrue(!p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.DARKNESS), "Warden Darkness must be blocked");
+
+			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+				net.minecraft.entity.effect.StatusEffects.SLOWNESS, 500, 0));
+			var slow = p.getStatusEffect(net.minecraft.entity.effect.StatusEffects.SLOWNESS);
+			assertTrue(slow != null && slow.getDuration() <= 80, "Pre-battle Slowness stays but must not be extended");
+			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.STRENGTH), "Pre-battle Strength must remain");
+
+			// Fire under feet (inFire)
+			p.damage(w, w.getDamageSources().inFire(), 2.0f);
+			p.setOnFireFor(5.0f);
+			assertTrue(p.getHealth() >= p.getMaxHealth() && p.getFireTicks() == 0 && BattleManager.isBattling(p),
+				"inFire must deal 0 damage, not ignite, and not abort battle");
+		});
+		// Simulate >30s underwater air check across ticks
+		ctx.waitTicks(35);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			assertTrue(p.getAir() == p.getMaxAir(), "Underwater air must stay full during battle");
+			assertTrue(p.getHealth() >= p.getMaxHealth(), "Player must not drown during battle");
+			assertTrue(BattleManager.isBattling(p), "Underwater battle must remain active");
+			w.setBlockState(waterPosRef[0], Blocks.AIR.getDefaultState());
+			w.setBlockState(waterPosRef[1], Blocks.AIR.getDefaultState());
+
+			// Mod loss effects (Nausea, Weakness, Run! Speed I) must apply
+			bRef[0].jumpToForTest(Battle.Phase.RESULT, false, true, 10, 90);
+			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.WEAKNESS), "Mod loss Weakness must apply");
+			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.NAUSEA), "Mod loss Nausea must apply");
+			assertTrue(p.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.SPEED), "Mod loss Run! Speed I must apply");
+			assertTrue(p.getFireTicks() == 0, "Player must not burn after battle ends");
+			p.clearStatusEffects();
+			p.setHealth(p.getMaxHealth());
+
+			// Void (outOfWorld) aborts battle
+			Battle bVoid = BattleManager.start(p, zRef[0]);
+			p.damage(w, w.getDamageSources().outOfWorld(), 4.0f);
+			assertTrue(!BattleManager.isBattling(p) && p.getHealth() < p.getMaxHealth(),
+				"Void damage must pass and abort battle");
+			p.setHealth(p.getMaxHealth());
+
+			// Lava aborts battle without penalty
+			Battle bLava = BattleManager.start(p, zRef[0]);
+			p.damage(w, w.getDamageSources().lava(), 4.0f);
+			assertTrue(!BattleManager.isBattling(p) && p.getHealth() < p.getMaxHealth(),
+				"Lava damage must pass and abort battle");
+			assertTrue(zRef[0].getCustomName() == null && !Theft.hasStolen(zRef[0]),
+				"Lava abort must not grant mob crown or steal items");
+			p.setHealth(p.getMaxHealth());
+			p.extinguish();
+
+			// /kill (genericKill / BYPASSES_INVULNERABILITY) passes damage
+			Battle bKill = BattleManager.start(p, zRef[0]);
+			float hpBeforeKill = p.getHealth();
+			p.damage(w, w.getDamageSources().genericKill(), 4.0f);
+			assertTrue(p.getHealth() < hpBeforeKill, "/kill (BYPASSES_INVULNERABILITY) must pass during battle");
+
+			p.setHealth(p.getMaxHealth());
+			p.clearStatusEffects();
 			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
 			GameTestSupport.cleanupBattles(server);
 			RapConfig.get().progression = "soft";
