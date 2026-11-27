@@ -1060,6 +1060,7 @@ public final class Review2Scenario {
 				zTrophy.refreshPositionAndAngles(p1.getX(), p1.getY(), p1.getZ() + 4, 180, 0);
 				w.spawnEntity(zTrophy);
 				Battle bs = BattleManager.start(p1, zTrophy);
+				bs.jumpToForTest(Battle.Phase.TIMELINE);
 				assertTrue(!bs.viewForTest().allowSwearing, "BattleView.allowSwearing must be false when config allowSwearing=false");
 				bs.abort("cleanup");
 				zTrophy.discard();
