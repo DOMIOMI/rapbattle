@@ -140,8 +140,10 @@ public final class Theft {
 
 		refreshMobName(mob, battle.opp.name());
 
-		// Humanoids with an empty main hand can hold it visually with 0% vanilla drop chance
-		if (mob.getMainHandStack().isEmpty()) {
+		// Humanoids (except allay/fox which can drop/spit hand items) with an empty main hand hold it visually with 0% drop chance
+		if (mob.getMainHandStack().isEmpty()
+			&& !(mob instanceof net.minecraft.entity.passive.AllayEntity)
+			&& !(mob instanceof net.minecraft.entity.passive.FoxEntity)) {
 			mob.equipStack(EquipmentSlot.MAINHAND, stolen.copy());
 			mob.setEquipmentDropChance(EquipmentSlot.MAINHAND, 0.0f);
 		}
