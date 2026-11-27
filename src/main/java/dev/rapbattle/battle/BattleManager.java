@@ -53,6 +53,8 @@ public final class BattleManager {
 	private static final List<Stage> RECENT = new ArrayList<>();
 	private static final Map<UUID, Long> MIC_HINT_CD = new HashMap<>();
 	private static final long MIC_HINT_MS = 3_000L;
+	private static final Map<UUID, Long> LEAVE_COOLDOWN = new HashMap<>();
+	private static final long LEAVE_COOLDOWN_MS = 20_000L;
 	private static final Map<UUID, ServerPlayerEntity> TEST_PLAYERS = new HashMap<>();
 	private static final ThreadLocal<Boolean> MOD_FORCED_TARGET = ThreadLocal.withInitial(() -> Boolean.FALSE);
 	private static final ThreadLocal<Boolean> MOD_FORCED_EFFECT = ThreadLocal.withInitial(() -> Boolean.FALSE);
@@ -112,6 +114,14 @@ public final class BattleManager {
 	public static void clearPending(ServerPlayerEntity p) {
 		if (p == null) return;
 		if (PENDING.remove(p.getUuid()) != null) closeChoice(p);
+	}
+
+	static void markLeaveCooldown(UUID u) {
+		if (u != null) LEAVE_COOLDOWN.put(u, dev.rapbattle.Clock.now() + LEAVE_COOLDOWN_MS);
+	}
+
+	public static void clearCooldownsForTest() {
+		LEAVE_COOLDOWN.clear();
 	}
 
 	public static boolean isPlayerResolving(ServerPlayerEntity p) {
@@ -854,6 +864,11 @@ public final class BattleManager {
 							|| isBattling(p) || pending.mob.getEntityWorld() != p.getEntityWorld()
 							|| pending.mob.squaredDistanceTo(p) > 16 * 16) {
 							closeChoice(p);
+							return;
+						}
+						if (dev.rapbattle.Clock.now() < LEAVE_COOLDOWN.getOrDefault(p.getUuid(), 0L)) {
+							closeChoice(p);
+							p.sendMessage(Text.translatable("rapbattle.battle.leave_cooldown").formatted(Formatting.YELLOW), true);
 							return;
 						}
 						STARES.removeIf(s -> s.mob() == pending.mob);

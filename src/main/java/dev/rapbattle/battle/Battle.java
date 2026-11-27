@@ -44,11 +44,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Battle {
 	public enum Phase { LOBBY, PREP, TIMELINE, JUDGING, ROUND_RESULT, RESULT }
 
-	static final ExecutorService POOL = Executors.newFixedThreadPool(8, r -> {
-		Thread t = new Thread(r, "rapbattle-ai");
-		t.setDaemon(true);
-		return t;
-	});
+	static final ExecutorService POOL = new ThreadPoolExecutor(4, 8, 60L, TimeUnit.SECONDS,
+		new LinkedBlockingQueue<>(64), r -> {
+			Thread t = new Thread(r, "rapbattle-ai");
+			t.setDaemon(true);
+			return t;
+		});
 	private static final AtomicInteger IDS = new AtomicInteger(1);
 	private static final long PREP_WAIT_MS = 20000, AUDIO_WAIT_MS = 12000, STT_WAIT_MS = 45000, JUDGE_WAIT_MS = 60000,
 		MIN_JUDGING_MS = 2500, ROUND_RESULT_MS = 7000, RESULT_MS = 11000;
@@ -366,6 +367,7 @@ public class Battle {
 			}
 		}
 		if (players.size() == 1 || (phase == Phase.LOBBY && uuid.equals(players.get(0))) || !anyOnline) {
+			BattleManager.markLeaveCooldown(uuid);
 			abort(Text.translatable("rapbattle.battle.abort_player_left"));
 			return;
 		}
@@ -552,7 +554,10 @@ public class Battle {
 		if (chunk.seq() != expectedSeq) return;
 		audioSeq.put(u, expectedSeq + 1);
 		ByteArrayOutputStream buf = audio.computeIfAbsent(u, k -> new ByteArrayOutputStream());
-		if (buf.size() + chunk.data().length > 8 * 1024 * 1024) return;
+		int maxBytes = view != null
+			? (int) Math.min(4 * 1024 * 1024L, 44L + (view.totalBeats * Math.max(200L, beatMs) + 5000L) * 32L)
+			: 2 * 1024 * 1024;
+		if (buf.size() + chunk.data().length > maxBytes) return;
 		buf.writeBytes(chunk.data());
 		if (chunk.last()) {
 			byte[] wav = buf.toByteArray();
@@ -1832,9 +1837,16 @@ public class Battle {
 		clearGlow();
 	}
 
+	private void cancelFutures() {
+		if (contentFuture != null) contentFuture.cancel(true);
+		if (verdictFuture != null) verdictFuture.cancel(true);
+		for (CompletableFuture<String> f : transcripts.values()) f.cancel(true);
+	}
+
 	public void abort(Text reason) {
 		if (finished) return;
 		finished = true;
+		cancelFutures();
 		releaseMobs();
 		broadcastChat(reason.copy().formatted(Formatting.GRAY));
 		sendEnd();
@@ -2007,6 +2019,7 @@ public class Battle {
 
 	private void finish() {
 		finished = true;
+		cancelFutures();
 		sendEnd();
 		releaseMobs();
 		BattleManager.recent(this);

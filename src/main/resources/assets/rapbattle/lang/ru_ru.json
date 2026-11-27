@@ -335,6 +335,7 @@
   "rapbattle.battle.player_joined": "%s вписывается в баттл!",
   "rapbattle.battle.abort_player_left": "Баттл сорвался: игрок ушёл",
   "rapbattle.battle.not_in_battle": "Ты не в баттле",
+  "rapbattle.battle.leave_cooldown": "Передохни 20 сек. после выхода из баттла!",
   "rapbattle.battle.abort_env": "Баттл прерван — выбирайся!",
   "rapbattle.battle.abort_mob_gone": "Баттл окончен: соперник пропал",
   "rapbattle.battle.crashed": "Баттл сломался, смотри лог сервера",

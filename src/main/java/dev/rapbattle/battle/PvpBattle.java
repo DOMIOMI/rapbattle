@@ -365,7 +365,10 @@ public final class PvpBattle {
 		if (chunk.seq() != expectedSeq) return;
 		audioSeq.put(u, expectedSeq + 1);
 		ByteArrayOutputStream buf = audio.computeIfAbsent(u, k -> new ByteArrayOutputStream());
-		if (buf.size() + chunk.data().length > 8 * 1024 * 1024) return;
+		int maxBytes = view != null
+			? (int) Math.min(4 * 1024 * 1024L, 44L + (view.totalBeats * Math.max(200L, beatMs) + 5000L) * 32L)
+			: 2 * 1024 * 1024;
+		if (buf.size() + chunk.data().length > maxBytes) return;
 		buf.writeBytes(chunk.data());
 		if (!chunk.last()) return;
 		byte[] wav = buf.toByteArray();
@@ -795,6 +798,8 @@ public final class PvpBattle {
 
 	private void end(Text reason) {
 		finished = true;
+		if (pvpVerdictFuture != null) pvpVerdictFuture.cancel(true);
+		for (CompletableFuture<String> f : transcripts.values()) f.cancel(true);
 		for (UUID u : List.of(a, b)) {
 			ServerPlayerEntity p = player(u);
 			if (p == null) continue;
