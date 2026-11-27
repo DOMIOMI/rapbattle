@@ -45,8 +45,20 @@ public final class Payloads {
 		@Override public Id<? extends CustomPayload> getId() { return ID; }
 	}
 
+	/** Server → client: nearby mob level badges (entity ids, packed rank|boss bytes, status bytes). */
+	public record MobBadgesS2C(java.util.List<Integer> entityIds, byte[] ranks, byte[] statuses) implements CustomPayload {
+		public static final Id<MobBadgesS2C> ID = new Id<>(Identifier.of(RapBattle.MOD_ID, "mob_badges"));
+		public static final PacketCodec<RegistryByteBuf, MobBadgesS2C> CODEC = PacketCodec.tuple(
+			PacketCodecs.VAR_INT.collect(PacketCodecs.toList(256)), MobBadgesS2C::entityIds,
+			PacketCodecs.byteArray(256), MobBadgesS2C::ranks,
+			PacketCodecs.byteArray(256), MobBadgesS2C::statuses,
+			MobBadgesS2C::new);
+		@Override public Id<? extends CustomPayload> getId() { return ID; }
+	}
+
 	public static void register() {
 		PayloadTypeRegistry.playS2C().register(StateS2C.ID, StateS2C.CODEC);
+		PayloadTypeRegistry.playS2C().register(MobBadgesS2C.ID, MobBadgesS2C.CODEC);
 		PayloadTypeRegistry.playC2S().register(ActionC2S.ID, ActionC2S.CODEC);
 		PayloadTypeRegistry.playC2S().register(AudioC2S.ID, AudioC2S.CODEC);
 	}

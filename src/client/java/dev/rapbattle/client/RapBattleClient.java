@@ -29,6 +29,7 @@ public class RapBattleClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		ClientConfig.load();
 		StageFx.register();
+		MobBadgeFx.register();
 		SmokeFx.register();
 		PlayerMoves.register();
 		// Settings: /rapbattle (works without Mod Menu).
@@ -77,7 +78,11 @@ public class RapBattleClient implements ClientModInitializer {
 		rap = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.rapbattle.rap", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
 
 		ClientPlayNetworking.registerGlobalReceiver(Payloads.StateS2C.ID, (payload, ctx) -> ClientBattle.onPacket(payload.json()));
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBattle.disconnect());
+		ClientPlayNetworking.registerGlobalReceiver(Payloads.MobBadgesS2C.ID, (payload, ctx) -> ctx.client().execute(() -> MobBadgeFx.onPacket(payload)));
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			ClientBattle.disconnect();
+			MobBadgeFx.clear();
+		});
 
 		ClientTickEvents.START_CLIENT_TICK.register(client -> {
 			if (client.player != null && ClientBattle.view != null && !ClientBattle.view.spectator) {
