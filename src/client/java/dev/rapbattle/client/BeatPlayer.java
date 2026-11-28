@@ -64,11 +64,16 @@ public final class BeatPlayer {
 		}
 		long loopMs = (long) t.bars() * 4 * v.beatMs;
 		long idx = clock / loopMs;
-		if (idx == loop) return;
+		long inLoop = clock - idx * loopMs;
+		if (idx == loop) {
+			keepInSync(inLoop, loopMs, t, v);
+			return;
+		}
 		stop();
 		loop = idx;
-		// Late by more than half a beat (joined mid-loop, lag): wait for the next loop instead of playing out of time.
-		if (clock - idx * loopMs > v.beatMs / 2) return;
+		// 6.32: started late (joined mid-loop, a lag spike) - play anyway; keepInSync seeks it to the clock.
+		// Only the last second of a loop is left silent: a seek that late is not worth it.
+		if (inLoop > loopMs - 1000) return;
 		float vol = v.spectator ? ClientConfig.get().spectatorBeatVolume : ClientConfig.get().beatVolume;
 		if (vol <= 0) return;
 		long t0 = System.nanoTime();
@@ -80,6 +85,48 @@ public final class BeatPlayer {
 			lastWarmupLeadMs = warmedAtMs > 0 ? System.currentTimeMillis() - warmedAtMs : -1;
 			dev.rapbattle.RapBattle.LOG.info("BeatPlayer beat0 track={} clock={}ms playCall={}ms warmupCall={}ms warmupLead={}ms",
 				t.id(), lastBeat0ClockMs, lastBeat0PlayCallMs, lastWarmupCallMs, lastWarmupLeadMs);
+		}
+	}
+
+	private static long lastSyncMs, lastReplayMs;
+	public static volatile int seeks;
+
+	/**
+	 * 6.32: after a lag spike the sound and the battle clock part ways and the old code left a whole loop of
+	 * silence. Every 400 ms compare the OpenAL play position with the clock and seek the source when it is off by
+	 * more than 70 ms; if the sound engine dropped the source, start it again (at most once in 2 s).
+	 */
+	private static void keepInSync(long inLoop, long loopMs, BeatTracks.Track t, BattleView v) {
+		long now = System.currentTimeMillis();
+		if (now - lastSyncMs < 400 || inLoop > loopMs - 600) return;
+		lastSyncMs = now;
+		var sm = MinecraftClient.getInstance().getSoundManager();
+		if (playing == null || !sm.isPlaying(playing)) {
+			float vol = v.spectator ? ClientConfig.get().spectatorBeatVolume : ClientConfig.get().beatVolume;
+			if (vol <= 0 || now - lastReplayMs < 2000) return;
+			lastReplayMs = now;
+			stop();
+			playing = PositionedSoundInstance.ui(SoundEvent.of(Identifier.of("rapbattle", "beat." + t.id())), 1.0f, Math.min(1f, vol));
+			sm.play(playing);
+			return;
+		}
+		try {
+			var system = ((dev.rapbattle.client.mixin.SoundManagerAccessor) sm).rapbattle$soundSystem();
+			var src = ((dev.rapbattle.client.mixin.SoundSystemAccessor) system).rapbattle$sources().get(playing);
+			if (src == null) return;
+			long asked = System.nanoTime();
+			src.run(source -> {
+				int ptr = ((dev.rapbattle.client.mixin.SourceAccessor) source).rapbattle$pointer();
+				if (org.lwjgl.openal.AL10.alGetSourcei(ptr, org.lwjgl.openal.AL10.AL_SOURCE_STATE) != org.lwjgl.openal.AL10.AL_PLAYING) return;
+				float expected = (inLoop + (System.nanoTime() - asked) / 1_000_000L) / 1000f;
+				float actual = org.lwjgl.openal.AL10.alGetSourcef(ptr, org.lwjgl.openal.AL11.AL_SEC_OFFSET);
+				if (Math.abs(actual - expected) > 0.07f) {
+					org.lwjgl.openal.AL10.alSourcef(ptr, org.lwjgl.openal.AL11.AL_SEC_OFFSET, expected);
+					seeks++;
+				}
+			});
+		} catch (RuntimeException ignored) {
+			// The sound engine changed under us (device switch): the next loop starts clean anyway.
 		}
 	}
 

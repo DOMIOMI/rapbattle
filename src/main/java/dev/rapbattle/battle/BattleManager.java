@@ -536,9 +536,9 @@ public final class BattleManager {
 	}
 
 	/** Chose to fight instead of rap: disrespect. Kin nearby jumps in. */
-	private static void disrespect(ServerPlayerEntity p, MobEntity mob) {
+	private static void disrespect(ServerPlayerEntity p, MobEntity mob, boolean chickened) {
 		String lang = Lang.of(p);
-		String title = Stats.of(p.getEntityWorld().getServer()).chickened(p.getUuid(), lang);
+		String title = chickened ? Stats.of(p.getEntityWorld().getServer()).chickened(p.getUuid(), lang) : null;
 		if (title != null) p.sendMessage(Text.translatable("rapbattle.manager.chickened_title", title)
 			.formatted(Formatting.GRAY), false);
 		boolean calm = peaceful(mob);
@@ -617,11 +617,14 @@ public final class BattleManager {
 				REFUSED.remove(sp.getUuid());
 				STARES.removeIf(s -> s.mob() == mob);
 				closeChoice(sp);
+				// 6.32: only a player who could have battled and chose to hit "chickened out"; when the mob itself
+				// refused (armor, mic) the hit is just a fight and does not go into the stats or the dossier.
 				if (pending.mob instanceof net.minecraft.entity.passive.IronGolemEntity ig) {
-					GolemDefender.chickenedOut(sp, ig);
+					if (pending.allowed) GolemDefender.chickenedOut(sp, ig);
+					else forceMobTarget(ig, sp);
 				} else {
 					if (pending.fromApproach) mob.setTarget(sp);
-					disrespect(sp, mob);
+					disrespect(sp, mob, pending.allowed);
 				}
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				Reputation.onPlayerHostileAction(sp, mob);
@@ -637,7 +640,7 @@ public final class BattleManager {
 				REFUSED.remove(sp.getUuid());
 				PENDING.remove(sp.getUuid());
 				closeChoice(sp);
-				disrespect(sp, mob);
+				disrespect(sp, mob, false);
 				if (mob instanceof net.minecraft.entity.passive.VillagerEntity v) GolemDefender.offended(sp, v);
 				Reputation.onPlayerHostileAction(sp, mob);
 				fightAfterBattle(sp, mob);

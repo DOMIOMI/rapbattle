@@ -127,6 +127,14 @@ public final class ActsScenario {
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			ServerWorld w = p.getEntityWorld();
+			// The captain only calls out a player who has a mic: do not rely on one left over from earlier groups.
+			if (!Trophies.hasAnyMic(p)) {
+				ItemStack raidMic = new ItemStack(Items.LIGHTNING_ROD);
+				NbtCompound raidTag = new NbtCompound();
+				raidTag.putString(Trophies.NBT_KEY, "homemade");
+				raidMic.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(raidTag));
+				p.getInventory().insertStack(raidMic);
+			}
 			p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
 				net.minecraft.entity.effect.StatusEffects.RAID_OMEN, 5, 0));
 			if (w.getRaidAt(p.getBlockPos()) == null) {

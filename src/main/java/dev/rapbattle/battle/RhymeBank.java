@@ -95,7 +95,15 @@ public final class RhymeBank {
 
 	/** Picks {@code blocks} groups of 4 words from distinct random groups in the given language. */
 	public static List<List<String>> pickBlocks(int blocks, Random rnd, String lang) {
-		List<List<String>> groups = new ArrayList<>(Lang.isRu(lang) ? GROUPS : GROUPS_EN);
+		return pickBlocks(blocks, rnd, lang, java.util.Set.of());
+	}
+
+	/** Same, but prefers groups with none of the {@code recent} words (falls back to all groups if too few are left). */
+	public static List<List<String>> pickBlocks(int blocks, Random rnd, String lang, java.util.Set<String> recent) {
+		List<List<String>> all = Lang.isRu(lang) ? GROUPS : GROUPS_EN;
+		List<List<String>> groups = new ArrayList<>();
+		for (List<String> g : all) if (!RecentRhymes.repeats(g, recent)) groups.add(g);
+		if (groups.size() < blocks) groups = new ArrayList<>(all);
 		Collections.shuffle(groups, rnd);
 		List<List<String>> out = new ArrayList<>();
 		for (int b = 0; b < blocks; b++) {

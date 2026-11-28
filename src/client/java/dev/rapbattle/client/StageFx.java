@@ -9,6 +9,7 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.util.Identifier;
 import net.minecraft.entity.Entity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.math.Vec3d;
@@ -24,6 +25,36 @@ public final class StageFx {
 	private StageFx() {}
 
 	private static final RenderLayer GLOW = RenderLayers.lightning();
+	/**
+	 * 6.32: shader packs (Iris + Photon and the like) draw the lightning layer their own way and our faint beams
+	 * vanished. With a pack on, the light goes through the beacon-beam layer instead: every pack renders it as glow.
+	 */
+	private static final RenderLayer GLOW_SHADERS = RenderLayers.beaconBeam(Identifier.ofVanilla("textures/entity/beacon_beam.png"), true);
+	/** True while this frame is drawn into {@link #GLOW_SHADERS}: vertices then carry texture, light and normal too. */
+	private static boolean richVertices;
+	private static java.lang.reflect.Method irisInUse;
+	private static Object irisApi;
+	private static boolean irisLooked;
+
+	/** Whether an Iris shader pack is on right now (reflection: Iris is optional). */
+	static boolean shadersOn() {
+		if (!irisLooked) {
+			irisLooked = true;
+			try {
+				Class<?> c = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
+				irisApi = c.getMethod("getInstance").invoke(null);
+				irisInUse = c.getMethod("isShaderPackInUse");
+			} catch (ReflectiveOperationException | LinkageError e) {
+				irisApi = null;
+			}
+		}
+		if (irisApi == null) return false;
+		try {
+			return (Boolean) irisInUse.invoke(irisApi);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			return false;
+		}
+	}
 	/** Alpha-blended (not additive) colour quads: real fog that hides what is behind it instead of glowing. */
 	private static final RenderLayer FOG = RenderLayers.debugQuads();
 	private static final int FOG_RGB = 0xD6D2E2;
@@ -75,7 +106,8 @@ public final class StageFx {
 		Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
 		Matrix4f mat = ctx.matrices().peek().getPositionMatrix();
 		VertexConsumerProvider consumers = ctx.consumers();
-		VertexConsumer vc = consumers.getBuffer(GLOW);
+		richVertices = false;
+		VertexConsumer vc;
 		float cx = (float) (v.stageX - cam.x), cy = (float) (v.stageY - cam.y), cz = (float) (v.stageZ - cam.z);
 		float t = time();
 		float beat = "TIMELINE".equals(v.phase) ? Moves.hit() : 0.3f;
@@ -142,12 +174,17 @@ public final class StageFx {
 			}
 		}
 		if (consumers instanceof VertexConsumerProvider.Immediate imm) imm.draw(FOG);
-		vc = consumers.getBuffer(GLOW);
+		boolean shaders = shadersOn();
+		RenderLayer glow = shaders ? GLOW_SHADERS : GLOW;
+		// Packs darken translucent glow a lot: give the light more body there.
+		float boost = shaders ? 1.8f : 1f;
+		richVertices = shaders;
+		vc = consumers.getBuffer(glow);
 		// The lights catch the haze: a faint glow at the foot of the nearest fog wall, pulsing with the beat.
 		for (int i = 0; i < RING_40.seg; i++) {
 			float x0 = cx + RING_40.cos[i] * r0, z0 = cz + RING_40.sin[i] * r0;
 			float x1 = cx + RING_40.cos[i + 1] * r0, z1 = cz + RING_40.sin[i + 1] * r0;
-			float al = 0.08f + 0.06f * beat;
+			float al = (0.08f + 0.06f * beat) * boost;
 			quad(vc, mat, x0, cy - 0.1f, z0, 0xB8A8FF, al, x1, cy - 0.1f, z1, 0xB8A8FF, al,
 				x1, cy + 2.2f, z1, 0xB8A8FF, 0, x0, cy + 2.2f, z0, 0xB8A8FF, 0);
 		}
@@ -168,11 +205,12 @@ public final class StageFx {
 				tz = cz + (float) Math.cos(t * 0.5 + i * 2.3) * 3f;
 			}
 			int col = BEAM_COLORS[i];
-			float strength = 0.75f + 0.25f * beat;
+			float strength = (0.75f + 0.25f * beat) * boost;
 			beam(vc, mat, sx, sy, sz, tx, ty, tz, col, 0.24f * strength, 0.05f * strength);
 			pool(vc, mat, tx, ty + 0.03f, tz, 1.5f, col, 0.30f * strength);
 		}
-		if (consumers instanceof VertexConsumerProvider.Immediate imm) imm.draw(GLOW);
+		if (consumers instanceof VertexConsumerProvider.Immediate imm) imm.draw(glow);
+		richVertices = false;
 	}
 
 	/** Slow fog density 0.35..1 around the ring: a few drifting sine waves, so it billows instead of pulsing. */
@@ -217,7 +255,10 @@ public final class StageFx {
 	}
 
 	private static void v(VertexConsumer vc, Matrix4f m, float x, float y, float z, int rgb, float a) {
-		vc.vertex(m, x, y, z).color((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, (int) (Math.max(0, Math.min(1, a)) * 255));
+		VertexConsumer c = vc.vertex(m, x, y, z).color((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, (int) (Math.max(0, Math.min(1, a)) * 255));
+		if (richVertices) {
+			c.texture(0.5f, 0.5f).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0f, 1f, 0f);
+		}
 	}
 
 	/** Drifting smoke and dust in the haze, a little every tick. */

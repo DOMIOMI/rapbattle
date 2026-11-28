@@ -571,7 +571,7 @@ public class Battle {
 		audioSeq.put(u, expectedSeq + 1);
 		ByteArrayOutputStream buf = audio.computeIfAbsent(u, k -> new ByteArrayOutputStream());
 		int maxBytes = view != null
-			? (int) Math.min(4 * 1024 * 1024L, 44L + (view.totalBeats * Math.max(200L, beatMs) + 5000L) * 32L)
+			? (int) Math.min(8 * 1024 * 1024L, 44L + (view.totalBeats * Math.max(200L, beatMs) + 5000L) * 32L)
 			: 2 * 1024 * 1024;
 		if (buf.size() + chunk.data().length > maxBytes) return;
 		buf.writeBytes(chunk.data());
@@ -785,6 +785,16 @@ public class Battle {
 		Speech.bubble(mob, lines.get(rnd.nextInt(lines.size())), rv.mobWon() ? 0xFFD27F : 0xFF8080, 3500);
 	}
 
+	/** Asks the model not to hand these players the rhyme words they already had in recent battles. */
+	private String recentRhymesText(List<UUID> active) {
+		java.util.Set<String> recent = RecentRhymes.of(active);
+		if (recent.isEmpty()) return "";
+		String list = String.join(", ", recent);
+		return Lang.isRu(lang)
+			? "Рифмы для игроков дай новые: эти слова у них уже были, не используй их: " + list + "."
+			: "Give the players new rhymes: they already had these words, do not use them: " + list + ".";
+	}
+
 	/** What the mob remembers about these players, for the verse prompt (empty if they never met). */
 	/** Embarrassing facts about each player for a personal roast: battle record, chickening out, deaths in this world. */
 	private String dossierText() {
@@ -797,20 +807,29 @@ public class Battle {
 			Stats.Player st = stats.player(u);
 			int deaths = p.getStatHandler().getStat(net.minecraft.stat.Stats.CUSTOM.getOrCreateStat(net.minecraft.stat.Stats.DEATHS));
 			String nm = names.getOrDefault(u, p.getName().getString());
+			// 6.32: "chickened out" only while it is still the player's story - not once they win more than they ran.
+			boolean coward = chickenedWorthMention(st.chickened, st.wins);
 			if (ru) {
 				sb.append("Досье на ").append(nm).append(": побед в баттлах ").append(st.wins).append(", поражений ").append(st.losses)
-					.append(", текущая серия ").append(st.streak).append(", зассал и полез в драку вместо баттла ").append(st.chickened)
-					.append(" раз, умирал в этом мире ").append(deaths).append(" раз. ");
+					.append(", текущая серия ").append(st.streak);
+				if (coward) sb.append(", зассал и полез в драку вместо баттла ").append(st.chickened).append(" раз");
+				sb.append(", умирал в этом мире ").append(deaths).append(" раз. ");
 			} else {
 				sb.append("Dossier on ").append(nm).append(": battle wins ").append(st.wins).append(", losses ").append(st.losses)
-					.append(", current streak ").append(st.streak).append(", chickened out into a fistfight ").append(st.chickened)
-					.append(" times, died in this world ").append(deaths).append(" times. ");
+					.append(", current streak ").append(st.streak);
+				if (coward) sb.append(", chickened out into a fistfight ").append(st.chickened).append(" times");
+				sb.append(", died in this world ").append(deaths).append(" times. ");
 			}
 		}
 		if (sb.length() == 0) return "";
 		sb.append(ru ? "Вверни 1–2 самых позорных факта из досье, если ложатся в тему; цифры можно округлять."
 			: "Work in 1–2 of the most embarrassing facts if they fit the theme; numbers may be rounded.");
 		return sb.toString();
+	}
+
+	/** The "chickened out" fact goes into the dossier only if it happened at least twice and outweighs the wins. */
+	static boolean chickenedWorthMention(int chickened, int wins) {
+		return chickened >= 2 && chickened > wins;
 	}
 
 	private String rivalryText() {
@@ -999,6 +1018,7 @@ public class Battle {
 			DragonBattle.holdHover(dragon);
 		}
 		if ((peaceTick++ % 5) == 0) keepThePeace();
+		if (peaceTick % 20 == 0) pruneListeners();
 		for (UUID u : new ArrayList<>(players)) {
 			if (leftPlayers.contains(u)) continue;
 			ServerPlayerEntity p = player(u);
@@ -1211,7 +1231,7 @@ public class Battle {
 		for (int i = 0; i < active.size(); i++) groups += (playerLines() + 3) / 4;
 		int groupsNeeded = groups;
 		String prev = history.toString();
-		String rivalry = (rivalryText() + " " + dossierText()).trim();
+		String rivalry = (rivalryText() + " " + dossierText() + " " + recentRhymesText(active)).trim();
 		int r = round;
 		String topicText = topicPromptText();
 		Stats stats = Stats.of(world.getServer());
@@ -1242,9 +1262,17 @@ public class Battle {
 		return (int) Math.floor(sum / Math.max(1, players.size()));
 	}
 
+	/** Lines per player. Bosses read long verses: the Ender Dragon about fifty lines solo, the others two dozen (6.32). */
 	private int playerLines() {
-		return Math.max(1, rank.linesPerPlayer(Math.max(1, activePlayers().size())));
+		int team = Math.max(1, activePlayers().size());
+		if (rank.isBoss()) {
+			int total = mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity ? DRAGON_LINES : BOSS_LINES;
+			return Math.max(rank.linesPerPlayer(team), (total / team + 3) / 4 * 4);
+		}
+		return Math.max(1, rank.linesPerPlayer(team));
 	}
+
+	static final int DRAGON_LINES = 52, BOSS_LINES = 24;
 
 	private void buildTimeline(Llm.Content content, long zero) {
 		beatZero = zero;
@@ -1289,9 +1317,13 @@ public class Battle {
 		int perPlayer = playerLines();
 		int blocks = (perPlayer + 3) / 4;
 		List<List<String>> groups = new ArrayList<>();
-		if (content != null) groups.addAll(content.rhymes());
+		// Rhymes these players already had in recent battles are not handed out again (a rematch gets new words).
+		java.util.Set<String> recent = RecentRhymes.of(active);
+		if (content != null) {
+			for (List<String> rg : content.rhymes()) if (!RecentRhymes.repeats(rg, recent)) groups.add(rg);
+		}
 		Collections.shuffle(groups, rnd);
-		if (groups.size() < blocks * active.size()) groups.addAll(RhymeBank.pickBlocks(blocks * active.size() - groups.size(), rnd, lang));
+		if (groups.size() < blocks * active.size()) groups.addAll(RhymeBank.pickBlocks(blocks * active.size() - groups.size(), rnd, lang, recent));
 		Map<UUID, List<String>> words = new LinkedHashMap<>();
 		int g = 0;
 		for (UUID u : active) {
@@ -1302,6 +1334,7 @@ public class Battle {
 				for (int i = 3; i < sliced.size(); i += 4) sliced.set(i, "");
 			}
 			words.put(u, sliced);
+			RecentRhymes.remember(u, sliced);
 		}
 		rhymeWords.clear();
 		rhymeWords.putAll(words);
@@ -1847,6 +1880,38 @@ public class Battle {
 				send(p, sv);
 			}
 		}
+	}
+
+	private final Set<UUID> endSent = new HashSet<>();
+
+	/**
+	 * Once a second: a bystander who walked out of range, and a player who left the battle, get the "end" packet right
+	 * away. Before 6.32 their client kept playing the last timeline it had (beat, mob voices) until the battle was over.
+	 */
+	private void pruneListeners() {
+		double r = RapConfig.get().spectatorRadius + 8;
+		for (UUID u : new ArrayList<>(spectators)) {
+			ServerPlayerEntity p = player(u);
+			if (p == null || p.getEntityWorld() != world || p.squaredDistanceTo(mob) > r * r) {
+				spectators.remove(u);
+				if (p != null) sendEndTo(p);
+			}
+		}
+		for (UUID u : leftPlayers) {
+			if (endSent.contains(u)) continue;
+			ServerPlayerEntity p = player(u);
+			if (p != null) {
+				sendEndTo(p);
+				endSent.add(u);
+			}
+		}
+	}
+
+	private void sendEndTo(ServerPlayerEntity p) {
+		BattleView end = new BattleView();
+		end.type = "end";
+		end.id = id;
+		send(p, end);
 	}
 
 	private static void send(ServerPlayerEntity p, BattleView v) {

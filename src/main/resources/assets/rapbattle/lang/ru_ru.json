@@ -3,6 +3,7 @@
   "key.rapbattle.accept": "Вписаться / «Погнали»",
   "key.rapbattle.decline": "Отклонить приглашение",
   "key.rapbattle.rap": "Выбрать рэп-баттл",
+  "key.rapbattle.skip": "Пропуск / старт",
   "death.attack.rapbattle.rap_battle": "%1$s был разгромлен %2$s в рэп-баттле",
   "death.attack.rapbattle.rap_battle.player": "%1$s был разгромлен %2$s в рэп-баттле",
   "subtitles.rapbattle.crowd.cheer": "Толпа ликует",

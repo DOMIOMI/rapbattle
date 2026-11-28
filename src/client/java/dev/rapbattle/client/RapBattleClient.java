@@ -17,7 +17,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 
 public class RapBattleClient implements ClientModInitializer {
-	private static KeyBinding accept, decline, rap;
+	private static KeyBinding accept, decline, rap, skip;
 
 	static String rapKeyName() { return keyName(rap, "R"); }
 	static String declineKeyName() { return keyName(decline, "N"); }
@@ -97,6 +97,7 @@ public class RapBattleClient implements ClientModInitializer {
 		accept = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.rapbattle.accept", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Y, category));
 		decline = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.rapbattle.decline", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_N, category));
 		rap = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.rapbattle.rap", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, category));
+		skip = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.rapbattle.skip", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_SPACE, category));
 
 		ClientPlayNetworking.registerGlobalReceiver(Payloads.StateS2C.ID, (payload, ctx) -> ClientBattle.onPacket(payload.json()));
 		ClientPlayNetworking.registerGlobalReceiver(Payloads.MobBadgesS2C.ID, (payload, ctx) -> ctx.client().execute(() -> MobBadgeFx.onPacket(payload)));
@@ -121,8 +122,8 @@ public class RapBattleClient implements ClientModInitializer {
 			while (decline.wasPressed()) ClientBattle.pressDecline();
 			while (rap.wasPressed()) ClientBattle.pressRap();
 			pollTopicKeys(client);
+			fixKeyConflicts(client);
 			pollSkipKey(client);
-			if (Intro.active() && client.options.jumpKey.isPressed()) Intro.skip();
 			// Keeps the beat and the mic going even when the HUD is hidden (F1).
 			ClientBattle.pump();
 		});
@@ -134,16 +135,59 @@ public class RapBattleClient implements ClientModInitializer {
 
 	private static boolean skipDown;
 
-	/** Space (the jump key) as a skip button everywhere in a battle; polled raw because movement keys are frozen there. */
+	/**
+	 * Skip everywhere in a battle: our own "skip" key (Space by default), the jump key wherever it is bound
+	 * (also a mouse button) and plain Space. Polled raw because movement keys are frozen in a battle.
+	 */
 	private static void pollSkipKey(net.minecraft.client.MinecraftClient client) {
-		if (ClientBattle.view == null || client.currentScreen != null) {
+		if (ClientBattle.view == null && !Intro.active() || client.currentScreen != null) {
 			skipDown = false;
 			return;
 		}
-		int code = KeyBindingHelper.getBoundKeyOf(client.options.jumpKey).getCode();
-		boolean down = code >= 0 && net.minecraft.client.util.InputUtil.isKeyPressed(client.getWindow(), code);
-		if (down && !skipDown) ClientBattle.pressSkip();
+		boolean down = isDown(client, KeyBindingHelper.getBoundKeyOf(skip))
+			|| isDown(client, KeyBindingHelper.getBoundKeyOf(client.options.jumpKey))
+			|| net.minecraft.client.util.InputUtil.isKeyPressed(client.getWindow(), GLFW.GLFW_KEY_SPACE);
+		if (down && !skipDown) {
+			if (Intro.active()) Intro.skip();
+			else ClientBattle.pressSkip();
+		}
 		skipDown = down;
+	}
+
+	private static boolean isDown(net.minecraft.client.MinecraftClient client, InputUtil.Key key) {
+		int code = key.getCode();
+		if (code < 0) return false;
+		if (key.getCategory() == InputUtil.Type.MOUSE) {
+			return GLFW.glfwGetMouseButton(client.getWindow().getHandle(), code) == GLFW.GLFW_PRESS;
+		}
+		if (key.getCategory() != InputUtil.Type.KEYSYM) return false;
+		return net.minecraft.client.util.InputUtil.isKeyPressed(client.getWindow(), code);
+	}
+
+	private static boolean keysChecked;
+
+	/**
+	 * Iris binds "reload shaders" to R by default, the same key as our battle key, so every challenge
+	 * reloaded the whole shader pack (a long freeze). Once per launch, unbind any other key that sits on our
+	 * battle key and is known to be heavy (shader reload).
+	 */
+	private static void fixKeyConflicts(net.minecraft.client.MinecraftClient client) {
+		if (keysChecked || client.options == null) return;
+		keysChecked = true;
+		InputUtil.Key ours = KeyBindingHelper.getBoundKeyOf(rap);
+		boolean changed = false;
+		for (KeyBinding k : client.options.allKeys) {
+			if (k == rap || !"iris.keybind.reload".equals(k.getId())) continue;
+			if (KeyBindingHelper.getBoundKeyOf(k).equals(ours)) {
+				k.setBoundKey(InputUtil.UNKNOWN_KEY);
+				changed = true;
+				dev.rapbattle.RapBattle.LOG.info("Unbound Iris shader reload from {}: it clashed with the battle key", ours.getTranslationKey());
+			}
+		}
+		if (changed) {
+			KeyBinding.updateKeysByCode();
+			client.options.write();
+		}
 	}
 
 	private static void pollTopicKeys(net.minecraft.client.MinecraftClient client) {

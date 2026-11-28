@@ -5,6 +5,9 @@
   "client": [
     "MobEntityAccessor",
     "ModelPartAccessor",
+    "SoundManagerAccessor",
+    "SoundSystemAccessor",
+    "SourceAccessor",
     "LivingEntityRenderStateMixin",
     "LivingEntityRendererMixin",
     "ModelCommandRendererMixin",

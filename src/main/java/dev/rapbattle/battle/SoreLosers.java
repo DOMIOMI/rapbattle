@@ -199,6 +199,12 @@ public final class SoreLosers {
 			if (p.squaredDistanceTo(mob) < 32 * 32) {
 				p.sendMessage(Text.translatable("rapbattle.sorelosers.refuse").formatted(Formatting.DARK_RED)
 					.append(Text.literal("<" + opp.name() + "> " + line).formatted(Formatting.RED)), false);
+				// 6.32: big and centred too, a chat line alone was easy to miss right after the judge's screen.
+				p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket(5, 70, 15));
+				p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.SubtitleS2CPacket(
+					Text.literal(opp.name() + ": " + line).formatted(Formatting.RED)));
+				p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.TitleS2CPacket(
+					Text.translatable("rapbattle.sorelosers.refuse").formatted(Formatting.DARK_RED, Formatting.BOLD)));
 			}
 		}
 		Speech.bubble(mob, Lang.pick(lang, "НЕ ПРИЗНАЁТ ПОРАЖЕНИЕ! ", "WON'T ACCEPT DEFEAT! ") + line, 0xFF4040, 4000);
