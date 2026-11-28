@@ -27,9 +27,9 @@ public final class GuideBook {
 
 	public static final String NBT_KEY = "rapbattle_guide";
 	public static final int PAGE_COUNT = 19;
-	/** Bump when the pages change, so players' old copies get replaced on join. 2 = 6.30 icons and reference. */
+	/** Bump when the pages change, so players' old copies get replaced on join. 2 = 6.30 icons and reference, 3 = planks mic, Space. */
 	public static final String VERSION_KEY = "rapbattle_guide_version";
-	public static final int VERSION = 2;
+	public static final int VERSION = 3;
 	public static final int MAX_PAGE_CHARS = 240;
 	private static final Map<UUID, Long> GIVE_COOLDOWN = new HashMap<>();
 	private static final long GIVE_COOLDOWN_MS = 5_000L;

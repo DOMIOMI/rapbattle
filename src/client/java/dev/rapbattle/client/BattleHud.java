@@ -55,7 +55,11 @@ public final class BattleHud {
 					case "PREP" -> drawPrep(ctx, tr, v, w, h);
 					case "TIMELINE" -> BroadcastHud.timeline(ctx, tr, v, w, h);
 					case "JUDGING" -> BroadcastHud.judging(ctx, tr, v, w, h);
-					case "ROUND_RESULT", "RESULT" -> BroadcastHud.result(ctx, tr, v, w, h);
+					case "ROUND_RESULT", "RESULT" -> {
+						BroadcastHud.result(ctx, tr, v, w, h);
+						String next = I18n.translate("rapbattle.hud.skip_result");
+						ctx.drawTextWithShadow(tr, next, w - tr.getWidth(next) - 6, h - 12, YELLOW);
+					}
 					default -> {}
 				}
 			}

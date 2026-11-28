@@ -444,6 +444,22 @@ public final class BattleManager {
 	}
 
 	/** Empty-hand hit: ask the player whether to rap or to fight. */
+	/**
+	 * After a refusal, a bare-handed hit on the same mob first re-checks the rules: if the player has fixed what was
+	 * missing (armor, mic, Respect), the old refusal is dropped and a fresh battle offer opens. Returns false if still refused.
+	 */
+	private static boolean reofferIfNowAllowed(ServerPlayerEntity sp, MobEntity mob) {
+		if (!sp.getMainHandStack().isEmpty()) return false;
+		Progression.StartCheck sc = Progression.canStart(sp, mob, true, 0, new Random());
+		if (!sc.allowed()) return false;
+		PENDING.remove(sp.getUuid());
+		REFUSED.remove(sp.getUuid());
+		closeChoice(sp);
+		if (RapConfig.get().skipChoice) start(sp, mob, sc.gate());
+		else offerChoice(sp, mob, false, sc);
+		return true;
+	}
+
 	private static void offerChoice(ServerPlayerEntity p, MobEntity mob) {
 		offerChoice(p, mob, false, null);
 	}
@@ -594,6 +610,8 @@ public final class BattleManager {
 			}
 			Pending pending = PENDING.get(sp.getUuid());
 			if (pending != null && pending.mob == mob && now < pending.until) {
+				// The mob said no, the player fixed it (put on the armor, took a mic) and calls it out again: a new offer, not a fight.
+				if (!pending.allowed && reofferIfNowAllowed(sp, mob)) return ActionResult.FAIL;
 				// Second hit while the choice is open = "набить ебало": a normal fight, and the kin takes offence.
 				PENDING.remove(sp.getUuid());
 				REFUSED.remove(sp.getUuid());
@@ -614,6 +632,7 @@ public final class BattleManager {
 			}
 			Refused refused = REFUSED.get(sp.getUuid());
 			if (refused != null && refused.mob() == mob && now < refused.until()) {
+				if (reofferIfNowAllowed(sp, mob)) return ActionResult.FAIL;
 				// It already told him off about the outfit: a hit now is just a fight, no second lecture.
 				REFUSED.remove(sp.getUuid());
 				PENDING.remove(sp.getUuid());
@@ -902,6 +921,10 @@ public final class BattleManager {
 					case "go" -> {
 						Battle b = byPlayer(p.getUuid());
 						if (b != null) b.startEarly(p);
+					}
+					case "skip_result" -> {
+						Battle b = byPlayer(p.getUuid());
+						if (b != null) b.skipResult(p);
 					}
 					case "topic" -> {
 						Battle b = byPlayer(p.getUuid());

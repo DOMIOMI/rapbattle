@@ -85,6 +85,18 @@ public final class UiTourScenario {
 		ctx.waitTicks(80);
 		GameTestSupport.takeScreenshot(ctx, "6.30-ui-6-result-late");
 
+		// 6.32: Space on the result screen closes it (solo: one press is everyone's vote).
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			GameTestSupport.assertTrue(BattleManager.byPlayer(p.getUuid()) == battle[0], "Result screen must still be up before Space");
+			battle[0].skipResult(p);
+		});
+		ctx.waitTicks(5);
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			GameTestSupport.assertTrue(BattleManager.byPlayer(p.getUuid()) == null, "Space on the result screen must end the battle");
+		});
+
 		sp.getServer().runOnServer(server -> {
 			GameTestSupport.cleanupBattles(server);
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);

@@ -179,6 +179,41 @@ public final class FirstSessionScenario {
 		TARGET[0] = ids[2];
 		shootChoice(ctx, sp, "6.30-session-3-need-armor");
 
+		// 6.32: refused for armor -> put the armor on -> hit again = a fresh battle offer, not a brawl.
+		float[] hp = new float[1];
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			MobEntity ironZ = (MobEntity) p.getEntityWorld().getEntityById(ids[2]);
+			BattleManager.clearAllForTest(); // forget the refusal from the screenshot above: this is a fresh first hit
+			p.attack(ironZ); // in leather: refused, the card stays open
+			assertTrue(BattleManager.hasPending(p.getUuid()), "Refusal must leave the choice card open");
+			wear(p, Items.COPPER_HELMET, Items.COPPER_CHESTPLATE, Items.COPPER_LEGGINGS, Items.COPPER_BOOTS);
+			hp[0] = ironZ.getHealth();
+			p.attack(ironZ); // now dressed right
+			assertTrue(ironZ.getHealth() == hp[0], "A hit after fixing the outfit must not be a brawl (mob took damage)");
+			assertTrue(BattleManager.hasPending(p.getUuid()), "A hit after fixing the outfit must open a new battle offer");
+		});
+		ctx.waitTicks(3);
+		ctx.runOnClient(c -> assertTrue(ClientBattle.choice != null && ClientBattle.choice.allowed,
+			"The new offer must be an open battle card"));
+		GameTestSupport.takeScreenshot(ctx, "6.32-session-refused-then-dressed");
+		// Still not dressed right: the second hit stays a fight, as before.
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			BattleManager.clearPendingForTest(p.getUuid());
+			MobEntity ironZ = (MobEntity) p.getEntityWorld().getEntityById(ids[2]);
+			wear(p, Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS);
+			p.attack(ironZ);
+			hp[0] = ironZ.getHealth();
+			p.attack(ironZ);
+			assertTrue(!BattleManager.hasPending(p.getUuid()), "Second hit while still refused must close the card (a fight)");
+			ironZ.setHealth(ironZ.getMaxHealth());
+			ironZ.setTarget(null);
+			BattleManager.clearAllForTest();
+		});
+		ctx.runOnClient(c -> ClientBattle.choice = null);
+		ctx.waitTicks(2);
+
 		// 5. Rank 4 gate: copper opens rank 3, two rank-3 species wins open rank 4.
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);

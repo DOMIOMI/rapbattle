@@ -121,6 +121,7 @@ public class RapBattleClient implements ClientModInitializer {
 			while (decline.wasPressed()) ClientBattle.pressDecline();
 			while (rap.wasPressed()) ClientBattle.pressRap();
 			pollTopicKeys(client);
+			pollSkipKey(client);
 			if (Intro.active() && client.options.jumpKey.isPressed()) Intro.skip();
 			// Keeps the beat and the mic going even when the HUD is hidden (F1).
 			ClientBattle.pump();
@@ -130,6 +131,20 @@ public class RapBattleClient implements ClientModInitializer {
 	}
 
 	private static final boolean[] TOPIC_DOWN = new boolean[3];
+
+	private static boolean skipDown;
+
+	/** Space (the jump key) as a skip button everywhere in a battle; polled raw because movement keys are frozen there. */
+	private static void pollSkipKey(net.minecraft.client.MinecraftClient client) {
+		if (ClientBattle.view == null || client.currentScreen != null) {
+			skipDown = false;
+			return;
+		}
+		int code = KeyBindingHelper.getBoundKeyOf(client.options.jumpKey).getCode();
+		boolean down = code >= 0 && net.minecraft.client.util.InputUtil.isKeyPressed(client.getWindow(), code);
+		if (down && !skipDown) ClientBattle.pressSkip();
+		skipDown = down;
+	}
 
 	private static void pollTopicKeys(net.minecraft.client.MinecraftClient client) {
 		if (!ClientBattle.inLobbyChallenger() || client.currentScreen != null) {

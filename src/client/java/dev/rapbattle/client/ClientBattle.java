@@ -619,6 +619,20 @@ public final class ClientBattle {
 		}
 	}
 
+	/** Space: skips the intro, starts the lobby now (challenger), or closes the judge's result screen. */
+	public static void pressSkip() {
+		if (Intro.active()) {
+			Intro.skip();
+			return;
+		}
+		if (view == null || view.spectator) return;
+		if ("LOBBY".equals(view.phase) && isChallenger()) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"go\"}"));
+		} else if ("RESULT".equals(view.phase) || "ROUND_RESULT".equals(view.phase)) {
+			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"skip_result\"}"));
+		}
+	}
+
 	public static void pressDecline() {
 		if (invite != null) {
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"invite\",\"id\":" + invite.id + ",\"accept\":false}"));

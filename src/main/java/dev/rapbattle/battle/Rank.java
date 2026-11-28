@@ -8,12 +8,12 @@ import dev.rapbattle.Lang;
  */
 public enum Rank {
 	//        armor          street        armorEn      streetEn     color      bpm mobLn solo coop leadIn rhymes verseLo verseHi xp   hearts
-	LEATHER  ("КОЖАНЫЙ",     "Мелочь",     "LEATHER",   "Small Fry", 0xA0663A,  80, 4,    4,   4,   8,     0,     1,      3,     10,   2),
+	LEATHER  ("КОЖАНЫЙ",     "Мелочь",     "LEATHER",   "Small Fry", 0xA0663A,  80, 4,    6,   4,   8,     0,     1,      3,     10,   2),
 	CHAIN    ("КОЛЬЧУЖНЫЙ",  "Шпана",      "CHAIN",     "Punk",      0x9AA3AD,  88, 4,    8,   4,   8,     1,     2,      4,     18,   2),
 	IRON     ("ЖЕЛЕЗНЫЙ",    "Уличный",    "IRON",      "Street",    0xD8D8D8,  94, 6,    8,   4,   4,     2,     3,      6,     30,   3),
-	GOLD     ("ЗОЛОТОЙ",     "Авторитет",  "GOLD",      "Big Shot",  0xF2C94C, 100, 8,    8,   6,   4,     3,     4,      7,     50,   4),
+	GOLD     ("ЗОЛОТОЙ",     "Авторитет",  "GOLD",      "Big Shot",  0xF2C94C, 100, 8,   10,   6,   4,     3,     4,      7,     50,   4),
 	DIAMOND  ("АЛМАЗНЫЙ",    "Легенда",    "DIAMOND",   "Legend",    0x5EE0E6, 108, 8,   12,   6,   4,     3,     6,      8,     85,   5),
-	NETHERITE("НЕЗЕРИТОВЫЙ", "Босс",       "NETHERITE", "Boss",      0x8B5CF6, 116, 6,    8,   4,   4,     4,     8,     10,    250,   5);
+	NETHERITE("НЕЗЕРИТОВЫЙ", "Босс",       "NETHERITE", "Boss",      0x8B5CF6, 116, 6,   12,   6,   4,     4,     8,     10,    250,   5);
 
 	public final String armor, street;
 	private final String armorEn, streetEn;
@@ -84,6 +84,11 @@ public enum Rank {
 	}
 
 	/** Lines per player for a team of {@code teamSize} players. */
+	/** Rebuttal targets ("ОТБЕЙ") for this rank: one on ranks 1-2, where the easy rhymes leave no room for two. */
+	public int targetCap(int styleCount) {
+		return level() <= 2 ? 1 : styleCount;
+	}
+
 	public int linesPerPlayer(int teamSize) {
 		if (teamSize <= 1) return playerLinesSolo;
 		if (teamSize == 2) return playerLinesCoop;

@@ -330,6 +330,17 @@ public class Battle {
 		}
 	}
 
+	private final Set<UUID> skipVotes = new HashSet<>();
+
+	/** Space on the judge's result screen: once every player in the battle has pressed it, the screen closes early. */
+	public void skipResult(ServerPlayerEntity p) {
+		if ((phase != Phase.RESULT && phase != Phase.ROUND_RESULT) || !hasPlayer(p.getUuid())) return;
+		long now = dev.rapbattle.Clock.now();
+		if (now - phaseStart < 600) return; // a press left over from the verse does not count
+		skipVotes.add(p.getUuid());
+		if (skipVotes.containsAll(activePlayers())) phaseStart = now - 600_000L;
+	}
+
 	/** Challenger pressed "go" before the lobby timer ran out. */
 	public void startEarly(ServerPlayerEntity p) {
 		if (phase == Phase.LOBBY && p.getUuid().equals(players.get(0))) lobbyEnd = dev.rapbattle.Clock.now();
@@ -539,7 +550,8 @@ public class Battle {
 		hasStyleBonus = anyStylish;
 		outfitBonus = hasStyleBonus ? 2 : 0;
 		double avg = sum / Math.max(1, players.size());
-		overdressed = !boss && Math.floor(avg) >= rank.level() + 2;
+		// 6.32: no more reward cut for dressing above the mob; the player asked for it gone.
+		overdressed = false;
 	}
 
 	private List<String> mobTeamNames() {
@@ -1203,8 +1215,9 @@ public class Battle {
 		int r = round;
 		String topicText = topicPromptText();
 		Stats stats = Stats.of(world.getServer());
-		int maxTargets = 2;
+		int maxTargets = 1;
 		for (UUID u : active) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
+		maxTargets = rank.targetCap(maxTargets);
 		int targetLimit = maxTargets;
 		contentFuture = CompletableFuture.supplyAsync(() -> {
 			Llm.Content c = Llm.roundContent(rappers, rank.label(lang), opp.mood(), opp.profile().language(lang), lineCount,
@@ -1241,9 +1254,10 @@ public class Battle {
 			: Fallback.mobVerse(speakers, namesList(), rank.mobLines, rnd, lang);
 		mobLines = lines;
 		Stats stats = Stats.of(world.getServer());
-		int maxTargets = 2;
+		int maxTargets = 1;
 		for (UUID u : active) maxTargets = Math.max(maxTargets, stats.player(u).mcStyle().targetCount());
-		targets = (content != null && !content.targets().isEmpty()) ? content.targets() : Fallback.extractTargets(lines, lang, maxTargets);
+		maxTargets = rank.targetCap(maxTargets);
+		targets = (content != null && !content.targets().isEmpty()) ? content.targets() : Fallback.extractTargets(lines, lang, maxTargets); if (targets.size() > maxTargets) targets = new ArrayList<>(targets.subList(0, maxTargets));
 		BattleView v = baseView();
 		v.targets = new ArrayList<>(targets);
 		int beat = 4; // 4-3-2-1 countdown
@@ -1770,6 +1784,7 @@ public class Battle {
 	private void setPhase(Phase p, long now) {
 		phase = p;
 		phaseStart = now;
+		skipVotes.clear();
 		broadcastState();
 	}
 
@@ -1813,7 +1828,7 @@ public class Battle {
 			ServerPlayerEntity p = player(u);
 			if (p != null) {
 				v.canReroll = !rerolledPlayers.contains(u);
-				int targetCap = stats.player(u).mcStyle().targetCount();
+				int targetCap = rank.targetCap(stats.player(u).mcStyle().targetCount());
 				v.targets = targets.size() > targetCap ? new ArrayList<>(targets.subList(0, targetCap)) : new ArrayList<>(targets);
 				Trophies.TrophyPerk perk = Trophies.equippedPerk(p);
 				v.revealBeats = (rank.revealBeats() > 0 && perk == Trophies.TrophyPerk.ENDER_DRAGON)
