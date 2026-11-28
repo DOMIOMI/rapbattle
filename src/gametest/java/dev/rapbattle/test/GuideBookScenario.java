@@ -58,7 +58,7 @@ public final class GuideBookScenario {
 			ItemStack book = GuideBook.create(lang);
 			WrittenBookContentComponent content = book.get(DataComponentTypes.WRITTEN_BOOK_CONTENT);
 			GameTestSupport.assertTrue(content != null && content.pages().size() == GuideBook.PAGE_COUNT,
-				"Handbook must have 14 pages");
+				"Handbook must have " + GuideBook.PAGE_COUNT + " pages");
 			StringBuilder tooLong = new StringBuilder();
 			for (int i = 0; i < content.pages().size(); i++) {
 				int lines = c.textRenderer.wrapLines(content.pages().get(i).get(false), 114).size();
@@ -71,7 +71,7 @@ public final class GuideBookScenario {
 		if (takeShots) {
 			ctx.waitTicks(2);
 			GameTestSupport.takeScreenshot(ctx, "guidebook-page-1");
-			for (int page : new int[]{3, 5, 6, 7}) {
+			for (int page : new int[]{3, 5, 6, 7, 13, 14, 15, 16, 17, 18}) {
 				ctx.runOnClient(c -> {
 					if (c.currentScreen instanceof BookScreen bs) bs.setPage(page);
 				});

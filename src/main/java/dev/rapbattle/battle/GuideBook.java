@@ -26,7 +26,10 @@ public final class GuideBook {
 	private GuideBook() {}
 
 	public static final String NBT_KEY = "rapbattle_guide";
-	public static final int PAGE_COUNT = 14;
+	public static final int PAGE_COUNT = 19;
+	/** Bump when the pages change, so players' old copies get replaced on join. 2 = 6.30 icons and reference. */
+	public static final String VERSION_KEY = "rapbattle_guide_version";
+	public static final int VERSION = 2;
 	public static final int MAX_PAGE_CHARS = 240;
 	private static final Map<UUID, Long> GIVE_COOLDOWN = new HashMap<>();
 	private static final long GIVE_COOLDOWN_MS = 5_000L;
@@ -46,6 +49,7 @@ public final class GuideBook {
 			new WrittenBookContentComponent(RawFilteredPair.of(title), "DOMI", 0, pages, true));
 		NbtCompound tag = new NbtCompound();
 		tag.putInt(NBT_KEY, 1);
+		tag.putInt(VERSION_KEY, VERSION);
 		book.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(tag));
 		return book;
 	}
@@ -72,7 +76,8 @@ public final class GuideBook {
 			boolean item = m.group(1).equals("i");
 			out.append(Text.object(new net.minecraft.text.object.AtlasTextObjectContents(
 				item ? net.minecraft.util.Atlases.ITEMS : net.minecraft.util.Atlases.BLOCKS,
-				net.minecraft.util.Identifier.ofVanilla((item ? "item/" : "block/") + m.group(2)))));
+				net.minecraft.util.Identifier.ofVanilla((item ? "item/" : "block/") + m.group(2))))
+				.formatted(Formatting.WHITE)); // text colour tints sprites; white keeps the real colours
 			last = m.end();
 		}
 		if (last < raw.length()) out.append(Text.literal(raw.substring(last)).formatted(color));
@@ -102,7 +107,9 @@ public final class GuideBook {
 
 	/** Gives the handbook in the player's current language; drops at feet if inventory is full. */
 	public static void give(ServerPlayerEntity player) {
-		if (player == null || hasGuideBook(player)) return;
+		if (player == null) return;
+		refreshOutdated(player);
+		if (hasGuideBook(player)) return;
 		long now = dev.rapbattle.Clock.now();
 		if (now < GIVE_COOLDOWN.getOrDefault(player.getUuid(), 0L)) return;
 		GIVE_COOLDOWN.put(player.getUuid(), now + GIVE_COOLDOWN_MS);
@@ -122,5 +129,21 @@ public final class GuideBook {
 			stats.markDirty();
 			give(player);
 		}
+		refreshOutdated(player);
+	}
+
+	/** Swaps every older edition of the handbook in the player's inventory for the current one, in place. */
+	public static void refreshOutdated(ServerPlayerEntity player) {
+		if (player == null) return;
+		var inv = player.getInventory();
+		for (int i = 0; i < inv.size(); i++) {
+			ItemStack s = inv.getStack(i);
+			if (isGuideBook(s) && versionOf(s) < VERSION) inv.setStack(i, create(Lang.of(player)));
+		}
+	}
+
+	static int versionOf(ItemStack stack) {
+		NbtComponent custom = stack.get(DataComponentTypes.CUSTOM_DATA);
+		return custom == null ? 0 : custom.copyNbt().getInt(VERSION_KEY).orElse(1);
 	}
 }
