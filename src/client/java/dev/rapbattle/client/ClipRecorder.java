@@ -40,8 +40,17 @@ public final class ClipRecorder {
 	public static void keep(byte[] voiceWav, long voiceStart, long from, long to, String track, long beatMs, String opponent) {
 		if (voiceWav == null || voiceWav.length < 4000) return;
 		last = new Take(voiceWav, voiceStart, from, to, track, beatMs, opponent);
+		offerPending = true;
+	}
+
+	private static boolean offerPending;
+
+	/** Posts the "save clip" offer once the battle HUD is gone (so it never runs under the judge panel). Called from ClientBattle.pump(). */
+	public static void flushOffer() {
+		if (!offerPending || ClientBattle.view != null) return;
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player == null) return;
+		offerPending = false;
 		Text button = Text.translatable("rapbattle.clip.save_button").styled(s -> s.withColor(Formatting.AQUA).withUnderline(true)
 			.withClickEvent(new ClickEvent.RunCommand("/rapbattle clip"))
 			.withHoverEvent(new HoverEvent.ShowText(Text.translatable("rapbattle.clip.save_hover"))));

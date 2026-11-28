@@ -92,7 +92,9 @@ public final class BroadcastHud {
 		// Mob
 		String mob = v.mobTeam.size() > 1 ? I18n.translate("rapbattle.hud.and_crew", v.mobName) : v.mobName;
 		dropText(ctx, tr, Text.literal(BattleHud.fit(tr, mob, side - 16)), rx0 + 9, y + 4, 1f, WHITE, RED, 1f, false);
-		ctx.drawText(tr, BattleHud.fit(tr, v.rankArmor + " · " + v.rankStreet, side - 22), rx0 + 14, y + 15, BattleHud.opaque(v.rankColor), false);
+		String rankLine = BattleHud.fit(tr, v.rankArmor + " · " + v.rankStreet, side - 26);
+		ctx.fill(rx0 + 11, y + 14, rx0 + 17 + tr.getWidth(rankLine), y + 24, 0xC0101018);
+		ctx.drawText(tr, rankLine, rx0 + 14, y + 15, mix(BattleHud.opaque(v.rankColor), WHITE, 0.25f), false);
 		respectBar(ctx, tr, rx0 + 1 + lean + 1, y + 26, side - lean - 2 - 7, shown[1], max, false, 1, RED);
 
 		// Combo under the centre while it burns.
@@ -327,6 +329,7 @@ public final class BroadcastHud {
 		// The table sits at the very bottom, centred, where the hotbar and hearts were (they are hidden during the battle).
 		// Cells grow to fit the mob's words; only on a very narrow screen the whole panel is drawn smaller.
 		// Same widths for the whole battle, so the panel does not jump from line to line.
+		showReaders = v.team.size() > 1;
 		int[] cw = widths(tr, v.rows.toArray(new BattleView.Row[0]));
 		int lw = cw[0] + cw[1] + cw[2] + cw[3] + 3 * GAP + 2 * PAD;
 		beginPanel(ctx, w, h, lw);
@@ -429,6 +432,8 @@ public final class BroadcastHud {
 	}
 
 	private static final int ROW = 15, GAP = 2, PAD = 4, MIN_COL = 46, MIN_WORD = 72;
+	/** True in a team battle: empty player rows then name who reads them. Set by {@link #timeline}. */
+	private static boolean showReaders;
 
 	/** Column widths so every mob word and rhyme fits whole. */
 	private static int[] widths(TextRenderer tr, BattleView.Row... rows) {
@@ -437,7 +442,7 @@ public final class BroadcastHud {
 			if (r == null) continue;
 			if (r.mob) for (int c = 0; c < 3; c++) if (r.cols[c] != null) cw[c] = Math.max(cw[c], tr.getWidth(r.cols[c]) + 10);
 			if (r.word != null) cw[3] = Math.max(cw[3], tr.getWidth(r.word) + 14);
-			if (!r.mob && r.reader != null) cw[0] = Math.max(cw[0], Math.min(90, tr.getWidth(r.reader) + 10));
+			if (showReaders && !r.mob && r.reader != null) cw[0] = Math.max(cw[0], Math.min(90, tr.getWidth(r.reader) + 10));
 		}
 		return cw;
 	}
@@ -453,7 +458,7 @@ public final class BroadcastHud {
 			else ctx.fillGradient(x, y, x + col, y + ROW, 0xFF22263A, 0xFF181B2A);
 			if (hit) ctx.fill(x, y + ROW - 2, x + col, y + ROW, r.mob ? ORANGE : accent);
 			else if (live) ctx.fill(x, y, x + col, y + 1, 0x30FFFFFF);
-			String text = r.mob ? (r.cols[c] == null ? "" : r.cols[c]) : (c == 0 && !live && r.reader != null ? r.reader : null);
+			String text = r.mob ? (r.cols[c] == null ? "" : r.cols[c]) : (c == 0 && !live && showReaders && r.reader != null ? r.reader : null);
 			if (text != null && !text.isEmpty()) {
 				int color = r.mob ? (live ? (hit ? YELLOW : TEXT) : DIM) : (me.equals(r.reader) ? GREEN : CYAN);
 				String t = BattleHud.fit(tr, text, col - 4);
@@ -568,7 +573,7 @@ public final class BroadcastHud {
 		List<OrderedText> jLines = tr.wrapLines(Text.literal("«" + r.comment + "»"), lw - 18);
 		String jNotes = r.overdressed ? I18n.translate("rapbattle.hud.note_overdressed") : "";
 		String jMine = "";
-		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me())) jMine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
+		for (BattleView.PlayerScore ps : r.players) if (ps.name.equals(ClientBattle.me()) && ps.transcript != null && !ps.transcript.isBlank()) jMine = I18n.translate("rapbattle.hud.you_said", ps.transcript);
 		int qh = 10 + jLines.size() * 10 + (jNotes.isEmpty() ? 0 : 11) + (jMine.isEmpty() ? 0 : 11) + 4;
 		int judgeTop = h - 6 - qh - 16;
 

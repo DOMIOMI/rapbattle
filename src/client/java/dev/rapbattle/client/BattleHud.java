@@ -36,6 +36,7 @@ public final class BattleHud {
 		ClientBattle.pump();
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.options.hudHidden) return;
+		if (mc.currentScreen instanceof net.minecraft.client.gui.screen.DeathScreen) return; // never under the death screen
 		TextRenderer tr = mc.textRenderer;
 		int w = ctx.getScaledWindowWidth(), h = ctx.getScaledWindowHeight();
 

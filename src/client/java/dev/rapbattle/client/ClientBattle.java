@@ -307,7 +307,10 @@ public final class ClientBattle {
 			if (isLookingAtChoiceMob()) choiceLookAt = now;
 			if (now - choiceAt > Math.max(1000, choice.choiceMs) && now - choiceLookAt > 2000) choice = null;
 		}
-		if (view == null) return;
+		if (view == null) {
+			ClipRecorder.flushOffer();
+			return;
+		}
 		if (!timeline()) {
 			if (!view.spectator && !"TIMELINE".equals(view.phase)) flushTrackedRow();
 			if (recordingFor == view.id && !"TIMELINE".equals(view.phase)) stopAndUpload();

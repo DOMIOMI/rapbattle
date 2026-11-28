@@ -2009,7 +2009,18 @@ public class Battle {
 			ps.score = battleDealt.getOrDefault(ps.name, 0);
 			this.result.players.add(ps);
 		}
+		// Fill what the client result screen reads, so screenshot tests show a real verdict card.
+		this.result.respectTeam = teamRespect;
+		this.result.respectMob = mobRespect;
+		this.result.mobLabel = opp.profile().species(lang);
+		this.result.teamLabel = String.join(" + ", namesList());
+		if (view != null) view.result = this.result;
 		setPhase(Phase.RESULT, dev.rapbattle.Clock.now());
+	}
+
+	/** Test-only: the judge's comment on the current result (it lengthens the result screen, like a real one). */
+	public void setResultCommentForTest(String comment) {
+		if (result != null) result.comment = comment;
 	}
 
 	/** Test-only helper to enter Phase.ROUND_RESULT with explicit round wins and finalResult=false. */
