@@ -17,6 +17,7 @@ import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -643,37 +644,32 @@ public final class BattleHud {
 			? c.challengeFrom + ": " + c.mobName + " (" + c.mobSpecies + ")"
 			: c.mobName + " (" + c.mobSpecies + ")";
 
-		String headline, subLine, hintLine;
-		int headlineColor, accent;
-		if (!c.challengeFrom.isEmpty()) {
-			headline = I18n.translate("rapbattle.hud.choice_rap_short");
-			headlineColor = YELLOW;
-			subLine = I18n.translate("rapbattle.hud.choice_answer");
-			hintLine = I18n.translate("rapbattle.hud.choice_answer_sub");
-			accent = Ui.GOLD;
-		} else if (c.allowed) {
-			headline = I18n.translate("rapbattle.hud.choice_rap_short");
-			headlineColor = c.boss ? 0xFFB48CFF : GREEN;
-			subLine = !c.gateWarning.isEmpty() ? c.gateWarning : "";
-			hintLine = I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
-			accent = c.boss ? Ui.BOSS : Ui.RED;
-		} else {
-			headline = I18n.translate("rapbattle.hud.choice_refused_short");
-			headlineColor = RED;
-			subLine = !c.refusalReason.isEmpty() ? c.refusalReason : c.refusal;
-			hintLine = I18n.translate(c.allowSwearing ? "rapbattle.hud.choice_fight" : "rapbattle.hud.choice_fight.clean");
-			accent = 0xFF6A6A78;
-		}
+		boolean challenge = !c.challengeFrom.isEmpty();
+		int accent = challenge ? Ui.GOLD : !c.allowed ? 0xFF6A6A78 : c.boss ? Ui.BOSS : Ui.RED;
+		// Refused: a red "REFUSED" headline plus the reason with item icons ("need X, yours Y").
+		String reason = c.allowed ? "" : (!c.refusalReason.isEmpty() ? c.refusalReason : c.refusal);
+		String note = challenge ? I18n.translate("rapbattle.hud.choice_answer_sub")
+			: c.allowed && !c.gateWarning.isEmpty() ? c.gateWarning : "";
 
-		float headScale = 1.3f;
-		float hintScale = 0.85f;
-		int headW = Math.round(tr.getWidth(headline) * headScale);
+		// Buttons: [R] battle (only when allowed), [N] walk away, [LMB] fight.
+		String fightLabel = I18n.translate("rapbattle.hud.btn_fight");
+		List<String[]> buttons = new ArrayList<>();
+		if (c.allowed || challenge) {
+			buttons.add(new String[]{RapBattleClient.rapKeyName(),
+				I18n.translate(challenge ? "rapbattle.hud.btn_answer" : c.boss ? "rapbattle.hud.btn_rap_boss" : "rapbattle.hud.btn_rap"), "g"});
+		}
+		buttons.add(new String[]{RapBattleClient.declineKeyName(),
+			I18n.translate(challenge ? "rapbattle.hud.btn_decline_challenge" : "rapbattle.hud.btn_decline"), "d"});
+		buttons.add(new String[]{RapBattleClient.attackKeyName(), fightLabel, "r"});
+		int gap = 6, btnW = 0;
+		for (String[] bt : buttons) btnW += keyButtonWidth(tr, bt[0], bt[1]) + gap;
+		btnW -= gap;
+
 		boolean hasIcons = !c.allowed && (c.needsMic || c.requiredArmorLevel > 0);
-		int subW = tr.getWidth(subLine) + (hasIcons ? (c.needsMic ? 20 : 38) : 0);
-		int bw = Math.min(w - 16, Math.max(
-			Math.max(tr.getWidth(name) + 34, headW + 24),
-			Math.max(subW + 24, Math.max(Math.round(tr.getWidth(hintLine) * hintScale) + 24, 210))));
-		int bh = subLine.isEmpty() ? 54 : 70;
+		int reasonW = tr.getWidth(reason) + (hasIcons ? (c.needsMic ? 20 : 38) : 0);
+		int bw = Math.min(w - 16, Math.max(Math.max(tr.getWidth(name) + 34, btnW + 16),
+			Math.max(reasonW + 24, Math.max(tr.getWidth(note) + 16, 210))));
+		int bh = 26 + (c.allowed || challenge ? 0 : 30) + 20 + (note.isEmpty() ? 0 : 12) + 4;
 		float in = Ui.easeOutBack(since / 320f);
 		float a = Ui.clamp01(since / 150f);
 		int cx = w / 2, x = cx - bw / 2;
@@ -682,7 +678,7 @@ public final class BattleHud {
 		Ui.tab(ctx, tr, I18n.translate("rapbattle.hud.choice_title"), x, y, accent, Ui.WHITE, a);
 		Ui.panel(ctx, x, y, bw, bh, accent, a);
 
-		// Line 1: Rank item icon + mob name & species
+		// Line 1: rank item icon + mob name & species
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().translate(x + 7, y + 4);
 		ctx.getMatrices().scale(0.85f, 0.85f);
@@ -691,43 +687,64 @@ public final class BattleHud {
 		Ui.dropText(ctx, tr, Text.literal(BattleHud.fit(tr, name, bw - 30)), x + 24, y + 6, 1f, Ui.WHITE, accent, a, false);
 		ctx.fill(x + 8, y + 20, x + bw - 8, y + 21, Ui.alphaOf(accent, 0.6f * a));
 
-		// Line 2: Large "R — battle" or "REFUSED" (+ reason with item icons)
-		Ui.text(ctx, tr, headline, x + 8, y + 25, headScale, headlineColor, a, true);
-		int hy = y + 41;
-		if (!subLine.isEmpty()) {
+		int ly = y + 26;
+		if (!c.allowed && !challenge) {
+			Ui.text(ctx, tr, I18n.translate("rapbattle.hud.choice_refused_short"), x + 8, ly, 1.3f, RED, a, true);
+			ly += 15;
 			int textX = x + 8;
-			if (!c.allowed && c.needsMic) {
-				ctx.getMatrices().pushMatrix();
-				ctx.getMatrices().translate(x + 8, hy - 2);
-				ctx.getMatrices().scale(0.75f, 0.75f);
-				ctx.drawItem(new ItemStack(net.minecraft.item.Items.LIGHTNING_ROD), 0, 0);
-				ctx.getMatrices().popMatrix();
+			if (c.needsMic) {
+				drawSmallItem(ctx, new ItemStack(net.minecraft.item.Items.LIGHTNING_ROD), x + 8, ly - 2);
 				textX += 15;
-			} else if (!c.allowed && c.requiredArmorLevel > 0) {
-				ctx.getMatrices().pushMatrix();
-				ctx.getMatrices().translate(x + 8, hy - 2);
-				ctx.getMatrices().scale(0.75f, 0.75f);
-				ctx.drawItem(MobBadgeFx.rankIcon(c.requiredArmorLevel, false), 0, 0);
-				ctx.getMatrices().popMatrix();
-				ctx.getMatrices().pushMatrix();
-				ctx.getMatrices().translate(x + 22, hy - 2);
-				ctx.getMatrices().scale(0.75f, 0.75f);
-				ctx.drawItem(c.yourArmorLevel > 0 ? MobBadgeFx.rankIcon(c.yourArmorLevel, false) : new ItemStack(net.minecraft.item.Items.BARRIER), 0, 0);
-				ctx.getMatrices().popMatrix();
+			} else if (c.requiredArmorLevel > 0) {
+				drawSmallItem(ctx, MobBadgeFx.rankIcon(c.requiredArmorLevel, false), x + 8, ly - 2);
+				drawSmallItem(ctx, c.yourArmorLevel > 0 ? MobBadgeFx.rankIcon(c.yourArmorLevel, false)
+					: new ItemStack(net.minecraft.item.Items.BARRIER), x + 22, ly - 2);
 				textX += 36;
 			}
-			int subColor = c.allowed ? 0xFFFFB84A : 0xFFE6C8C8;
-			Ui.text(ctx, tr, BattleHud.fit(tr, subLine, bw - (textX - x) - 8), textX, hy, 1f, subColor, a, true);
-			hy += 13;
+			Ui.text(ctx, tr, BattleHud.fit(tr, reason, bw - (textX - x) - 8), textX, ly, 1f, 0xFFE6C8C8, a, true);
+			ly += 15;
 		}
 
-		// Line 3: Small hint ("hit again — fight")
-		Ui.text(ctx, tr, BattleHud.fit(tr, hintLine, Math.round((bw - 16) / hintScale)), x + 8, hy, hintScale, DIM, a, true);
+		// Button row, centred
+		int bx = cx - btnW / 2;
+		for (String[] bt : buttons) {
+			int col = switch (bt[2]) { case "g" -> c.boss ? Ui.BOSS : GREEN; case "r" -> RED; default -> DIM; };
+			bx += drawKeyButton(ctx, tr, bt[0], bt[1], bx, ly, col, a) + gap;
+		}
+		ly += 20;
+		if (!note.isEmpty()) {
+			Ui.text(ctx, tr, BattleHud.fit(tr, note, bw - 16), x + 8, ly, 1f, challenge ? DIM : 0xFFFFB84A, a, true);
+		}
 
 		// Draining bar along bottom edge
 		float left = 1 - Ui.clamp01(since / (float) Math.max(1, c.choiceMs));
 		ctx.fill(x, y + bh - 2, x + Math.round(bw * left), y + bh, Ui.alphaOf(Ui.mix(accent, Ui.WHITE, 0.4f), a));
 		Ui.shine(ctx, x, y, bw, bh, (since - 250) / 450f, 0x22FFFFFF);
+	}
+
+	private static void drawSmallItem(DrawContext ctx, ItemStack stack, int x, int y) {
+		ctx.getMatrices().pushMatrix();
+		ctx.getMatrices().translate(x, y);
+		ctx.getMatrices().scale(0.75f, 0.75f);
+		ctx.drawItem(stack, 0, 0);
+		ctx.getMatrices().popMatrix();
+	}
+
+	private static int keyButtonWidth(TextRenderer tr, String key, String label) {
+		return Math.max(12, tr.getWidth(key) + 6) + 4 + tr.getWidth(label) + 6;
+	}
+
+	/** A keyboard-style button: a light key cap with the key name, then the action in the accent colour. */
+	private static int drawKeyButton(DrawContext ctx, TextRenderer tr, String key, String label, int x, int y, int color, float a) {
+		int bw = keyButtonWidth(tr, key, label), bh = 16;
+		ctx.fill(x, y, x + bw, y + bh, Ui.alphaOf(Ui.mix(color, Ui.BG, 0.8f) | 0xFF000000, 0.9f * a));
+		ctx.drawStrokedRectangle(x, y, bw, bh, Ui.alphaOf(color, 0.8f * a));
+		int kw = Math.max(12, tr.getWidth(key) + 6);
+		ctx.fill(x + 2, y + 2, x + 2 + kw, y + bh - 2, Ui.alphaOf(0xFFE6E6F0, a));
+		ctx.fill(x + 2, y + bh - 4, x + 2 + kw, y + bh - 2, Ui.alphaOf(0xFF9A9AAA, a));
+		Ui.text(ctx, tr, key, x + 2 + (kw - tr.getWidth(key)) / 2f, y + 4, 1f, Ui.DARK, a, false);
+		Ui.text(ctx, tr, label, x + kw + 6, y + 4, 1f, color, a, true);
+		return bw;
 	}
 
 	/** Invite to a battle (Y/N): drops in from the top, the keys in a second line, the frame pulses. */

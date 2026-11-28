@@ -52,7 +52,7 @@ public final class GangsScenario {
 			ServerWorld w = p.getEntityWorld();
 			p.changeGameMode(GameMode.SURVIVAL);
 			p.setInvulnerable(true);
-			p.getInventory().clear();
+			GameTestSupport.clearKeepMic(p);
 			BattleManager.clearPendingForTest(p.getUuid());
 
 			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
@@ -116,7 +116,7 @@ public final class GangsScenario {
 		sp.getServer().runOnServer(server -> {
 			GameTestSupport.cleanupBattles(server);
 			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
-			server.getPlayerManager().getPlayerList().get(0).getInventory().clear();
+			GameTestSupport.clearKeepMic(server.getPlayerManager().getPlayerList().get(0));
 		});
 	}
 
@@ -352,7 +352,7 @@ public final class GangsScenario {
 		sp.getServer().runOnServer(server -> {
 			GameTestSupport.cleanupBattles(server);
 			if (zRef[0] != null && !zRef[0].isRemoved()) zRef[0].discard();
-			server.getPlayerManager().getPlayerList().get(0).getInventory().clear();
+			GameTestSupport.clearKeepMic(server.getPlayerManager().getPlayerList().get(0));
 		});
 	}
 }

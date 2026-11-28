@@ -50,15 +50,38 @@ public final class GuideBook {
 		return book;
 	}
 
-	/** Formats the first line as a dark-blue heading and the rest as black body text. */
+	/** Icon token in page text: {@code {i:iron_ingot}} = item sprite, {@code {b:lightning_rod}} = block sprite. */
+	private static final java.util.regex.Pattern ICON = java.util.regex.Pattern.compile("\\{([ib]):([a-z0-9_]+)}");
+
+	/** Formats the first line as a dark-blue heading and the rest as black body text; icon tokens become sprites. */
 	public static Text formatPage(String raw) {
 		int nl = raw.indexOf('\n');
 		if (nl < 0) {
-			return Text.literal(raw).formatted(Formatting.DARK_BLUE);
+			return withIcons(raw, Formatting.DARK_BLUE);
 		}
-		MutableText heading = Text.literal(raw.substring(0, nl)).formatted(Formatting.DARK_BLUE);
-		MutableText body = Text.literal(raw.substring(nl)).formatted(Formatting.BLACK);
-		return heading.append(body);
+		MutableText heading = withIcons(raw.substring(0, nl), Formatting.DARK_BLUE);
+		return heading.append(withIcons(raw.substring(nl), Formatting.BLACK));
+	}
+
+	private static MutableText withIcons(String raw, Formatting color) {
+		MutableText out = Text.empty();
+		java.util.regex.Matcher m = ICON.matcher(raw);
+		int last = 0;
+		while (m.find()) {
+			if (m.start() > last) out.append(Text.literal(raw.substring(last, m.start())).formatted(color));
+			boolean item = m.group(1).equals("i");
+			out.append(Text.object(new net.minecraft.text.object.AtlasTextObjectContents(
+				item ? net.minecraft.util.Atlases.ITEMS : net.minecraft.util.Atlases.BLOCKS,
+				net.minecraft.util.Identifier.ofVanilla((item ? "item/" : "block/") + m.group(2)))));
+			last = m.end();
+		}
+		if (last < raw.length()) out.append(Text.literal(raw.substring(last)).formatted(color));
+		return out;
+	}
+
+	/** Page length as the reader sees it: each icon token counts as one character. */
+	public static int visibleLength(String raw) {
+		return ICON.matcher(raw).replaceAll("#").length();
 	}
 
 	public static boolean isGuideBook(ItemStack stack) {

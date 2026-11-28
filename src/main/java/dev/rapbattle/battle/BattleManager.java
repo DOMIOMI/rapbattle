@@ -480,7 +480,9 @@ public final class BattleManager {
 			v.refusalReason = Lang.t(lang, "rapbattle.choice.need_mic");
 		} else if (!dressAllowed) {
 			v.requiredArmorLevel = Outfit.required(gateRank);
-			v.requiredOutfit = Battle.levelLabel(v.requiredArmorLevel, lang);
+			// Level 2 is chainmail or the craftable copper armor; say so, chainmail alone is a dead end early on.
+			v.requiredOutfit = v.requiredArmorLevel == 2 ? Lang.t(lang, "rapbattle.choice.armor_chain_or_copper")
+				: Battle.levelLabel(v.requiredArmorLevel, lang);
 			String yours = v.yourArmorLevel <= 0 ? Lang.t(lang, "rapbattle.choice.armor_none") : v.yourOutfit;
 			v.refusal = refusalLine(o, lang, refIdx);
 			v.refusalReason = Lang.t(lang, "rapbattle.choice.need_armor", v.requiredOutfit, yours);

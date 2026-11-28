@@ -101,13 +101,16 @@ public final class ProgressionRules {
 		return count;
 	}
 
-	/** Species moved from base rank 3 to rank 1 in 6.29; their pre-6.29 wins were rank-3 wins. */
-	private static final java.util.Set<String> LEGACY_RANK3 = java.util.Set.of(
-		"zombie", "husk", "drowned", "zombie_villager", "skeleton", "stray", "bogged", "parched", "spider");
+	/** Base ranks before the starter mobs moved to rank 1 (6.29/6.30); their old wins keep these ranks. */
+	private static final Map<String, Integer> LEGACY_RANKS = Map.ofEntries(
+		Map.entry("zombie", 3), Map.entry("husk", 3), Map.entry("drowned", 3), Map.entry("zombie_villager", 3),
+		Map.entry("skeleton", 3), Map.entry("stray", 3), Map.entry("bogged", 3), Map.entry("parched", 3),
+		Map.entry("spider", 3), Map.entry("sheep", 2), Map.entry("cow", 2), Map.entry("pig", 2));
 
-	/** Base rank a species had before 6.29 (used only to migrate old per-species wins). */
+	/** Base rank a species had before the starter-mob change (used only to migrate old per-species wins). */
 	public static int legacyBaseRank(String species, ToIntFunction<String> currentBaseRank) {
-		return LEGACY_RANK3.contains(species) ? 3 : currentBaseRank.applyAsInt(species);
+		Integer old = LEGACY_RANKS.get(species);
+		return old != null ? old : currentBaseRank.applyAsInt(species);
 	}
 
 	/** Converts pre-6.29 {@code species -> wins} into {@code "species:rank" -> wins} using the old base ranks. */

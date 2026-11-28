@@ -101,7 +101,7 @@ public final class Outfit {
 		return new Score(value, note.toString().trim(), stylish);
 	}
 
-	/** 0 empty / not armour, 1 leather, 2 chain, 3 iron (and turtle), 4 gold (and elytra), 5 diamond, 6 netherite. */
+	/** 0 empty / not armour, 1 leather, 2 chain or copper, 3 iron (and turtle), 4 gold (and elytra), 5 diamond, 6 netherite. */
 	static int material(ItemStack s) {
 		if (s.isEmpty()) return 0;
 		Gangs.Gang gang = Gangs.gangOf(s);
@@ -111,6 +111,7 @@ public final class Outfit {
 		String id = Registries.ITEM.getId(s.getItem()).getPath();
 		if (id.startsWith("leather_")) return 1;
 		if (id.startsWith("chainmail_")) return 2;
+		if (id.startsWith("copper_")) return 2; // craftable early, unlike chainmail
 		if (id.startsWith("iron_")) return 3;
 		if (id.startsWith("golden_")) return 4;
 		if (id.startsWith("diamond_")) return 5;

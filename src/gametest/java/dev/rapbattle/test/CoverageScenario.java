@@ -138,7 +138,7 @@ public final class CoverageScenario {
 			if (!blazeRef[0].isRemoved()) blazeRef[0].discard();
 			if (!crowdMobRef[0].isRemoved()) crowdMobRef[0].discard();
 			p1.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
-			p1.getInventory().clear();
+			GameTestSupport.clearKeepMic(p1);
 			RapConfig.get().progression = "soft";
 			GameTestSupport.cleanupBattles(server);
 		});
@@ -230,7 +230,7 @@ public final class CoverageScenario {
 			assertTrue(BattleManager.hasPendingForTest(p1.getUuid()), "Natural golem must hunt and open PENDING via GolemDefender.tick()");
 			BattleManager.clearPendingForTest(p1.getUuid());
 			if (naturalGolemRef[0] != null) naturalGolemRef[0].discard();
-			p1.getInventory().clear();
+			GameTestSupport.clearKeepMic(p1);
 
 			// 3. 6.21 Item 2: 2v1 post-battle crowd defense WITH active truce & WITNESSES (no clear/expire!)
 			ServerWorld w = p1.getEntityWorld();
@@ -429,7 +429,7 @@ public final class CoverageScenario {
 			assertTrue(!BattleManager.isBattling(p1), "Coop battle must abort when all players leave");
 			assertTrue(z.getCustomName() == null && !Theft.hasStolen(z), "Aborted coop battle mob must have no crown or stolen item");
 			z.discard();
-			p1.getInventory().clear();
+			GameTestSupport.clearKeepMic(p1);
 			GameTestSupport.cleanupBattles(server);
 		});
 		ctx.waitTicks(2);

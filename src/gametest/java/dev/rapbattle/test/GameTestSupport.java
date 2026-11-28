@@ -114,6 +114,20 @@ public final class GameTestSupport {
 		}
 	}
 
+	/** Clears the inventory but keeps a homemade mic in the last slot (mob battles need one since 6.29). */
+	public static void clearKeepMic(net.minecraft.entity.player.PlayerEntity p) {
+		p.getInventory().clear();
+		p.getInventory().setStack(35, homemadeMic());
+	}
+
+	public static net.minecraft.item.ItemStack homemadeMic() {
+		var mic = new net.minecraft.item.ItemStack(net.minecraft.item.Items.LIGHTNING_ROD);
+		var tag = new net.minecraft.nbt.NbtCompound();
+		tag.putString(dev.rapbattle.battle.Trophies.NBT_KEY, dev.rapbattle.battle.Trophies.TrophyPerk.HOMEMADE.key);
+		mic.set(net.minecraft.component.DataComponentTypes.CUSTOM_DATA, net.minecraft.component.type.NbtComponent.of(tag));
+		return mic;
+	}
+
 	public static void cleanupBattles(net.minecraft.server.MinecraftServer server) {
 		for (var p : server.getPlayerManager().getPlayerList()) {
 			BattleManager.clearPendingForTest(p.getUuid());
@@ -155,6 +169,8 @@ public final class GameTestSupport {
 			var p = server.getPlayerManager().getPlayerList().get(0);
 			p.clearStatusEffects();
 			p.getInventory().clear();
+			// Since 6.29 every mob battle needs a mic; older scenarios assume one is at hand.
+			p.getInventory().setStack(35, homemadeMic());
 			p.setHealth(p.getMaxHealth());
 			p.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
 			p.setInvulnerable(true);
@@ -168,6 +184,7 @@ public final class GameTestSupport {
 			st.wins = 0;
 			st.losses = 0;
 			st.speciesWins.clear();
+			st.rankedSpeciesWins.clear();
 			st.dailySpeciesWins.clear();
 			st.dailyDay = -1;
 			st.dragonWon = false;

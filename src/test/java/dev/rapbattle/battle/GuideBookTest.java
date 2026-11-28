@@ -18,8 +18,11 @@ class GuideBookTest {
 				String text = Lang.t(lang, key);
 				assertNotEquals(key, text, "Missing guide page " + i + " for " + lang);
 				assertFalse(text.isBlank(), "Blank guide page " + i + " for " + lang);
-				assertTrue(text.length() <= GuideBook.MAX_PAGE_CHARS,
-					"Page " + i + " (" + lang + ") exceeds max chars: " + text.length() + " > " + GuideBook.MAX_PAGE_CHARS);
+				int len = GuideBook.visibleLength(text);
+				assertTrue(len <= GuideBook.MAX_PAGE_CHARS,
+					"Page " + i + " (" + lang + ") exceeds max chars: " + len + " > " + GuideBook.MAX_PAGE_CHARS);
+				assertFalse(text.replaceAll("\\{[ib]:[a-z0-9_]+}", "").contains("{"),
+					"Page " + i + " (" + lang + ") has a broken icon token");
 			}
 		}
 	}

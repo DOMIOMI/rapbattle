@@ -19,6 +19,27 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 public class RapBattleClient implements ClientModInitializer {
 	private static KeyBinding accept, decline, rap;
 
+	static String rapKeyName() { return keyName(rap, "R"); }
+	static String declineKeyName() { return keyName(decline, "N"); }
+
+	/** Short name of the attack key ("LMB" / "ЛКМ" by default). */
+	static String attackKeyName() {
+		KeyBinding k = net.minecraft.client.MinecraftClient.getInstance().options.attackKey;
+		return k.isDefault() ? net.minecraft.client.resource.language.I18n.translate("rapbattle.hud.key_lmb")
+			: k.getBoundKeyLocalizedText().getString();
+	}
+
+	private static String keyName(KeyBinding k, String fallback) {
+		if (k == null) return fallback;
+		// Letter keys: show the Latin key cap (R), not the layout's letter (К on a Russian layout).
+		String tk = k.getBoundKeyTranslationKey();
+		if (tk != null && tk.startsWith("key.keyboard.") && tk.length() == "key.keyboard.".length() + 1) {
+			return tk.substring(tk.length() - 1).toUpperCase(java.util.Locale.ROOT);
+		}
+		String s = k.getBoundKeyLocalizedText().getString();
+		return s.isEmpty() ? fallback : s.toUpperCase(java.util.Locale.ROOT);
+	}
+
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void registerBling(net.minecraft.client.render.entity.LivingEntityRenderer renderer,
 									  net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback.RegistrationHelper helper) {

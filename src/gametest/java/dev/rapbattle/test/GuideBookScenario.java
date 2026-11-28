@@ -59,21 +59,25 @@ public final class GuideBookScenario {
 			WrittenBookContentComponent content = book.get(DataComponentTypes.WRITTEN_BOOK_CONTENT);
 			GameTestSupport.assertTrue(content != null && content.pages().size() == GuideBook.PAGE_COUNT,
 				"Handbook must have 14 pages");
+			StringBuilder tooLong = new StringBuilder();
 			for (int i = 0; i < content.pages().size(); i++) {
 				int lines = c.textRenderer.wrapLines(content.pages().get(i).get(false), 114).size();
-				GameTestSupport.assertTrue(lines <= 14,
-					"Guide page " + (i + 1) + " (" + lang + ") wrapped to " + lines + " lines (> 14)");
+				if (lines > 14) tooLong.append(" page ").append(i + 1).append('=').append(lines);
 			}
+			GameTestSupport.assertTrue(tooLong.length() == 0,
+				"Guide pages (" + lang + ") wrapped to more than 14 lines:" + tooLong);
 			c.setScreen(new BookScreen(BookScreen.Contents.create(book)));
 		});
 		if (takeShots) {
 			ctx.waitTicks(2);
 			GameTestSupport.takeScreenshot(ctx, "guidebook-page-1");
-			ctx.runOnClient(c -> {
-				if (c.currentScreen instanceof BookScreen bs) bs.setPage(7);
-			});
-			ctx.waitTicks(2);
-			GameTestSupport.takeScreenshot(ctx, "guidebook-page-8-act2");
+			for (int page : new int[]{3, 5, 6, 7}) {
+				ctx.runOnClient(c -> {
+					if (c.currentScreen instanceof BookScreen bs) bs.setPage(page);
+				});
+				ctx.waitTicks(2);
+				GameTestSupport.takeScreenshot(ctx, "guidebook-page-" + (page + 1));
+			}
 		}
 		ctx.runOnClient(c -> c.setScreen(null));
 	}
