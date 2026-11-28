@@ -103,6 +103,9 @@ public final class StageFx {
 		BattleView v = stage();
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (v == null || mc.world == null) return;
+		// 6.35: Iris has no program for our fog / glow quads ("Missing program debug_quads") and drops them -
+		// with a shader pack on, the haze and the spotlights are drawn as particles in tick() instead.
+		if (shadersOn()) return;
 		Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
 		Matrix4f mat = ctx.matrices().peek().getPositionMatrix();
 		VertexConsumerProvider consumers = ctx.consumers();
@@ -213,6 +216,43 @@ public final class StageFx {
 		richVertices = false;
 	}
 
+	/** Haze and light beams made of particles: every shader pack renders particles. */
+	private static void shaderParticles(MinecraftClient mc, BattleView v) {
+		var w = mc.world;
+		double cx = v.stageX, cy = v.stageY, cz = v.stageZ;
+		double r0 = v.stageRadius + 1.6;
+		// Haze: soft pale dust low around the crowd ring.
+		for (int i = 0; i < 14; i++) {
+			double a = RND.nextDouble() * 2 * Math.PI, r = r0 + RND.nextDouble() * 4.0;
+			w.addParticleClient(new net.minecraft.particle.DustParticleEffect(FOG_RGB, 3.5f),
+				cx + Math.cos(a) * r, cy + 0.2 + RND.nextDouble() * 1.8, cz + Math.sin(a) * r, 0, 0.003, 0);
+		}
+		// Beams: coloured dust along four lines from above the ring onto the reader (or sweeping the stage).
+		Entity reader = w.getEntityById(ClientBattle.readerId());
+		float t = time();
+		for (int i = 0; i < 4; i++) {
+			double a = Math.PI / 4 + i * Math.PI / 2;
+			double sx = cx + Math.cos(a) * (r0 + 1), sz = cz + Math.sin(a) * (r0 + 1), sy = cy + 11;
+			double tx, ty, tz;
+			if (reader != null && "TIMELINE".equals(v.phase)) {
+				tx = reader.getX();
+				ty = reader.getY();
+				tz = reader.getZ();
+			} else {
+				tx = cx + Math.sin(t * 0.6 + i * 1.7) * 3;
+				ty = cy;
+				tz = cz + Math.cos(t * 0.5 + i * 2.3) * 3;
+			}
+			for (int k = 0; k < 9; k++) {
+				double f = RND.nextDouble();
+				double spread = 0.15 + f * 0.9;
+				w.addParticleClient(new net.minecraft.particle.DustParticleEffect(BEAM_COLORS[i], 1.6f),
+					sx + (tx - sx) * f + (RND.nextDouble() - 0.5) * spread, sy + (ty - sy) * f,
+					sz + (tz - sz) * f + (RND.nextDouble() - 0.5) * spread, 0, 0, 0);
+			}
+		}
+	}
+
 	/** Slow fog density 0.35..1 around the ring: a few drifting sine waves, so it billows instead of pulsing. */
 	private static float billow(double a, float t, int layer) {
 		double v = Math.sin(a * 3 + t + layer * 1.7) * 0.5 + Math.sin(a * 7 - t * 1.3 + layer) * 0.3 + Math.sin(a * 13 + t * 0.7 + layer * 2.3) * 0.2;
@@ -265,6 +305,7 @@ public final class StageFx {
 	private static void tick(MinecraftClient mc) {
 		BattleView v = stage();
 		if (v == null || mc.world == null || mc.isPaused()) return;
+		if (shadersOn()) shaderParticles(mc, v);
 		double r0 = v.stageRadius + 2.5;
 		for (int i = 0; i < 9; i++) {
 			double a = RND.nextDouble() * 2 * Math.PI, r = r0 + RND.nextDouble() * 2.5;

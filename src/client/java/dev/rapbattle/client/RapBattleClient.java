@@ -147,10 +147,7 @@ public class RapBattleClient implements ClientModInitializer {
 		boolean down = isDown(client, KeyBindingHelper.getBoundKeyOf(skip))
 			|| isDown(client, KeyBindingHelper.getBoundKeyOf(client.options.jumpKey))
 			|| net.minecraft.client.util.InputUtil.isKeyPressed(client.getWindow(), GLFW.GLFW_KEY_SPACE);
-		if (down && !skipDown) {
-			if (Intro.active()) Intro.skip();
-			else ClientBattle.pressSkip();
-		}
+		if (down && !skipDown) ClientBattle.pressSkip();
 		skipDown = down;
 	}
 

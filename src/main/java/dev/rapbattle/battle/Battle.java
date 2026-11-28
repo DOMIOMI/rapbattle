@@ -349,9 +349,13 @@ public class Battle {
 		long now = dev.rapbattle.Clock.now();
 		// 6.33: friends nearby got an invite - give them a few seconds to press R/Y before the lobby closes.
 		lobbyEnd = invited.isEmpty() ? now : Math.min(lobbyEnd, Math.max(now, phaseStart + INVITE_GRACE_MS));
+		if (lobbyEnd > now) {
+			long sec = (lobbyEnd - now + 999) / 1000;
+			p.sendMessage(Text.translatable("rapbattle.battle.wait_invited", sec).formatted(Formatting.YELLOW), true);
+		}
 	}
 
-	static final long INVITE_GRACE_MS = 6000;
+	static final long INVITE_GRACE_MS = 3500;
 	/** Players who said no to this battle's invite: not asked again. */
 	private final Set<UUID> declinedInvite = new HashSet<>();
 
@@ -369,12 +373,16 @@ public class Battle {
 		}
 	}
 
-	/** Hitting the battling mob or pressing R near it while not invited: ask to join. */
+	/** Hitting the battling mob or pressing R on it: the player wants in - join right away (lobby only). */
 	public void requestJoin(ServerPlayerEntity p) {
-		if (phase != Phase.LOBBY || hasPlayer(p.getUuid()) || BattleManager.isBattling(p)) return;
+		if (hasPlayer(p.getUuid()) || BattleManager.isBattling(p)) return;
+		if (phase != Phase.LOBBY) {
+			p.sendMessage(Text.translatable("rapbattle.battle.join_late").formatted(Formatting.YELLOW), true);
+			return;
+		}
 		declinedInvite.remove(p.getUuid());
-		if (invited.contains(p.getUuid())) answerInvite(p, true);
-		else invite(p);
+		if (!invited.contains(p.getUuid())) invite(p);
+		answerInvite(p, true);
 	}
 
 	/** Challenger picks a battle topic in the lobby (1..3). */

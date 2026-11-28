@@ -621,6 +621,7 @@ public final class ClientBattle {
 
 	/** Space: skips the intro, starts the lobby now (challenger), or closes the judge's result screen. */
 	public static void pressSkip() {
+		dev.rapbattle.RapBattle.LOG.info("Skip pressed: phase={} intro={}", view == null ? "-" : view.phase, Intro.active());
 		if (Intro.active()) {
 			Intro.skip();
 			return;
@@ -649,7 +650,8 @@ public final class ClientBattle {
 	/** R: rap battle when choice is open, or once-per-round rhyme reroll during your verse. */
 	public static void pressRap() {
 		// 6.33: R answers an invite too ("вписаться"), not only Y.
-		if (invite != null && choice == null && view == null) {
+		if (invite != null && view == null) {
+			choice = null;
 			pressAccept();
 			return;
 		}

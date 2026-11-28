@@ -422,6 +422,17 @@ public final class BattleManager {
 		clearPending(challenger);
 		Battle b = new Battle(challenger, mob, precheckedGate);
 		BATTLES.add(b);
+		// 6.35: a friend who hit the same mob a moment ago has his own choice card on it - he joins this battle instead.
+		for (UUID other : new ArrayList<>(PENDING.keySet())) {
+			Pending pd = PENDING.get(other);
+			if (pd == null || pd.mob != mob || other.equals(challenger.getUuid())) continue;
+			ServerPlayerEntity op = challenger.getEntityWorld().getServer().getPlayerManager().getPlayer(other);
+			PENDING.remove(other);
+			if (op != null) {
+				closeChoice(op);
+				b.requestJoin(op);
+			}
+		}
 		double r = mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity
 			? Math.max(RapConfig.get().inviteRadius, 48.0)
 			: RapConfig.get().inviteRadius;
@@ -939,6 +950,13 @@ public final class BattleManager {
 					}
 					case "rap" -> {
 						Pending pending = PENDING.remove(p.getUuid());
+						// 6.35: both hit the same mob and the other player's battle already started - R joins it.
+						Battle running = pending == null ? null : byMob(pending.mob);
+						if (running != null && !isBattling(p)) {
+							closeChoice(p);
+							running.requestJoin(p);
+							return;
+						}
 						if (pending == null || !pending.allowed || !pending.mob.isAlive() || byMob(pending.mob) != null
 							|| isBattling(p) || pending.mob.getEntityWorld() != p.getEntityWorld()
 							|| pending.mob.squaredDistanceTo(p) > 16 * 16) {

@@ -573,5 +573,7 @@
   "rapbattle.progression.dragon_open": "Дракон ✔",
   "rapbattle.progression.dragon_locked": "Дракон ✖",
   "rapbattle.progression.style_summary": "Допуск: %s · %s · %s",
-  "rapbattle.progression.style_summary_off": "Допуск: все ранги ✔ (прогрессия выкл.)"
+  "rapbattle.progression.style_summary_off": "Допуск: все ранги ✔ (прогрессия выкл.)",
+  "rapbattle.battle.join_late": "Баттл уже идёт — вписаться можно только в лобби",
+  "rapbattle.battle.wait_invited": "Ждём приглашённых ещё %s сек…"
 }

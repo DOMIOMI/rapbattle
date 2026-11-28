@@ -794,5 +794,39 @@ public final class BroadcastHud {
 			ctx.fill(x + bw, y + 12, x + total, y + 13, alphaOf(color, 0.8f));
 			ctx.drawText(tr, BattleHud.fit(tr, line, lw - 12), x + bw + 8, y + 3, color, false);
 		}
+		if ("TIMELINE".equals(v.phase)) spectatorLines(ctx, tr, v, w, y + 20);
+	}
+
+	/** 6.35: bystanders read along - the line being read now and the next one, under the LIVE strip. */
+	private static void spectatorLines(DrawContext ctx, TextRenderer tr, BattleView v, int w, int y) {
+		BattleView.Row cur = ClientBattle.liveRow();
+		if (cur == null) return;
+		int i = v.rows.indexOf(cur);
+		BattleView.Row next = i >= 0 && i + 1 < v.rows.size() ? v.rows.get(i + 1) : null;
+		String a = rowText(cur), b = next == null ? "" : rowText(next);
+		int maxW = Math.min(w - 40, 420);
+		int lineW = Math.max(tr.getWidth(a), b.isEmpty() ? 0 : tr.getWidth(b));
+		int boxW = Math.min(maxW, lineW + 16);
+		int x = w / 2 - boxW / 2;
+		int h = b.isEmpty() ? 14 : 25;
+		ctx.fill(x, y, x + boxW, y + h, 0xB0060609);
+		int col = cur.mob ? ORANGE : CYAN;
+		String ta = BattleHud.fit(tr, a, boxW - 12);
+		ctx.drawText(tr, ta, w / 2 - tr.getWidth(ta) / 2, y + 3, col, false);
+		if (!b.isEmpty()) {
+			String tb = BattleHud.fit(tr, b, boxW - 12);
+			ctx.drawText(tr, tb, w / 2 - tr.getWidth(tb) / 2, y + 14, DIM, false);
+		}
+	}
+
+	private static String rowText(BattleView.Row r) {
+		String who = r.reader == null || r.reader.isEmpty() ? "" : r.reader + ": ";
+		if (r.fullLine != null && !r.fullLine.isBlank()) return who + r.fullLine;
+		StringBuilder sb = new StringBuilder();
+		if (r.cols != null) for (String c : r.cols) if (c != null && !c.isBlank()) sb.append(c).append(' ');
+		String word = r.word == null ? "" : r.word;
+		String body = sb.toString().trim();
+		// A player's line has only the rhyme word to hit: show it as "... слово".
+		return who + (body.isEmpty() ? "… " + word : body + " " + word).trim();
 	}
 }

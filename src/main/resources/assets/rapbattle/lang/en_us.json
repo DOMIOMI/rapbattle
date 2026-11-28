@@ -573,5 +573,7 @@
   "rapbattle.progression.dragon_open": "Dragon ✔",
   "rapbattle.progression.dragon_locked": "Dragon ✖",
   "rapbattle.progression.style_summary": "Access: %s · %s · %s",
-  "rapbattle.progression.style_summary_off": "Access: all ranks ✔ (progression off)"
+  "rapbattle.progression.style_summary_off": "Access: all ranks ✔ (progression off)",
+  "rapbattle.battle.join_late": "The battle is already on — you can only join in the lobby",
+  "rapbattle.battle.wait_invited": "Waiting for invited players %s more sec…"
 }
