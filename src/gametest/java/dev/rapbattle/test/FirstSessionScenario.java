@@ -59,6 +59,8 @@ public final class FirstSessionScenario {
 		T m = type.create(w, SpawnReason.COMMAND);
 		m.refreshPositionAndAngles(p.getX() + dx, p.getY(), p.getZ() + 3, 180, 0);
 		m.setAiDisabled(true);
+		w.spawnEntity(m);
+		// After spawning: StarterGear rolls random armor on load (more likely far from spawn and on later days).
 		for (EquipmentSlot s : EquipmentSlot.values()) {
 			if (s.isArmorSlot()) m.equipStack(s, ItemStack.EMPTY);
 		}
@@ -66,7 +68,6 @@ public final class FirstSessionScenario {
 			m.equipStack(EquipmentSlot.HEAD, new ItemStack(helmet));
 			m.setEquipmentDropChance(EquipmentSlot.HEAD, 0f);
 		}
-		w.spawnEntity(m);
 		return m;
 	}
 

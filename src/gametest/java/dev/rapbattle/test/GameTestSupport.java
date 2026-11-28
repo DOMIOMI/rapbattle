@@ -143,6 +143,11 @@ public final class GameTestSupport {
 	public static void resetScenario(ClientGameTestContext ctx,
 									 net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext sp,
 									 int slotIndex) {
+		// A previous group may have left the player dead (death screen); respawn before anything else.
+		ctx.runOnClient(c -> {
+			if (c.player != null && c.player.isDead()) c.player.requestRespawn();
+		});
+		ctx.waitFor(c -> c.player != null && !c.player.isDead(), 200);
 		ctx.runOnClient(c -> {
 			c.setScreen(null);
 			ClientBattle.view = null;
@@ -165,6 +170,7 @@ public final class GameTestSupport {
 			cfg.allowSwearing = false;
 
 			var ow = server.getWorld(net.minecraft.world.World.OVERWORLD);
+			ow.setTimeOfDay(1000); // night gives mobs +1 rank; every group starts in the morning
 			int cx = slotIndex * 128;
 			var p = server.getPlayerManager().getPlayerList().get(0);
 			p.clearStatusEffects();
