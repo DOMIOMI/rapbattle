@@ -56,6 +56,9 @@ public final class ReputationScenario {
 
 			ZombieEntity z = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
 			z.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4.0, 180, 0);
+			// Rank 4 (gold helmet), as the old rank-3 zombie + night bonus was: Street Cred 4 covers the rank-4 creeper.
+			// Note: jumping straight to RESULT skips the lobby, so no crowd gathers and the witness path itself is not exercised.
+			z.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, new net.minecraft.item.ItemStack(net.minecraft.item.Items.GOLDEN_HELMET));
 			w.spawnEntity(z);
 			zRef[0] = z;
 

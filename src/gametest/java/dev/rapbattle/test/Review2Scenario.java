@@ -116,6 +116,7 @@ public final class Review2Scenario {
 			// 2. Beat 2 distinct Rank 3 species (Zombie + Skeleton) -> Rank 4 opens
 			ZombieEntity z3 = EntityType.ZOMBIE.create(w, SpawnReason.COMMAND);
 			z3.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			z3.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_HELMET)); // rank 3 since 6.29
 			w.spawnEntity(z3);
 			Battle b1 = BattleManager.start(p, z3);
 			b1.setPlayerScoreForTest(p.getName().getString(), 60);
@@ -123,6 +124,7 @@ public final class Review2Scenario {
 
 			SkeletonEntity sk3 = EntityType.SKELETON.create(w, SpawnReason.COMMAND);
 			sk3.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ() + 4, 180, 0);
+			sk3.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_HELMET)); // rank 3 since 6.29
 			w.spawnEntity(sk3);
 			Battle b2 = BattleManager.start(p, sk3);
 			b2.setPlayerScoreForTest(p.getName().getString(), 60);

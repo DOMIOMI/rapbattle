@@ -44,8 +44,9 @@ public final class BattleManager {
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final long CHOICE_MS = 4000;
 
+	/** {@code challenge}: the mob called the player out (answer in 15 s or it is a fight), so looking does not extend it. */
 	private record Pending(MobEntity mob, long until, boolean allowed, boolean golem, boolean fromApproach,
-						   ProgressionRules.GateCheck gate) {}
+						   ProgressionRules.GateCheck gate, boolean challenge) {}
 
 	/** Recently finished battles: if a fight breaks out right after, the crowd keeps it fair. */
 	private record Stage(MobEntity mob, Crowd crowd, long until, Set<UUID> attackers, Set<MobEntity> engaged) {}
@@ -197,7 +198,7 @@ public final class BattleManager {
 		Opponent o = sc.opp();
 		Rank displayRank = sc.ranks().battleRank();
 		boolean isGolem = mob instanceof net.minecraft.entity.passive.IronGolemEntity;
-		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + 15_000, true, isGolem, !isGolem, sc.gate()));
+		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + 15_000, true, isGolem, !isGolem, sc.gate(), true));
 		if (!isGolem) {
 			mob.setTarget(null);
 			mob.getNavigation().stop();
@@ -457,7 +458,7 @@ public final class BattleManager {
 		boolean dressAllowed = sc.dressAllowed();
 		ProgressionRules.GateCheck gate = sc.gate();
 		boolean allowed = sc.allowed();
-		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + CHOICE_MS, allowed, false, fromApproach, gate));
+		PENDING.put(p.getUuid(), new Pending(mob, dev.rapbattle.Clock.now() + CHOICE_MS, allowed, false, fromApproach, gate, false));
 		BattleView v = new BattleView();
 		v.type = "choice";
 		v.allowSwearing = RapConfig.get().allowSwearing;
@@ -801,10 +802,10 @@ public final class BattleManager {
 			for (Map.Entry<UUID, Pending> e : new ArrayList<>(PENDING.entrySet())) {
 				Pending pd = e.getValue();
 				ServerPlayerEntity pl = server.getPlayerManager().getPlayer(e.getKey());
-				if (pl != null && pd.mob.isAlive() && isLookingAt(pl, pd.mob)) {
+				if (!pd.challenge && pl != null && pd.mob.isAlive() && isLookingAt(pl, pd.mob)) {
 					long ext = now + 2000L;
 					if (ext > pd.until) {
-						pd = new Pending(pd.mob, ext, pd.allowed, pd.golem, pd.fromApproach, pd.gate);
+						pd = new Pending(pd.mob, ext, pd.allowed, pd.golem, pd.fromApproach, pd.gate, pd.challenge);
 						PENDING.put(e.getKey(), pd);
 					}
 				}
@@ -1026,7 +1027,7 @@ public final class BattleManager {
 	public static void expirePendingForTest(UUID playerId) {
 		Pending pd = PENDING.get(playerId);
 		if (pd != null) {
-			PENDING.put(playerId, new Pending(pd.mob, 0L, pd.allowed, pd.golem, pd.fromApproach, pd.gate));
+			PENDING.put(playerId, new Pending(pd.mob, 0L, pd.allowed, pd.golem, pd.fromApproach, pd.gate, pd.challenge));
 		}
 	}
 

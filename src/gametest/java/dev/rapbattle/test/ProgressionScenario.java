@@ -239,6 +239,7 @@ public final class ProgressionScenario {
 			RapConfig.get().progression = "soft";
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
 			p.setStackInHand(Hand.OFF_HAND, ItemStack.EMPTY);
+			p.getInventory().setStack(35, ItemStack.EMPTY); // no mic anywhere for the first check
 			Stats.Player st = Stats.of(server).player(p.getUuid());
 			st.respect = 600;
 			st.speciesWins.put("blaze", 1);
@@ -278,6 +279,7 @@ public final class ProgressionScenario {
 			Stats.Player st = Stats.of(server).player(p.getUuid());
 			st.respect = 900;
 			st.speciesWins.put("iron_golem", 1);
+			st.rankedSpeciesWins.put("iron_golem:5", 1); // gates read ranked wins since 6.29
 
 			p.setStackInHand(Hand.OFF_HAND, makeHomemadeMic());
 			assertTrue(!DragonBattle.canChallenge(p, dragon), "Dragon must refuse homemade mic");
