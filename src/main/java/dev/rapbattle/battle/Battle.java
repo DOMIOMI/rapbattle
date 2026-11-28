@@ -323,6 +323,7 @@ public class Battle {
 			broadcastState();
 		} else {
 			invited.remove(p.getUuid());
+			if (!accept) declinedInvite.add(p.getUuid());
 			BattleView close = new BattleView();
 			close.type = "invite_close";
 			close.id = id;
@@ -338,12 +339,42 @@ public class Battle {
 		long now = dev.rapbattle.Clock.now();
 		if (now - phaseStart < 600) return; // a press left over from the verse does not count
 		skipVotes.add(p.getUuid());
-		if (skipVotes.containsAll(activePlayers())) phaseStart = now - 600_000L;
+		// 6.33: in co-op one press is enough - waiting for every player's vote felt like Space did nothing.
+		phaseStart = now - 600_000L;
 	}
 
 	/** Challenger pressed "go" before the lobby timer ran out. */
 	public void startEarly(ServerPlayerEntity p) {
-		if (phase == Phase.LOBBY && p.getUuid().equals(players.get(0))) lobbyEnd = dev.rapbattle.Clock.now();
+		if (phase != Phase.LOBBY || !hasPlayer(p.getUuid())) return;
+		long now = dev.rapbattle.Clock.now();
+		// 6.33: friends nearby got an invite - give them a few seconds to press R/Y before the lobby closes.
+		lobbyEnd = invited.isEmpty() ? now : Math.min(lobbyEnd, Math.max(now, phaseStart + INVITE_GRACE_MS));
+	}
+
+	static final long INVITE_GRACE_MS = 6000;
+	/** Players who said no to this battle's invite: not asked again. */
+	private final Set<UUID> declinedInvite = new HashSet<>();
+
+	/**
+	 * Once a second in the lobby: a free player who walked up (or stood a bit too far at the call) gets the invite
+	 * too. Before 6.33 only those within the invite radius at the very moment of the challenge were asked.
+	 */
+	private void inviteLatecomers() {
+		double r = Math.max(cfg.inviteRadius, 24.0);
+		for (ServerPlayerEntity other : world.getPlayers()) {
+			UUID u = other.getUuid();
+			if (hasPlayer(u) || invited.contains(u) || declinedInvite.contains(u) || other.isSpectator()) continue;
+			if (BattleManager.isBattling(other) || other.squaredDistanceTo(mob) > r * r) continue;
+			invite(other);
+		}
+	}
+
+	/** Hitting the battling mob or pressing R near it while not invited: ask to join. */
+	public void requestJoin(ServerPlayerEntity p) {
+		if (phase != Phase.LOBBY || hasPlayer(p.getUuid()) || BattleManager.isBattling(p)) return;
+		declinedInvite.remove(p.getUuid());
+		if (invited.contains(p.getUuid())) answerInvite(p, true);
+		else invite(p);
 	}
 
 	/** Challenger picks a battle topic in the lobby (1..3). */
@@ -1065,6 +1096,7 @@ public class Battle {
 					closeLobby();
 					startPrep(now);
 				} else if ((now - phaseStart) / 1000 != (now - phaseStart - 50) / 1000) {
+					inviteLatecomers();
 					broadcastState(); // refresh the lobby timer once a second
 				}
 			}

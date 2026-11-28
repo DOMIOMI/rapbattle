@@ -626,7 +626,8 @@ public final class ClientBattle {
 			return;
 		}
 		if (view == null || view.spectator) return;
-		if ("LOBBY".equals(view.phase) && isChallenger()) {
+		if ("LOBBY".equals(view.phase)) {
+			// 6.33: any player of the team can start (co-op), not only the challenger.
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"go\"}"));
 		} else if ("RESULT".equals(view.phase) || "ROUND_RESULT".equals(view.phase)) {
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"skip_result\"}"));
@@ -647,6 +648,11 @@ public final class ClientBattle {
 
 	/** R: rap battle when choice is open, or once-per-round rhyme reroll during your verse. */
 	public static void pressRap() {
+		// 6.33: R answers an invite too ("вписаться"), not only Y.
+		if (invite != null && choice == null && view == null) {
+			pressAccept();
+			return;
+		}
 		if (choice != null && choice.allowed) {
 			ClientPlayNetworking.send(new Payloads.ActionC2S("{\"type\":\"rap\"}"));
 			choice = null;

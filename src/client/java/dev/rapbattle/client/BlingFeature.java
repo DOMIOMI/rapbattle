@@ -101,19 +101,38 @@ public class BlingFeature extends FeatureRenderer<LivingEntityRenderState, Entit
 				MicModel.render(m, q, light, 1 / 16f, null);
 				m.pop();
 			} else if (!Bling.isBiped(type)) {
-				// Small & quadruped mobs: microphone stand in front of the muzzle, scaled to their height.
+				// Small & quadruped mobs: a microphone stand on the ground in front of the muzzle. 6.33: it is placed in
+				// the body's space at the head's rest position, so it stands still while the head bangs (it used to be
+				// glued to the mouth and fly around with it).
 				float mouthY = c.minY + h * 0.72f;
 				float mz = c.minZ - fur - 2.5f;
-				float standH = Math.max(5.5f, Math.min(18f, s.height * 10f));
-				m.push();
-				m.peek().getPositionMatrix().set(head.pos());
-				m.peek().getNormalMatrix().set(head.normal());
-				m.translate(cx / 16f, mouthY / 16f, (mz + 3.75f) / 16f);
-				MicModel.render(m, q, light, 1 / 16f, null);
-				m.pop();
-				draw(m, head, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), cx, mouthY + 1.0f, mz - 0.6f, 1.0f, 2.0f, 1.0f);
-				draw(m, head, q, light, Blocks.IRON_BLOCK.getDefaultState(), cx, mouthY + 1.5f + standH * 0.5f, mz - 0.6f, 0.7f, standH, 0.7f);
-				draw(m, head, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), cx, mouthY + 1.5f + standH, mz - 0.6f, 3.2f, 0.7f, 3.2f);
+				ModelPart root = model.getRootPart();
+				ModelPart headPart = root.hasChild("head") ? root.getChild("head") : null;
+				if (headPart != null) {
+					var rest = headPart.getDefaultTransform();
+					float px = rest.x() + cx, py = rest.y() + mouthY, pz = rest.z() + mz;
+					float ground = 24f; // model space: y grows down, the feet stand at 24 pixels
+					float top = Math.min(py + 1.5f, ground - 2f);
+					Part body = new Part(new Matrix4f(m.peek().getPositionMatrix()), new Matrix3f(m.peek().getNormalMatrix()), c);
+					m.push();
+					m.translate(px / 16f, py / 16f, (pz + 3.75f) / 16f);
+					MicModel.render(m, q, light, 1 / 16f, null);
+					m.pop();
+					draw(m, body, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), px, py + 1.0f, pz - 0.6f, 1.0f, 2.0f, 1.0f);
+					draw(m, body, q, light, Blocks.IRON_BLOCK.getDefaultState(), px, (top + ground) * 0.5f, pz - 0.6f, 0.7f, ground - top, 0.7f);
+					draw(m, body, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), px, ground - 0.35f, pz - 0.6f, 3.2f, 0.7f, 3.2f);
+				} else {
+					float standH = Math.max(5.5f, Math.min(18f, s.height * 10f));
+					m.push();
+					m.peek().getPositionMatrix().set(head.pos());
+					m.peek().getNormalMatrix().set(head.normal());
+					m.translate(cx / 16f, mouthY / 16f, (mz + 3.75f) / 16f);
+					MicModel.render(m, q, light, 1 / 16f, null);
+					m.pop();
+					draw(m, head, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), cx, mouthY + 1.0f, mz - 0.6f, 1.0f, 2.0f, 1.0f);
+					draw(m, head, q, light, Blocks.IRON_BLOCK.getDefaultState(), cx, mouthY + 1.5f + standH * 0.5f, mz - 0.6f, 0.7f, standH, 0.7f);
+					draw(m, head, q, light, Blocks.BLACK_CONCRETE.getDefaultState(), cx, mouthY + 1.5f + standH, mz - 0.6f, 3.2f, 0.7f, 3.2f);
+				}
 			}
 		}
 		if (kit.chain() != null) {

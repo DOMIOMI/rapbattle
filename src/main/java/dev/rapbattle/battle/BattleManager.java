@@ -594,7 +594,7 @@ public final class BattleManager {
 			Battle existing = byMob(mob);
 			if (existing != null) {
 				// Hitting a mob that is already battling: join if invited, otherwise just don't hurt it.
-				if (existing.invited.contains(sp.getUuid())) existing.answerInvite(sp, true);
+				existing.requestJoin(sp);
 				return ActionResult.FAIL;
 			}
 			if (mob instanceof net.minecraft.entity.boss.dragon.EnderDragonEntity dragon && sp.getMainHandStack().isEmpty()) {

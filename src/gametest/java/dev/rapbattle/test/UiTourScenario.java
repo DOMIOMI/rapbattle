@@ -105,5 +105,33 @@ public final class UiTourScenario {
 			for (MobEntity m : spawned) if (m.isAlive()) m.discard();
 		});
 		ctx.waitTicks(5);
+		sheepMicStand(ctx, sp);
+	}
+
+	/** 6.33: an animal's mic stand stands on the ground while it reads (it used to hang from its mouth). */
+	private static void sheepMicStand(ClientGameTestContext ctx, TestSingleplayerContext sp) {
+		Battle[] battle = new Battle[1];
+		MobEntity[] sheep = new MobEntity[1];
+		sp.getServer().runOnServer(server -> {
+			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);
+			ServerWorld w = p.getEntityWorld();
+			MobEntity m = (MobEntity) EntityType.SHEEP.create(w, SpawnReason.COMMAND);
+			m.refreshPositionAndAngles(p.getX() + 3, p.getY(), p.getZ() + 3, 90, 0);
+			m.setAiDisabled(true);
+			w.spawnEntity(m);
+			sheep[0] = m;
+			battle[0] = BattleManager.start(p, m);
+		});
+		GameTestSupport.assertTrue(battle[0] != null, "Sheep battle must start");
+		sp.getServer().runOnServer(server -> battle[0].jumpToForTest(Battle.Phase.TIMELINE));
+		for (int i = 0; i < 6; i++) {
+			ctx.waitTicks(60);
+			GameTestSupport.takeScreenshot(ctx, "6.33-sheep-stand-" + i);
+		}
+		sp.getServer().runOnServer(server -> {
+			GameTestSupport.cleanupBattles(server);
+			if (sheep[0].isAlive()) sheep[0].discard();
+		});
+		ctx.waitTicks(5);
 	}
 }
