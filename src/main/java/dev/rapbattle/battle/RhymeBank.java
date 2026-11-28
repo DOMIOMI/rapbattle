@@ -114,6 +114,27 @@ public final class RhymeBank {
 		return out;
 	}
 
+	/**
+	 * 6.34, PvP fairness: two players in one language get blocks from the SAME rhyme groups (same ending, same
+	 * difficulty), each with their own words - a group of 8 splits 4 + 4, a group of 7 shares one word.
+	 * Returns two lists of {@code blocks} blocks of 4 words.
+	 */
+	public static List<List<List<String>>> pickPairedBlocks(int blocks, Random rnd, String lang, java.util.Set<String> recent) {
+		List<List<String>> all = Lang.isRu(lang) ? GROUPS : GROUPS_EN;
+		List<List<String>> groups = new ArrayList<>();
+		for (List<String> g : all) if (!RecentRhymes.repeats(g, recent)) groups.add(g);
+		if (groups.size() < blocks) groups = new ArrayList<>(all);
+		Collections.shuffle(groups, rnd);
+		List<List<String>> a = new ArrayList<>(), b = new ArrayList<>();
+		for (int i = 0; i < blocks; i++) {
+			List<String> g = new ArrayList<>(groups.get(i % groups.size()));
+			Collections.shuffle(g, rnd);
+			a.add(new ArrayList<>(g.subList(0, 4)));
+			b.add(new ArrayList<>(g.subList(g.size() - 4, g.size())));
+		}
+		return List.of(a, b);
+	}
+
 	/** Picks a spare rhyming word from the same rhyme group as {@code currentWord}, avoiding {@code exclude}. */
 	public static String spareWord(String currentWord, java.util.Collection<String> exclude, Random rnd, String lang) {
 		List<List<String>> groups = Lang.isRu(lang) ? GROUPS : GROUPS_EN;

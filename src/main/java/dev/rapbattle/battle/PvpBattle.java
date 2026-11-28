@@ -266,10 +266,20 @@ public final class PvpBattle {
 		v.rankColor = 0xF07167;
 		v.respectMax = 100;
 		int beat = 4; // countdown
+		// 6.34: same language - both get the same rhyme endings (fair difficulty), each with their own words.
+		java.util.Map<UUID, List<List<String>>> paired = new java.util.HashMap<>();
+		if (dev.rapbattle.Lang.isRu(langOf(a)) == dev.rapbattle.Lang.isRu(langOf(b))) {
+			var pair = RhymeBank.pickPairedBlocks(LINES / 4, rnd, langOf(a), RecentRhymes.of(List.of(a, b)));
+			paired.put(a, pair.get(0));
+			paired.put(b, pair.get(1));
+		}
 		for (UUID u : List.of(a, b)) {
 			// Each reader gets rhymes in his own language.
 			List<String> words = new ArrayList<>();
-			for (List<String> grp : RhymeBank.pickBlocks(LINES / 4, rnd, langOf(u))) words.addAll(grp);
+			List<List<String>> blocks = paired.containsKey(u) ? paired.get(u)
+				: RhymeBank.pickBlocks(LINES / 4, rnd, langOf(u), RecentRhymes.of(List.of(u)));
+			for (List<String> grp : blocks) words.addAll(grp);
+			RecentRhymes.remember(u, words);
 			rhymes.put(u, words.subList(0, LINES));
 			BattleView.Segment seg = new BattleView.Segment();
 			seg.reader = names.get(u);
