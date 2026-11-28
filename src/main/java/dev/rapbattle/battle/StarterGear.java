@@ -53,11 +53,11 @@ public final class StarterGear {
 	public static void register() {
 		ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
 			if (!(entity instanceof MobEntity mob) || !mob.isAlive()) return;
-			if (mob.hasAttached(ROLLED)) return;
-			mob.setAttached(ROLLED, true);
-
+			// Only eligible species get the saved flag, so other mobs carry no extra data.
 			String id = MobProfiles.of(mob.getType()).id();
 			if (!isEligibleSpecies(id)) return;
+			if (mob.hasAttached(ROLLED)) return;
+			mob.setAttached(ROLLED, true);
 			// Do not overwrite existing armor (vanilla spawn gear, tests, or custom mobs).
 			for (EquipmentSlot s : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
 				if (!mob.getEquippedStack(s).isEmpty()) return;

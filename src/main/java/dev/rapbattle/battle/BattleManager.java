@@ -1156,6 +1156,9 @@ public final class BattleManager {
 
 	private static final Set<UUID> BADGE_SENT = new HashSet<>();
 	private static final Random BADGE_RND = new Random();
+	private static final double BADGE_RADIUS = 9.0;
+	/** Each badge runs a full start check (opponent, ranks, gates), so keep the per-player count small. */
+	private static final int BADGE_MAX = 12;
 
 	private static boolean isLookingAt(ServerPlayerEntity p, MobEntity mob) {
 		if (p == null || mob == null || p.getEntityWorld() != mob.getEntityWorld()) return false;
@@ -1176,8 +1179,10 @@ public final class BattleManager {
 				}
 				continue;
 			}
-			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(10.0),
-				m -> m.isAlive() && m.squaredDistanceTo(p) <= 10.0 * 10.0 && byMob(m) == null && !inAnyCrowd(m));
+			// Client draws badges within 8 blocks; 9 leaves a margin for movement between updates.
+			List<MobEntity> near = p.getEntityWorld().getEntitiesByClass(MobEntity.class, p.getBoundingBox().expand(BADGE_RADIUS),
+				m -> m.isAlive() && !m.isInvisible() && m.squaredDistanceTo(p) <= BADGE_RADIUS * BADGE_RADIUS
+					&& byMob(m) == null && !inAnyCrowd(m));
 			if (near.isEmpty()) {
 				if (BADGE_SENT.remove(u)) {
 					ServerPlayNetworking.send(p, new Payloads.MobBadgesS2C(List.of(), new byte[0], new byte[0]));
@@ -1185,7 +1190,7 @@ public final class BattleManager {
 				continue;
 			}
 			near.sort(Comparator.comparingDouble(m -> m.squaredDistanceTo(p)));
-			int count = Math.min(24, near.size());
+			int count = Math.min(BADGE_MAX, near.size());
 			List<Integer> ids = new ArrayList<>(count);
 			byte[] ranks = new byte[count];
 			byte[] statuses = new byte[count];
