@@ -78,11 +78,7 @@ public class Stats extends PersistentState {
 			p.dailySpeciesWins = new HashMap<>(daily.getSecond());
 			p.rankedSpeciesWins = new HashMap<>(spPair.getSecond());
 			if (p.rankedSpeciesWins.isEmpty() && !p.speciesWins.isEmpty()) {
-				for (var e : p.speciesWins.entrySet()) {
-					if (e.getValue() != null && e.getValue() > 0) {
-						p.rankedSpeciesWins.put(e.getKey() + ":" + MobProfiles.baseRankOf(e.getKey()), e.getValue());
-					}
-				}
+				p.rankedSpeciesWins = ProgressionRules.migrateLegacySpeciesWins(p.speciesWins, MobProfiles::baseRankOf);
 			}
 			return p;
 		}));
@@ -90,13 +86,7 @@ public class Stats extends PersistentState {
 		/** Returns ranked wins map, falling back to legacy {@link #speciesWins} if not yet migrated. */
 		public Map<String, Integer> effectiveRankedSpeciesWins() {
 			if (!rankedSpeciesWins.isEmpty() || speciesWins.isEmpty()) return rankedSpeciesWins;
-			Map<String, Integer> migrated = new HashMap<>();
-			for (var e : speciesWins.entrySet()) {
-				if (e.getValue() != null && e.getValue() > 0) {
-					migrated.put(e.getKey() + ":" + MobProfiles.baseRankOf(e.getKey()), e.getValue());
-				}
-			}
-			return migrated;
+			return ProgressionRules.migrateLegacySpeciesWins(speciesWins, MobProfiles::baseRankOf);
 		}
 
 		public int dailyWinsFor(String speciesId, long day) {

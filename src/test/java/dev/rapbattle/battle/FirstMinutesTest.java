@@ -44,4 +44,13 @@ class FirstMinutesTest {
 		assertEquals(2, r3);
 		assertTrue(ProgressionRules.checkRankGate(ProgressionRules.Mode.STRICT, 4, false, 0, r3, false).allowed());
 	}
+
+	@Test
+	void legacyWinsKeepOldRank3ForMovedSpecies() {
+		// Pre-6.29 save: zombie + skeleton wins were rank-3 wins; blaze keeps its current rank
+		Map<String, Integer> legacy = Map.of("zombie", 4, "skeleton", 1, "blaze", 2, "cow", 0);
+		Map<String, Integer> ranked = ProgressionRules.migrateLegacySpeciesWins(legacy, id -> id.equals("blaze") ? 4 : 1);
+		assertEquals(Map.of("zombie:3", 4, "skeleton:3", 1, "blaze:4", 2), ranked);
+		assertEquals(2, ProgressionRules.countRankedSpeciesWinsAtExactRank(ranked, 3));
+	}
 }

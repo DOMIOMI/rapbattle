@@ -101,6 +101,27 @@ public final class ProgressionRules {
 		return count;
 	}
 
+	/** Species moved from base rank 3 to rank 1 in 6.29; their pre-6.29 wins were rank-3 wins. */
+	private static final java.util.Set<String> LEGACY_RANK3 = java.util.Set.of(
+		"zombie", "husk", "drowned", "zombie_villager", "skeleton", "stray", "bogged", "parched", "spider");
+
+	/** Base rank a species had before 6.29 (used only to migrate old per-species wins). */
+	public static int legacyBaseRank(String species, ToIntFunction<String> currentBaseRank) {
+		return LEGACY_RANK3.contains(species) ? 3 : currentBaseRank.applyAsInt(species);
+	}
+
+	/** Converts pre-6.29 {@code species -> wins} into {@code "species:rank" -> wins} using the old base ranks. */
+	public static Map<String, Integer> migrateLegacySpeciesWins(Map<String, Integer> speciesWins, ToIntFunction<String> currentBaseRank) {
+		Map<String, Integer> out = new java.util.HashMap<>();
+		if (speciesWins == null) return out;
+		for (var e : speciesWins.entrySet()) {
+			if (e.getKey() != null && e.getValue() != null && e.getValue() > 0) {
+				out.put(e.getKey() + ":" + legacyBaseRank(e.getKey(), currentBaseRank), e.getValue());
+			}
+		}
+		return out;
+	}
+
 	/** Counts distinct species with at least 1 win at the exact battle {@code rank} (keys formatted as {@code "species:rank"}). */
 	public static int countRankedSpeciesWinsAtExactRank(Map<String, Integer> rankedWins, int rank) {
 		if (rankedWins == null || rankedWins.isEmpty()) return 0;
