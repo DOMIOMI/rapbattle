@@ -97,6 +97,19 @@ public final class FirstSessionScenario {
 		List<MobEntity> spawned = new ArrayList<>();
 		int[] ids = new int[3]; // sheep (allowed), naked zombie (no mic), iron zombie (need armor)
 
+		// 0. The first mic is the cheapest craft there is: any planks over a stick (6.31).
+		sp.getServer().runOnServer(server -> {
+			ServerWorld w = server.getOverworld();
+			for (Item planks : new Item[]{Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.CRIMSON_PLANKS}) {
+				var input = net.minecraft.recipe.input.CraftingRecipeInput.create(1, 2,
+					List.of(new ItemStack(planks), new ItemStack(Items.STICK)));
+				var match = server.getRecipeManager().getFirstMatch(net.minecraft.recipe.RecipeType.CRAFTING, input, w);
+				assertTrue(match.isPresent(), "Planks over a stick must craft the homemade mic (" + planks + ")");
+				ItemStack mic = match.get().value().craft(input, w.getRegistryManager());
+				assertTrue(Trophies.perkOf(mic) == Trophies.TrophyPerk.HOMEMADE, "Crafted item must be the homemade mic, got " + mic);
+			}
+		});
+
 		// 1-2. Mic first, then every starter mob is open to a naked player.
 		sp.getServer().runOnServer(server -> {
 			ServerPlayerEntity p = server.getPlayerManager().getPlayerList().get(0);

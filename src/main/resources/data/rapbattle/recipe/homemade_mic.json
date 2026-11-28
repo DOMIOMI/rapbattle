@@ -2,14 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "equipment",
   "key": {
-    "C": "minecraft:copper_ingot",
-    "R": "minecraft:redstone",
+    "P": "#minecraft:planks",
     "S": "minecraft:stick"
   },
   "pattern": [
-    " C ",
-    " R ",
-    " S "
+    "P",
+    "S"
   ],
   "result": {
     "count": 1,
